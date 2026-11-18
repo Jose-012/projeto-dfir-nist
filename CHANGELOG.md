@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - abas testadas na largura mínima real (`EVD-016`)
+
+- `all_tabs_stay_inside_the_minimum_content_width` agora renderiza o conteúdo a 780 px, correspondentes à janela mínima de 960 px menos os 180 px da navegação. O teste anterior usava 960 px para o conteúdo e não cobria esse limite real.
+- Prova de sensibilidade: a implementação com `horizontal_wrapped` passou; a mutação temporária para `horizontal` falhou com `Plano` até x=819,3; a restauração voltou a passar. A mutação não foi commitada.
+- `EVD-016`: `just verify` com 436 passed/1 skipped e doc-gate PASS. Nenhum layout adicional mudou; supply chain/e2e permanecem em `EVD-014`, sem janela real ou verificação externa nova.
+
 ## Unreleased - 2026-11-18 - navegação incluída no teste estrito de glifos (`EVD-015`)
 
 - O bloco real da navegação foi extraído sem mudança de comportamento para `DfirApp::navigation` e passou a ser renderizado por um teste com o default estrito do `egui_kittest`. Isso fecha a lacuna do teste anterior, que cobria `EvidenceState` mas não os rótulos laterais alterados no `26cc8b3`.
