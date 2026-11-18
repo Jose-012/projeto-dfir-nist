@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - payload/provenance analíticos inválidos não viram null (`EVD-023`)
+
+- As reproduções retornavam `payload: Null` por evidência e `provenance: Null` por incidente. `AnalyticalResultResponse` agora usa `TryFrom` com erros específicos, e as duas coleções propagam a falha para todos os consumidores.
+- A evidência e o incidente foram criados pelos fluxos reais; as linhas inválidas foram inseridas sem updates ou remoção de triggers. Nenhum produtor ou schema mudou.
+- `EVD-023`: dois testes focados, `just verify` com 446 passed/1 skipped, e2e 110/110 com todos os resultados e documentos válidos, e doc-gate PASS. Supply chain permanece em `EVD-020`; nenhuma janela real nova foi aberta.
+
 ## Unreleased - 2026-11-18 - metadados inválidos de custódia/auditoria não viram null (`EVD-022`)
 
 - As reproduções inseriram registros inválidos sem remover triggers append-only. Antes da correção, `list_custody` e `list_events` retornavam `metadata: Null` com sucesso; agora propagam `Protocol` com o tipo do registro e sem expor o JSON bruto.

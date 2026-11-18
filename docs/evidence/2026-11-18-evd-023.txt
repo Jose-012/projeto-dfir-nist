@@ -1,0 +1,50 @@
+EVD-023 - payload e provenance analiticos invalidos nao viram null
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T07:20Z..07:30Z
+commit-tree: 5fade478f669d80c40f38138b42597329676aaec (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-23 e os consumidores de AnalyticalResultResponse. A conversao de
+AnalyticalResultRecord convertia payload e provenance invalidos em Value::Null.
+
+Reproducao antes da correcao, sobre a arvore 6c64d53 mais os dois testes novos:
+  cargo nextest run --locked evidence_results_reject_malformed_stored_analytical_payload
+    exit 100 esperado para a reproducao. evidence_analytical_results retornou um
+    YARA_MATCH com payload=Null e provenance valido para payload='not-json'.
+  cargo nextest run --locked incident_results_reject_malformed_stored_analytical_provenance
+    exit 100 esperado para a reproducao. current_results_for_incident retornou um
+    FINDING com provenance=Null e payload valido para provenance='not-json'.
+  A evidencia e o incidente foram criados pelos fluxos reais. As linhas analiticas
+  invalidas foram inseridas diretamente, sem UPDATE ou remocao de triggers.
+
+Correcao no commit 5fade47:
+  AnalyticalResultResponse usa TryFrom<AnalyticalResultRecord> com AppError::Config
+  especifico para payload e provenance, sem incluir o JSON bruto.
+  evidence_analytical_results e current_results_for_incident coletam Result e
+  propagam o mesmo erro para todos os consumidores downstream.
+
+Regressao depois da correcao:
+  cargo nextest run --locked malformed_stored_analytical
+    exit 0; 2 passed, 324 skipped. Cobre os dois campos e os dois caminhos reais
+    de leitura, por evidencia e por incidente.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 446 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required.
+  Findings, ATT&CK, IOCs, gaps NIST, plano, recomendacoes e os cinco documentos
+  continuaram legiveis, com hashes e determinismo conferidos no cenario valido.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa registros propositalmente invalidos em banco descartavel;
+nao declara reparo de dados legados nem execucao sobre incidente real. Dados
+invalidos agora geram erro em vez de desaparecer como null nas respostas.
+Outros consumidores diretos de payload fora dessa conversao nao foram generalizados
+ou alterados nesta tarefa. Supply chain nao foi repetido porque Cargo.lock nao
+mudou; EVD-020 permanece vigente. Nenhuma janela real nova foi aberta.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.
