@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - verificação ambiental da árvore final (`EVD-036`)
+
+- Sobre `3e3132c`, sem mudança de produção ou dependências, `just supply-chain` passou com as exceções documentadas; `cargo deny --workspace check` terminou com advisories/bans/licenses/sources OK.
+- Uma janela real isolada permaneceu aberta por 25 s até timeout 124 esperado, com backend Gl/Mesa Intel. O log não teve diagnósticos de fonte/glyph/scroll nem nomes de fixtures. Não houve navegação manual ou incidente real.
+- `just verify` e e2e não foram repetidos; permanecem em `EVD-035` com 462 passed/1 skipped e 110/110. Doc-gate PASS.
+
 ## Unreleased - 2026-11-18 - supersessão preserva tipo e origem analítica (`EVD-035`)
 
 - Revisões com a mesma `correlation_key` podiam mudar YARA de evidência, ATT&CK de incidente e YARA para IOC. As reproduções deixaram a origem anterior sem vigente ou mudaram o tipo selecionado.

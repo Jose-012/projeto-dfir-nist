@@ -1,0 +1,42 @@
+EVD-036 - verificacao ambiental da arvore final
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T11:43Z..11:52Z
+commit-tree: 3e3132c80e7345ce116fed5a9606e538b49b3a38 (sem mudanca de codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151; cargo-audit 0.22.2; cargo-deny 0.20.2; Xorg :0
+
+Escopo: F1-15/F1-35. Repetir supply chain e abertura de janela real sobre a
+arvore limpa cujo gate Rust/e2e completo esta em EVD-035. Nao houve mudanca de
+producao, dependencias, Cargo.lock ou migrations nesta tarefa.
+
+just supply-chain
+  exit 0. cargo audit --no-yanked carregou 1533 advisories e varreu 612 crates;
+  manteve somente o warning permitido RUSTSEC-2025-0141 (bincode). A excecao de
+  vulnerabilidade WVR-004/RUSTSEC-2026-0459 e o aviso RUSTSEC-2026-0543 continuam
+  cobertos pela configuracao e justificativas ja documentadas.
+  cargo deny --workspace check: advisories ok, bans ok, licenses ok, sources ok.
+  Log: validation/task-024-supply-chain.txt.
+
+Janela real sobre 3e3132c, com armazenamento isolado:
+  cargo build --locked --bin dfir-app
+    exit 0. Log: validation/task-024-build.txt.
+  DFIR_DATA_ROOT=/home/jose/.jcode/scratch/dfir-evd036-gui-QpMBTI
+  DISPLAY=:0 timeout 25 ./target/debug/dfir-app
+    A janela permaneceu aberta ate o timeout, exit 124 esperado.
+    O log registrou Mesa Intel(R) HD Graphics 2000 (SNB GT1), backend Gl,
+    IntegratedGpu, driver_info 3.3 (Core Profile) Mesa 25.0.7-2+deb13u1.
+    Tambem registrou duas tentativas EGL malsucedidas antes da selecao do
+    adaptador; o backend Gl foi inicializado e a janela permaneceu aberta.
+  Log: validation/task-024-real-window.txt.
+  No font|No glyph|missing font|missing glyph|ScrollArea ID: 0 matches.
+  Nomes de fixtures no log isolado: 0 matches.
+  Log das checagens: validation/task-024-log-checks.txt.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: o smoke declara somente build, abertura da janela e inspecao do log; nao
+houve navegacao manual, incidente real ou leitura de caso. O timeout 124 e o
+resultado esperado, nao uma falha de startup. just verify e o e2e nao foram
+repetidos; seus resultados atuais permanecem EVD-035 (462 passed/1 skipped e
+110/110). Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

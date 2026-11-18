@@ -60,10 +60,12 @@ O release é fechado somente com evidência executada.
 > **Atualização 2026-11-18 (uma só raiz por correlation_key).** No commit `ecc324d`, `EVD-034`: duas raízes com a mesma chave geravam duas linhas vigentes e a leitura singular escolhia a segunda. Nova raiz agora exige `supersedes` quando a chave já existe, antes do INSERT/auditoria; 18 controles centrais passaram. `just verify` terminou com 459 passed/1 skipped, e2e 110/110 e doc-gate PASS. Sem reparo de histórico antigo; supply chain/smoke permanecem em `EVD-032`.
 >
 > **Atualização 2026-11-18 (tipo e origem estáveis na supersessão).** No commit `e4bd37a`, `EVD-035`: revisões mudavam evidência, incidente e tipo do resultado vigente. A transação agora preserva tipo/incidente e evidência para não-IOC; IOC mantém agregação entre evidências no mesmo incidente. O gate inicial detectou essa exceção e foi ajustado antes do PASS final. `just verify` final terminou com 462 passed/1 skipped, e2e 110/110 e doc-gate PASS. Sem reparo antigo; supply chain/smoke permanecem em `EVD-032`.
+>
+> **Atualização 2026-11-18 (verificação ambiental da árvore final).** Sobre `3e3132c`, sem mudança de código, `EVD-036`: supply chain verde e janela real isolada aberta por 25 s até timeout 124 esperado, backend Gl/Mesa Intel, sem diagnósticos de fonte/glyph/scroll ou nomes de fixtures. Não houve navegação manual ou incidente real. `just verify`/e2e não foram repetidos e continuam em `EVD-035`; doc-gate PASS.
 
 ## Gate documental
 
-Estado: `PASS` em 2026-11-18 (`EVD-035`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-18 (`EVD-036`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`/`EVD-035`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -94,7 +96,7 @@ cargo test --workspace --locked --doc
 
 ## Supply chain
 
-Estado: `PASS` em 2026-11-18 (`EVD-032`; anteriores `EVD-003`/`EVD-007`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`), com **uma** exceção de vulnerabilidade justificada (`RUSTSEC-2026-0459`, `WVR-004`) e duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono). SQLite e chrono têm revisão até 2026-12-31. Exceção é risco aceito ou aviso analisado, não prova de inexploração.
+Estado: `PASS` em 2026-11-18 (`EVD-036`; anteriores `EVD-003`/`EVD-007`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-032`), com **uma** exceção de vulnerabilidade justificada (`RUSTSEC-2026-0459`, `WVR-004`) e duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono). SQLite e chrono têm revisão até 2026-12-31. Exceção é risco aceito ou aviso analisado, não prova de inexploração.
 
 ```bash
 cargo deny --workspace check
@@ -113,7 +115,7 @@ cargo audit
 - `WAIVED` **aarch64** (`WVR-002`, mesma validade): provado só em x86_64;
 - `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-035`);
 - `PASS` **identidade analítica versionada:** raiz única, sucessora única e tipo/incidente estáveis; evidência estável exceto agregação IOC no mesmo incidente; violações falham antes de nova linha/auditoria, sem reparar histórico antigo (`EVD-033`/`EVD-034`/`EVD-035`);
-- `PASS` **janela real na árvore final:** build e abertura isolada por 25 s até timeout 124 esperado, backend Gl/Mesa Intel, sem diagnósticos de fonte/glyph/scroll ou nomes de fixtures; sem navegação manual (`EVD-032`);
+- `PASS` **janela real na árvore final:** build e abertura isolada por 25 s até timeout 124 esperado, backend Gl/Mesa Intel, sem diagnósticos de fonte/glyph/scroll ou nomes de fixtures; sem navegação manual (`EVD-036`);
 - `PASS` **matriz de risco sem perda silenciosa:** severity inválida/`NONE` ou confidence inválida/ausente falha com ID/campo antes dos entregáveis (`EVD-031`);
 - `PASS` **caminho crítico limitado ao incidente:** os dois lados de `SEQUENCE_NEXT` devem pertencer ao incidente solicitado; relações antigas não são reparadas automaticamente (`EVD-030`);
 - `PASS` **entregáveis sem arrays de plano perdidos:** `finding_ids`, `nist_subcategories` e `depends_on` inválidos falham em collect antes de renderizar; campos ausentes continuam legados (`EVD-029`);
