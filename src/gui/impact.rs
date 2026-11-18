@@ -4,7 +4,7 @@
 //! anterior (mesma regra append-only de F1-01).
 
 use super::backend::{Backend, Command};
-use super::{CONFIDENCE_OPTIONS, IMPACT_LEVEL_OPTIONS, Loadable, enum_combo, non_empty};
+use super::{CONFIDENCE_OPTIONS, IMPACT_LEVEL_OPTIONS, Loadable, enum_combo, non_empty, str_field};
 use crate::service::AnalyticalResultResponse;
 
 #[derive(Default)]
@@ -17,6 +17,52 @@ struct Form {
     operational_disruption: String,
     financial_impact: String,
     confidence: String,
+}
+
+fn assessment_ui(ui: &mut egui::Ui, assessment: &AnalyticalResultResponse) {
+    let payload = &assessment.payload;
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+
+        ui.label(format!(
+            "Disponibilidade: {}",
+            str_field(payload, "availability_impact")
+        ));
+        ui.label(format!(
+            "Confidencialidade: {}",
+            str_field(payload, "confidentiality_impact")
+        ));
+        ui.label(format!(
+            "Integridade: {}",
+            str_field(payload, "integrity_impact")
+        ));
+        ui.label(format!(
+            "Ativos afetados: {}",
+            str_field(payload, "affected_assets")
+        ));
+        ui.label(format!(
+            "Dados afetados: {}",
+            str_field(payload, "affected_data")
+        ));
+        ui.label(format!(
+            "Disrupção operacional: {}",
+            str_field(payload, "operational_disruption")
+        ));
+        let financial_impact = str_field(payload, "financial_impact");
+        ui.label(format!(
+            "Impacto financeiro: {}",
+            if financial_impact.is_empty() {
+                "não informado"
+            } else {
+                financial_impact
+            }
+        ));
+        ui.label(format!(
+            "Confiança: {}",
+            assessment.confidence.as_deref().unwrap_or("não informada")
+        ));
+    });
 }
 
 pub struct ImpactState {
@@ -86,7 +132,7 @@ impl ImpactState {
         ui.heading("Avaliação de impacto vigente");
         self.current.show(ui, |ui, current| match current {
             Some(assessment) => {
-                ui.small(assessment.payload.to_string());
+                assessment_ui(ui, assessment);
             }
             None => {
                 ui.label("Nenhuma avaliação de impacto registrada ainda.");
@@ -160,5 +206,90 @@ impl ImpactState {
                 ui.spinner();
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod ui_tests {
+    use super::ImpactState;
+    use crate::gui::Loadable;
+    use crate::gui::backend::Backend;
+    use crate::service::AnalyticalResultResponse;
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    type State = (ImpactState, Backend);
+
+    fn assessment(payload: serde_json::Value) -> AnalyticalResultResponse {
+        AnalyticalResultResponse {
+            id: "impact-1".into(),
+            result_type: "IMPACT_ASSESSMENT".into(),
+            correlation_key: "impact-key-1".into(),
+            evidence_id: None,
+            incident_id: Some("inc-1".into()),
+            analysis_job_id: None,
+            rule_or_model_id: None,
+            rule_or_model_version: None,
+            confidence: Some("MEDIUM".into()),
+            payload,
+            provenance: serde_json::Value::Null,
+            supersedes: None,
+            created_at: "2026-10-16T00:00:00Z".into(),
+        }
+    }
+
+    fn harness_for(state: ImpactState, backend: Backend) -> Harness<'static, State> {
+        crate::gui::test_harness::builder()
+            .with_size(egui::vec2(700.0, 1300.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, "inc-1", backend),
+                (state, backend),
+            )
+    }
+
+    #[test]
+    fn current_assessment_shows_structured_fields_instead_of_raw_json() {
+        let (backend, _commands) = Backend::for_test();
+        let payload = serde_json::json!({
+            "kind": "IMPACT_ASSESSMENT",
+            "availability_impact": "HIGH",
+            "confidentiality_impact": "MEDIUM",
+            "integrity_impact": "LOW",
+            "affected_assets": "Servidor de arquivos FS02 e estações do setor financeiro",
+            "affected_data": "Documentos internos e registros de clientes com dados pessoais",
+            "operational_disruption": "Serviço de arquivos indisponível por quatro horas",
+            "financial_impact": "Estimativa preliminar de R$ 40 mil a R$ 60 mil",
+            "financial_impact_known": true
+        });
+        let raw_payload = payload.to_string();
+        let state = ImpactState {
+            loaded_for: Some("inc-1".into()),
+            current: Loadable::Ready(Some(assessment(payload))),
+            ..ImpactState::default()
+        };
+        let mut harness = harness_for(state, backend);
+        harness.run();
+
+        for label in [
+            "Disponibilidade: HIGH",
+            "Confidencialidade: MEDIUM",
+            "Integridade: LOW",
+            "Ativos afetados: Servidor de arquivos FS02 e estações do setor financeiro",
+            "Dados afetados: Documentos internos e registros de clientes com dados pessoais",
+            "Disrupção operacional: Serviço de arquivos indisponível por quatro horas",
+            "Impacto financeiro: Estimativa preliminar de R$ 40 mil a R$ 60 mil",
+            "Confiança: MEDIUM",
+        ] {
+            harness.get_by_label(label);
+        }
+        assert!(
+            harness.query_by_label(raw_payload.as_str()).is_none(),
+            "o payload JSON minificado não deve ser exibido"
+        );
+        assert!(
+            harness
+                .query_by_label_contains("\"affected_assets\":")
+                .is_none(),
+            "nenhuma chave JSON bruta deve virar interface"
+        );
     }
 }

@@ -2,7 +2,10 @@
 //! incidente, com resultados analíticos de suporte opcionais (F1-05).
 
 use super::backend::{Backend, Command};
-use super::{CONFIDENCE_OPTIONS, Loadable, RECOMMENDATION_CATEGORY_OPTIONS, enum_combo, non_empty};
+use super::{
+    CONFIDENCE_OPTIONS, Loadable, RECOMMENDATION_CATEGORY_OPTIONS, enum_combo, non_empty,
+    str_field, string_list,
+};
 use crate::service::AnalyticalResultResponse;
 
 #[derive(Default)]
@@ -12,6 +15,30 @@ struct Form {
     description: String,
     confidence: String,
     supporting_result_ids: String,
+}
+
+fn recommendation_ui(ui: &mut egui::Ui, item: &AnalyticalResultResponse) {
+    let payload = &item.payload;
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+
+        ui.label(format!("Categoria: {}", str_field(payload, "category")));
+        ui.strong(str_field(payload, "title"));
+        ui.label(format!("Descrição: {}", str_field(payload, "description")));
+        ui.label(format!(
+            "Confiança: {}",
+            item.confidence.as_deref().unwrap_or("não informada")
+        ));
+
+        let supporting_results = string_list(&item.provenance, "supporting_result_ids");
+        if !supporting_results.is_empty() {
+            ui.label("Resultados de suporte:");
+            for result_id in supporting_results {
+                ui.label(format!("• {result_id}"));
+            }
+        }
+    });
 }
 
 pub struct RecommendationsState {
@@ -120,9 +147,7 @@ impl RecommendationsState {
                 return;
             }
             for item in filtered {
-                ui.group(|ui| {
-                    ui.small(item.payload.to_string());
-                });
+                recommendation_ui(ui, item);
             }
         });
 
@@ -179,5 +204,92 @@ impl RecommendationsState {
                 ui.spinner();
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod ui_tests {
+    use super::RecommendationsState;
+    use crate::gui::Loadable;
+    use crate::gui::backend::Backend;
+    use crate::service::AnalyticalResultResponse;
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    type State = (RecommendationsState, Backend);
+
+    fn recommendation(
+        payload: serde_json::Value,
+        provenance: serde_json::Value,
+    ) -> AnalyticalResultResponse {
+        AnalyticalResultResponse {
+            id: "recommendation-1".into(),
+            result_type: "RECOMMENDATION".into(),
+            correlation_key: "recommendation-key-1".into(),
+            evidence_id: None,
+            incident_id: Some("inc-1".into()),
+            analysis_job_id: None,
+            rule_or_model_id: None,
+            rule_or_model_version: None,
+            confidence: Some("HIGH".into()),
+            payload,
+            provenance,
+            supersedes: None,
+            created_at: "2026-10-16T00:00:00Z".into(),
+        }
+    }
+
+    fn harness_for(state: RecommendationsState, backend: Backend) -> Harness<'static, State> {
+        crate::gui::test_harness::builder()
+            .with_size(egui::vec2(760.0, 1300.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, "inc-1", backend),
+                (state, backend),
+            )
+    }
+
+    #[test]
+    fn loaded_recommendation_shows_structured_fields_and_support_instead_of_raw_json() {
+        let (backend, _commands) = Backend::for_test();
+        let payload = serde_json::json!({
+            "kind": "RECOMMENDATION",
+            "category": "IMMEDIATE",
+            "title": "Isolar o servidor de arquivos FS02",
+            "description": "Desconectar o ativo da rede e preservar os logs antes de iniciar a recuperação"
+        });
+        let raw_payload = payload.to_string();
+        let provenance = serde_json::json!({
+            "producer": "dfir-app",
+            "method": "analyst-authored recommendation",
+            "supporting_result_ids": ["finding-17", "attack-23"]
+        });
+        let state = RecommendationsState {
+            loaded_for: Some("inc-1".into()),
+            list: Loadable::Ready(vec![recommendation(payload, provenance)]),
+            ..RecommendationsState::default()
+        };
+        let mut harness = harness_for(state, backend);
+        harness.run();
+
+        for label in [
+            "Categoria: IMMEDIATE",
+            "Isolar o servidor de arquivos FS02",
+            "Descrição: Desconectar o ativo da rede e preservar os logs antes de iniciar a recuperação",
+            "Confiança: HIGH",
+            "Resultados de suporte:",
+            "• finding-17",
+            "• attack-23",
+        ] {
+            harness.get_by_label(label);
+        }
+        assert!(
+            harness.query_by_label(raw_payload.as_str()).is_none(),
+            "o payload JSON minificado não deve ser exibido"
+        );
+        assert!(
+            harness
+                .query_by_label_contains("\"description\":")
+                .is_none(),
+            "nenhuma chave JSON bruta deve virar interface"
+        );
     }
 }

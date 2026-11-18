@@ -2,7 +2,9 @@
 //! (F1-04).
 
 use super::backend::{Backend, Command};
-use super::{ATTACK_TACTIC_OPTIONS, CONFIDENCE_OPTIONS, Loadable, enum_combo, non_empty};
+use super::{
+    ATTACK_TACTIC_OPTIONS, CONFIDENCE_OPTIONS, Loadable, enum_combo, non_empty, str_field,
+};
 use crate::service::AnalyticalResultResponse;
 
 #[derive(Default)]
@@ -14,6 +16,54 @@ struct Form {
     basis: String,
     confidence: String,
     analyst_note: String,
+}
+
+fn mapping_ui(ui: &mut egui::Ui, item: &AnalyticalResultResponse) {
+    let payload = &item.payload;
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+
+        ui.strong(format!("Técnica: {}", str_field(payload, "technique_id")));
+        ui.label(format!("Tática: {}", str_field(payload, "tactic")));
+        let sub_technique = str_field(payload, "sub_technique_id");
+        ui.label(format!(
+            "Subtécnica: {}",
+            if sub_technique.is_empty() {
+                "não informada"
+            } else {
+                sub_technique
+            }
+        ));
+
+        let evidence = item.evidence_id.as_deref().unwrap_or("não vinculada");
+        let evidence_status = str_field(payload, "evidence_status");
+        if evidence_status.is_empty() {
+            ui.label(format!("Evidência: {evidence}"));
+        } else {
+            ui.label(format!(
+                "Evidência: {evidence} · situação: {evidence_status}"
+            ));
+        }
+
+        let basis = str_field(payload, "basis");
+        ui.label(format!(
+            "Base analítica: {}",
+            if basis.is_empty() {
+                "não informada"
+            } else {
+                basis
+            }
+        ));
+        ui.label(format!(
+            "Confiança: {}",
+            item.confidence.as_deref().unwrap_or("não informada")
+        ));
+        let analyst_note = str_field(payload, "analyst_note");
+        if !analyst_note.is_empty() {
+            ui.label(format!("Nota do analista: {analyst_note}"));
+        }
+    });
 }
 
 pub struct AttackState {
@@ -87,9 +137,7 @@ impl AttackState {
                 return;
             }
             for item in items {
-                ui.group(|ui| {
-                    ui.small(item.payload.to_string());
-                });
+                mapping_ui(ui, item);
             }
         });
 
@@ -146,5 +194,87 @@ impl AttackState {
                 ui.spinner();
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod ui_tests {
+    use super::AttackState;
+    use crate::gui::Loadable;
+    use crate::gui::backend::Backend;
+    use crate::service::AnalyticalResultResponse;
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    type State = (AttackState, Backend);
+
+    fn mapping(payload: serde_json::Value) -> AnalyticalResultResponse {
+        AnalyticalResultResponse {
+            id: "attack-1".into(),
+            result_type: "ATTACK_MAPPING".into(),
+            correlation_key: "attack-key-1".into(),
+            evidence_id: Some("ev-42".into()),
+            incident_id: Some("inc-1".into()),
+            analysis_job_id: None,
+            rule_or_model_id: Some("T1078".into()),
+            rule_or_model_version: None,
+            confidence: Some("HIGH".into()),
+            payload,
+            provenance: serde_json::Value::Null,
+            supersedes: None,
+            created_at: "2026-10-16T00:00:00Z".into(),
+        }
+    }
+
+    fn harness_for(state: AttackState, backend: Backend) -> Harness<'static, State> {
+        crate::gui::test_harness::builder()
+            .with_size(egui::vec2(700.0, 1200.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, "inc-1", backend),
+                (state, backend),
+            )
+    }
+
+    #[test]
+    fn loaded_mapping_shows_structured_fields_instead_of_raw_json() {
+        let (backend, _commands) = Backend::for_test();
+        let payload = serde_json::json!({
+            "kind": "ATTACK_MAPPING",
+            "tactic": "CREDENTIAL_ACCESS",
+            "technique_id": "T1078",
+            "sub_technique_id": "T1078.001",
+            "basis": "Eventos 4624 correlacionados com a conta administrativa durante a janela do incidente",
+            "analyst_note": "Revisar a origem do logon antes do encerramento",
+            "evidence_status": "DOCUMENTED"
+        });
+        let raw_payload = payload.to_string();
+        let state = AttackState {
+            loaded_for: Some("inc-1".into()),
+            list: Loadable::Ready(vec![mapping(payload)]),
+            ..AttackState::default()
+        };
+        let mut harness = harness_for(state, backend);
+        harness.run();
+
+        for label in [
+            "Tática: CREDENTIAL_ACCESS",
+            "Técnica: T1078",
+            "Subtécnica: T1078.001",
+            "Evidência: ev-42 · situação: DOCUMENTED",
+            "Base analítica: Eventos 4624 correlacionados com a conta administrativa durante a janela do incidente",
+            "Confiança: HIGH",
+            "Nota do analista: Revisar a origem do logon antes do encerramento",
+        ] {
+            harness.get_by_label(label);
+        }
+        assert!(
+            harness.query_by_label(raw_payload.as_str()).is_none(),
+            "o payload JSON minificado não deve ser exibido"
+        );
+        assert!(
+            harness
+                .query_by_label_contains("\"technique_id\":")
+                .is_none(),
+            "nenhuma chave JSON bruta deve virar interface"
+        );
     }
 }
