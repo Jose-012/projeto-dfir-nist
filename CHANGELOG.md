@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - caminho crítico não aceita relações entre incidentes (`EVD-030`)
+
+- `link_critical_path_stages` validava apenas o tipo dos estágios. A reprodução criou A0→B0 no contexto de A e B0→B1 no mesmo contexto; o grafo de A expôs uma aresta para um estágio estrangeiro.
+- A persistência agora recebe o `incident_id` do serviço e exige que ambos os lados pertençam a ele antes de inserir `SEQUENCE_NEXT`. Ligação válida e ramificação continuam permitidas, e o erro de escopo mantém diagnóstico específico.
+- `EVD-030`: regressão real de serviço/grafo, três testes focados, `just verify` com 456 passed/1 skipped, e2e 110/110 e doc-gate PASS. Não houve reparo de relações antigas; supply chain permanece em `EVD-020`.
+
 ## Unreleased - 2026-11-18 - arrays de plano inválidos não chegam aos entregáveis (`EVD-029`)
 
 - `plan_view` aceitava `finding_ids`, `nist_subcategories` e `depends_on` malformados, e os documentos os convertiam em listas vazias. A reprodução gerou o Entregável 4 com a falsa frase **Recomendação geral** para um item com achado.

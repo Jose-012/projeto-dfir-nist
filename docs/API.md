@@ -53,7 +53,7 @@ Ao indexar ou reindexar `results.jsonl`, JSON inválido ou profundidade acima de
 | `async create_attack_mapping` | `incident_id: &str, evidence_id: Option<&str>, tactic: &str, technique_id: &str, sub_technique_id: Option<&str>, basis: &str, confidence: &str, analyst_note: Option<&str>` | `AppResult<String>` | — |
 | `async list_attack_mappings` | `incident_id: &str` | `AppResult<Vec<AnalyticalResultResponse>>` | — |
 | `async create_critical_path_stage` | `incident_id: &str, evidence_id: Option<&str>, sequence_index: i64, stage_label: &str, basis: &str, confidence: &str` | `AppResult<String>` | — |
-| `async link_critical_path_stages` | `incident_id: &str, from_stage_id: &str, to_stage_id: &str` | `AppResult<()>` | — |
+| `async link_critical_path_stages` | `incident_id: &str, from_stage_id: &str, to_stage_id: &str` | `AppResult<()>` | Ambos os estágios devem ser `CRITICAL_PATH_LINK` do incidente informado; relações entre incidentes falham antes da escrita (`EVD-030`). |
 | `async critical_path` | `incident_id: &str` | `AppResult<CriticalPathView>` | Grafo do caminho crítico: estágios vigentes + arestas `SEQUENCE_NEXT` entre eles. |
 | `async create_impact_assessment` | `incident_id: &str, availability_impact: &str, confidentiality_impact: &str, integrity_impact: &str, affected_assets: &str, affected_data: &str, operational_disruption: &str, financial_impact: Option<&str>, confidence: &str` | `AppResult<String>` | — |
 | `async current_impact_assessment` | `incident_id: &str` | `AppResult<Option<AnalyticalResultResponse>>` | — |

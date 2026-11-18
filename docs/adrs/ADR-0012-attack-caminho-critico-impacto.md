@@ -33,6 +33,8 @@ Um pequeno helper genérico, `analytical_results::insert_relation`, foi adiciona
 
 `link_critical_path_stages` valida que ambos os lados são de fato `CRITICAL_PATH_LINK` antes de criar a relação — impede, por exemplo, ligar um estágio a um mapping ATT&CK por engano.
 
+Atualização `EVD-030` (2026-11-18): a persistência também recebe o `incident_id` do serviço e exige que ambos os estágios pertençam a esse incidente. Antes, A0→B0 e B0→B1 podiam ser persistidos no contexto de A; agora falham sem relação. Isso não altera a leitura nem repara relações antigas.
+
 **Limitação assumida**: estágios não são versionados por `supersedes` de forma integrada com suas relações — corrigir a descrição de um estágio (mesmo `sequence_index`) cria uma nova linha que substitui a anterior via `correlation_key`, mas as relações `SEQUENCE_NEXT` continuam apontando para o id da linha antiga até serem recriadas manualmente. Aceitável para o MVP (recriar a relação é uma chamada extra); registrado aqui para não ser redescoberto como bug.
 
 ### Matriz de impacto: uma linha versionada por incidente

@@ -1,0 +1,52 @@
+EVD-030 - caminho critico nao aceita relacoes entre incidentes
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T09:10Z..09:22Z
+commit-tree: d7470e95775995d5e888b4beb0b32231ea440185 (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-04. O servico link_critical_path_stages recebia incident_id, mas a
+persistencia validava apenas existencia e tipo dos dois estagios. Era possivel
+criar SEQUENCE_NEXT entre incidentes ou entre dois estagios estrangeiros no
+contexto de um terceiro incidente.
+
+Reproducao antes da correcao, sobre a arvore 3038f1f mais o teste novo:
+  cargo nextest run --locked critical_path_links_stay_inside_requested_incident
+    exit 100 esperado para a reproducao. O servico criou estagios reais A0/A1 e
+    B0/B1. A0->B0 no contexto de A e B0->B1 no mesmo contexto retornaram Ok.
+    O grafo de A continha uma aresta para um alvo ausente de seus estagios e B0
+    tinha uma relacao persistida. O assert registra:
+    cross_incident_accepted=true foreign_pair_accepted=true graph_edges=1
+    foreign_targets=1 foreign_relations=1.
+
+Correcao no commit d7470e9:
+  a persistencia agora recebe incident_id e exige que cada lado seja
+  CRITICAL_PATH_LINK e pertenca exatamente a esse incidente antes de inserir a
+  relacao. O servico propaga seu incident_id. O erro de escopo preserva a razao
+  especifica em AppError::user_message. A assinatura publica do servico, a
+  leitura do grafo e o comportamento de ramificacao nao mudaram.
+
+Regressao depois da correcao:
+  cargo nextest run --locked --no-fail-fast critical_path
+    exit 0; 3 testes: a nova regressao de servico/grafo, o controle existente de
+    ligacao valida e o controle de resultado com tipo errado. A regressao cobre
+    os dois casos invalidos sem aresta/relacao, o diagnostico "different
+    incident" e uma ligacao valida A0->A1 que continua aparecendo no grafo.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 456 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  caminho critico, cinco documentos, hardening, determinismo e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa incidentes e estagios sinteticos em banco descartavel;
+nao executou incidente real nem reparou relacoes entre incidentes ja persistidas.
+A limitacao ADR-0012 de recriar relacoes apos substituir um estagio permanece.
+Supply chain nao foi repetido porque Cargo.lock nao mudou; EVD-020 permanece a
+execucao vigente. Nenhuma janela real nova foi aberta; o smoke anterior e EVD-020.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.
