@@ -60,6 +60,9 @@ pub struct IncidentsState {
     evidence: Loadable<Vec<EvidenceResponse>>,
     /// Eventos de auditoria do incidente selecionado (F1-24).
     audit: Loadable<Vec<AuditEventView>>,
+    /// Hash escolhido pelo operador. Além do tooltip, uma ação por teclado ou
+    /// mouse revela o valor integral fora da coluna truncada.
+    audit_hash_detail: Option<String>,
 }
 
 impl Default for IncidentsState {
@@ -84,6 +87,7 @@ impl Default for IncidentsState {
             export: Default::default(),
             evidence: Loadable::Idle,
             audit: Loadable::Idle,
+            audit_hash_detail: None,
         }
     }
 }
@@ -98,9 +102,12 @@ impl IncidentsState {
 
     pub fn on_incident_evidence_loaded(
         &mut self,
-        _incident_id: &str,
+        incident_id: &str,
         result: Result<Vec<EvidenceResponse>, String>,
     ) {
+        if self.selected.as_ref().map(|item| item.id.as_str()) != Some(incident_id) {
+            return;
+        }
         self.evidence = match result {
             Ok(items) => Loadable::Ready(items),
             Err(message) => Loadable::Failed(message),
@@ -109,9 +116,12 @@ impl IncidentsState {
 
     pub fn on_audit_loaded(
         &mut self,
-        _incident_id: &str,
+        incident_id: &str,
         result: Result<Vec<AuditEventView>, String>,
     ) {
+        if self.selected.as_ref().map(|item| item.id.as_str()) != Some(incident_id) {
+            return;
+        }
         self.audit = match result {
             Ok(items) => Loadable::Ready(items),
             Err(message) => Loadable::Failed(message),
@@ -126,6 +136,9 @@ impl IncidentsState {
                 self.new_name.clear();
                 self.selected = Some(incident.clone());
                 self.tab = Tab::default();
+                self.evidence = Loadable::Idle;
+                self.audit = Loadable::Idle;
+                self.audit_hash_detail = None;
                 if let Loadable::Ready(items) = &mut self.list {
                     items.insert(0, incident);
                 } else {
@@ -142,9 +155,10 @@ impl IncidentsState {
             .default_size(260.0)
             .show(ui, |ui| {
                 ui.heading("Incidentes");
+                let name_label = ui.label("Nome do novo incidente");
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut self.new_name)
-                        .on_hover_text("Nome do novo incidente");
+                        .labelled_by(name_label.id);
                     if ui
                         .add_enabled(
                             !self.creating && !self.new_name.trim().is_empty(),
@@ -196,6 +210,7 @@ impl IncidentsState {
                                     self.selected = Some(incident.clone());
                                     self.evidence = Loadable::Idle;
                                     self.audit = Loadable::Idle;
+                                    self.audit_hash_detail = None;
                                 }
                             }
                         });
@@ -383,6 +398,29 @@ impl IncidentsState {
                                         }
                                     });
                             });
+                        let mut chosen_hash = self.audit_hash_detail.clone().unwrap_or_default();
+                        egui::ComboBox::from_label("Selecionar hash completo da auditoria")
+                            .selected_text(if chosen_hash.is_empty() {
+                                "— selecione um prefixo —".to_string()
+                            } else {
+                                chosen_hash[..12.min(chosen_hash.len())].to_string()
+                            })
+                            .show_ui(ui, |ui| {
+                                for event in events {
+                                    ui.selectable_value(
+                                        &mut chosen_hash,
+                                        event.event_hash.clone(),
+                                        &event.event_hash[..12.min(event.event_hash.len())],
+                                    );
+                                }
+                            });
+                        if !chosen_hash.is_empty() {
+                            self.audit_hash_detail = Some(chosen_hash);
+                        }
+                        if let Some(hash) = &self.audit_hash_detail {
+                            ui.label("Hash completo selecionado (também disponível por teclado):");
+                            ui.monospace(hash);
+                        }
                         ui.small(format!("{} evento(s) neste incidente.", events.len()));
                     });
                 }
@@ -654,6 +692,60 @@ mod tests {
         harness.run();
 
         harness.get_by_label(&tooltip);
+    }
+
+    #[test]
+    fn selecting_the_hash_prefix_reveals_the_full_hash_as_actionable_text() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        state.tab = Tab::Audit;
+        let full_hash = "0123456789abcdef".repeat(4);
+        let mut event = audit_event(1, "EVIDENCE_LINKED_TO_INCIDENT");
+        event.event_hash = full_hash.clone();
+        state.audit = Loadable::Ready(vec![event]);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(780.0, 600.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        assert!(harness.query_by_label(&full_hash).is_none());
+        harness
+            .get_by_label("Selecionar hash completo da auditoria")
+            .click();
+        harness.run();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, &full_hash[..12])
+            .click();
+        harness.run();
+        harness.get_by_label(&full_hash);
+        assert_eq!(
+            harness.state().0.audit_hash_detail.as_deref(),
+            Some(full_hash.as_str())
+        );
+    }
+
+    #[test]
+    fn late_audit_and_evidence_responses_do_not_replace_the_selected_incident() {
+        let mut state = state_with_incident();
+        state.audit = Loadable::Ready(vec![audit_event(1, "INCIDENT_CREATED")]);
+        state.evidence = Loadable::Ready(vec![evidence("ev-1", "senai-demo.evtx")]);
+
+        state.on_audit_loaded(
+            "outro-incidente",
+            Ok(vec![audit_event(2, "EVIDENCE_LINKED_TO_INCIDENT")]),
+        );
+        state.on_incident_evidence_loaded(
+            "outro-incidente",
+            Ok(vec![evidence("ev-2", "outra-fixture.evtx")]),
+        );
+
+        assert_eq!(state.audit.ready().map(Vec::len), Some(1));
+        assert_eq!(state.evidence.ready().map(Vec::len), Some(1));
+        assert_eq!(state.audit.ready().unwrap()[0].action, "INCIDENT_CREATED");
+        assert_eq!(state.evidence.ready().unwrap()[0].id, "ev-1");
     }
 
     #[test]
