@@ -18,6 +18,8 @@ O release é fechado somente com evidência executada.
 > **Atualização 2026-11-18 (fechamento da rodada de engenharia).** No commit `f8dd8c6`, `EVD-013`: doctor 0 erros/1 aviso de Python; `just verify` com nextest 432 passed/1 skipped, doc-tests, fmt/check/clippy; supply chain verde com as exceções documentadas; doc-gate PASS; e2e 110/110. Windows, aarch64, incidente real e CI continuam não executados/não implementados, sob os waivers e pendências já registrados.
 >
 > **Atualização 2026-11-18 (ajuste visual da GUI).** No commit `26cc8b3`, `EVD-014`: fmt/check/clippy/doc-tests verdes, nextest 435 passed/1 skipped, supply chain verde, doc-gate PASS e e2e 110/110. A verificação cobre os três novos testes de glifos e layout; nenhuma janela real ou verificação externa nova foi declarada.
+>
+> **Atualização 2026-11-18 (cobertura de glifos da navegação).** No commit `3ff341e`, `EVD-015`: o caminho real da navegação passa no teste estrito; mutação temporária com 📁 falhou por `No glyph` e a restauração passou. `just verify` terminou com 436 passed/1 skipped e doc-gate PASS. Supply chain e e2e não foram repetidos; `EVD-014` segue como evidência desses gates.
 
 ## Gate documental
 
@@ -32,7 +34,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-014`, nextest 435 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-015`, nextest 436 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -69,7 +71,7 @@ cargo audit
 - `PASS` **contenção do engine provada com o engine de verdade** (ADR-0024): `cargo test --locked --workspace` (inclui `engine/tests/sandbox.rs`, que exige `EACCES`/`EPERM` onde devido e tem controle com a política `off`) e `scripts/e2e_headless.py` (repete a prova sobre o EVTX real) — `EVD-005`, `EVD-006`. **Rodar sempre pelo workspace**: `cargo test -p dfir-engine` não unifica as features do tokio e esconde falhas do runtime sob seccomp. Em Linux sem Landlock os testes de enforcement avisam e saem: o release no Linux **não** pode ser fechado nesse ambiente;
 - `WAIVED` **Windows** (`WVR-001`, aprovado pelo operador em 2026-11-14, válido até 2026-12-31): o Job Object só foi compilado; o release **não declara suporte a Windows** nesta rodada. Condição de saída: `dfir-app engine-smoke` + `just e2e <evtx>` em Windows, conferindo o aviso esperado `SANDBOX_NOT_FULLY_APPLIED`;
 - `WAIVED` **aarch64** (`WVR-002`, mesma validade): provado só em x86_64;
-- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (gates Rust, `EVD-014`);
+- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-015`);
 - `PASS` **candidatos de detecção:** o e2e confirma que os candidatos nascem pendentes, que só a confirmação cria achado, que rejeitar exige motivo e que nova execução não duplica — `EVD-006`;
 - `PASS` **cópia antes de migration (RF-032):** `cargo test` cobre a cópia, a verificação, a recusa por falta de espaço e a adulteração (`EVD-005`); a execução real sobre dados reais aconteceu no e2e (`EVD-006`); política de retenção de `backups/` documentada em `docs/OPERATION.md` §3.1.1;
 - SQLite local e staging com retenção definida.

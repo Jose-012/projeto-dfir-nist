@@ -1,0 +1,29 @@
+EVD-015 - cobertura estrita de glifos na navegação
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T05:54Z..06:00Z
+commit-tree: 3ff341e3ae4655f576b7061e4c218d41c4b7cba4
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: o teste estrito de glifos do commit 26cc8b3 renderizava EvidenceState,
+mas não a navegação DfirApp alterada no mesmo commit. O bloco real da
+navegação foi extraído sem mudança de comportamento para um método interno e
+agora é renderizado pelo teste com o default estrito do egui_kittest.
+
+Prova de sensibilidade por mutação temporária:
+  O teste passou com os rótulos corrigidos. O emoji 📁 foi então restaurado
+  temporariamente apenas na navegação e o teste falhou em fonts.rs com:
+  No glyph for "📁" (U+1F4C1) in Proportional.
+  O rótulo correto foi restaurado imediatamente e o teste voltou a passar.
+  A mutação não foi commitada.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 436 passed, 1 skipped.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Não repetidos nesta mudança de teste/GUI: supply chain e e2e, cujas últimas
+execuções verdes permanecem em EVD-014. Nenhuma janela real foi aberta.
+Windows x86_64, Linux aarch64, incidente real e CI automático continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

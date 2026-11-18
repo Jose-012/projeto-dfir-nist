@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - navegação incluída no teste estrito de glifos (`EVD-015`)
+
+- O bloco real da navegação foi extraído sem mudança de comportamento para `DfirApp::navigation` e passou a ser renderizado por um teste com o default estrito do `egui_kittest`. Isso fecha a lacuna do teste anterior, que cobria `EvidenceState` mas não os rótulos laterais alterados no `26cc8b3`.
+- Prova de sensibilidade: ao restaurar 📁 temporariamente, o teste falhou com `No glyph for 📁 (U+1F4C1)`; após restaurar o rótulo corrigido, voltou a passar. A mutação não foi commitada.
+- `EVD-015`: `just verify` com 436 passed/1 skipped, doc-tests, fmt/check/clippy e doc-gate verdes. Supply chain/e2e não repetidos e mantidos em `EVD-014`; nenhuma janela real ou verificação externa nova.
+
 ## Unreleased - 2026-11-18 - ajuste visual da GUI verificado (`EVD-014`)
 
 - No commit `26cc8b3`: removidos os emojis sem glifo das ações e da navegação, abas de incidentes passam a quebrar linha, profiles Current/Target usam IDs de scroll distintos e a tabela de evidências ganha scroll horizontal e linhas mais altas. Três testes de regressão cobrem glifos, abas estreitas e conflito de IDs.
