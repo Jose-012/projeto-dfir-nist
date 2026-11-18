@@ -27,7 +27,7 @@ A implementação abaixo pertence à base já concluída e não redefine os `RF-
 
 | Ticket | RFs canônicos | Entrega | Estado |
 |---|---|---|---|
-| F1-01 | Enabler (sem RF próprio) | Modelo analítico comum/provenance/versionamento | IMPLEMENTED / PENDING-HUMAN |
+| F1-01 | Enabler (sem RF próprio) | Modelo analítico comum/provenance/versionamento | IMPLEMENTED / PENDING-HUMAN (`EVD-033`: pai já substituído não aceita segunda sucessora; histórico ramificado antigo não é reparado) |
 | F1-02 | RF-008 | YARA-X e resultados estruturados | IMPLEMENTED / PENDING-HUMAN |
 | F1-03 | RF-009, RF-010 | Current/Target Profile + Gap reproduzível | IMPLEMENTED / PENDING-HUMAN (E0505 corrigido em 2026-10-02) |
 | F1-04 | RF-011, RF-018, RF-020 | ATT&CK + caminho crítico + impacto | IMPLEMENTED / PENDING-HUMAN (`EVD-030`: ambos os estágios de `SEQUENCE_NEXT` devem pertencer ao incidente solicitado; relações antigas não são reparadas automaticamente) |
@@ -40,7 +40,7 @@ A implementação abaixo pertence à base já concluída e não redefine os `RF-
 | F1-11 | RF-016, RF-017, RF-046 (RF-045 → Fase 4) | Dataset BEC e testes de segurança | IMPLEMENTED / PENDING-HUMAN (reduzido: ADR-0023, Etapa 7; só EVTX, sem CSV/JSONL; testado em rustc 1.97.1 em 2026-10-27) |
 | F1-12 | RF-014, RF-030, RF-032, RF-047 + RFs MVP restantes | Release candidate e reconciliação | PARCIAL (documentos reconciliados em 2026-10-27; RF-032 automático; F1-26 e F1-28 implementados; RF-049 adiado por decisão do operador; **pendentes:** CI no toolchain pinado (F1-14), ~~`cargo audit` (F1-15)~~ [executado em 2026-10-29, ver a linha F1-15; nota de 2026-11-04, Gap origem: INC-03], execução em Windows e em incidente real) |
 | F1-13 | RF-047 | Lock regenerado e compilação corrigida | IMPLEMENTED / PENDING-HUMAN |
-| F1-14 | (gates) | Baseline de verificação e CI | PARCIAL (2026-11-18: `just verify` com 457 passed/1 skipped em **1.100.0**, `EVD-031`; e2e 110/110 em `EVD-031`; CI automático não implementado e `WAIVED` por `WVR-003` até 2026-12-31) |
+| F1-14 | (gates) | Baseline de verificação e CI | PARCIAL (2026-11-18: `just verify` com 458 passed/1 skipped em **1.100.0**, `EVD-033`; e2e 110/110 em `EVD-033`; CI automático não implementado e `WAIVED` por `WVR-003` até 2026-12-31) |
 | F1-15 | (supply chain) | Supply chain da árvore de UI | PARCIAL (2026-11-18: `cargo audit` e `cargo deny --workspace check` verdes em `EVD-032`; uma vulnerabilidade aceita por `WVR-004` e duas exceções informativas documentadas; manual, sem CI (`WVR-003`); `cargo vet` dispensado no MVP; exceções informativas da UI removidas do grafo com eframe 0.37.0 sem accesskit) |
 | F1-16 | RF-005, RF-006 | Fixtures EVTX e testes de integração | VERIFIED (2026-11-15, `EVD-011`): fixture EVTX sanitizada versionada `tests/fixtures/senai-demo.evtx` (determinística) e e2e 110/110 sem arquivo externo |
 | F1-17 | RF-006 | Erros de parsing persistidos | IMPLEMENTED / PENDING-HUMAN (ADR-0021; `EVD-021`: warnings persistidos com JSON inválido ou contagem negativa/divergente falham em vez de virar lista vazia) |

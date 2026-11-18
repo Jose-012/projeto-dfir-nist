@@ -1,0 +1,56 @@
+EVD-033 - resultado analitico nao aceita segunda sucessora do mesmo pai
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T10:19Z..10:31Z
+commit-tree: d5b7840ccbd3b9ffdc1e42fa17cd867c48ed1685 (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-01. insert_on_connection exigia a mesma correlation_key, mas nao
+verificava se o pai ja tinha uma sucessora. Duas revisoes do mesmo pai ficavam
+vigentes na listagem, enquanto current_for_correlation_key escolhia somente a
+mais recente por sequence.
+
+Reproducao antes da correcao, sobre a arvore 0b95be1 mais o teste novo:
+  cargo nextest run --locked a_superseded_result_cannot_gain_a_second_successor
+    exit 100 esperado para a reproducao. O caminho central criou first e second;
+    uma segunda sucessora de first foi aceita. list_current_by_evidence retornou
+    duas linhas e current_for_correlation_key selecionou a terceira. O assert
+    registra second successor accepted=true current_rows=2 selected_is_third=true.
+    Tudo ocorreu via insert publico do modulo, sem UPDATE/DELETE ou SQL manual.
+
+Correcao no commit d5b7840:
+  dentro da mesma transacao BEGIN IMMEDIATE, a persistencia agora consulta se ja
+  existe uma linha com supersedes igual ao pai. Se existir, retorna erro
+  "already superseded" antes do INSERT e da auditoria. A serializacao existente
+  impede que duas escritas concorrentes passem juntas por essa checagem.
+
+Regressao depois da correcao:
+  cargo nextest run --locked --no-fail-fast superseded
+    exit 0; 2 testes: a nova regressao e a listagem vigente sem limite. A segunda
+    sucessora falha, current listing e singular current mantem second, o
+    historico fica com duas linhas e a contagem de auditoria permanece duas.
+  cargo nextest run --locked --no-fail-fast supersedes
+    exit 0; 6 controles existentes: sequencia YARA, correlation_key divergente,
+    reprocessamento ATT&CK/impacto, revisao de Finding e profile NIST.
+  O primeiro filtro nao incluia a nova regressao pela forma "superseded"; por
+  isso o segundo comando foi executado explicitamente e ambos ficaram no log.
+
+Tentativa de setup nao contada como evidencia comportamental:
+  a primeira closure da fixture falhou na compilacao por lifetime. Foi substituida
+  por uma funcao local com lifetime explicito e o log ficou separado em
+  task-021-before-setup.txt. A reproducao comportamental valida e task-021-before.txt.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 458 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  resultados versionados, cinco documentos, hardening, determinismo e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa SQLite descartavel e nao repara historico ramificado ja
+persistido. Supply chain e janela real nao foram repetidos; EVD-032 permanece a
+execucao ambiental mais recente. Windows x86_64, Linux aarch64, incidente real e
+CI automatico continuam PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

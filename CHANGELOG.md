@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - resultado analítico não aceita segunda sucessora do mesmo pai (`EVD-033`)
+
+- A checagem central validava `correlation_key`, mas aceitava duas sucessoras para o mesmo pai. A reprodução obteve duas linhas vigentes na listagem enquanto `current_for_correlation_key` escolhia a terceira.
+- A transação agora rejeita pai já substituído antes do INSERT e da auditoria. A listagem e a leitura singular preservam a segunda versão, com duas linhas de histórico e duas auditorias.
+- `EVD-033`: regressão central, oito testes focados, `just verify` com 458 passed/1 skipped, e2e 110/110 e doc-gate PASS. Histórico ramificado antigo não é reparado; supply chain e smoke permanecem em `EVD-032`.
+
 ## Unreleased - 2026-11-18 - verificação ambiental final (`EVD-032`)
 
 - Sem mudança de código sobre `7080dd5`: `just supply-chain` passou com as exceções já documentadas; `cargo deny --workspace check` terminou com advisories/bans/licenses/sources OK.
