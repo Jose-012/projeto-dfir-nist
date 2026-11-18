@@ -1076,7 +1076,6 @@ dependencies = [
  "egui_kittest",
  "futures-util",
  "libc",
- "proptest",
  "rfd",
  "serde",
  "serde_json",
@@ -1114,6 +1113,7 @@ dependencies = [
 name = "dfir-protocol"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "serde",
  "serde_json",
 ]

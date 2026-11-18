@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased — 2026-11-18 — propriedades críticas do protocolo e remoção de resíduo
+
+- `proptest` passou de dependência não utilizada do app para dev-dependency de `dfir-protocol`. Novas propriedades cobrem profundidade JSON, round-trip de eventos e referências lógicas, com 128 casos cada. O lock manteve os mesmos 612 pacotes.
+- Removido `engine/examples/dump_evtx_tmp.rs`, exemplo temporário sem referências que imprimia conteúdo de evidência.
+- Verificação: protocolo 29/29; `just verify` com nextest 429 passed/1 skipped, fmt/check/clippy verdes; `just supply-chain` e `just doc-gate` PASS.
+
 ## Unreleased — 2026-11-18 — simplificação da governança documental
 
 - `docs/rtm.md` passou a ser a única matriz de tickets; `docs/FASE1_STATUS.md` ficou somente com histórico. README e prompt perderam narrativas datadas; DoR e plano de backlog concluídos foram arquivados; atualizações passam a cobrir apenas documentos afetados e novos relatórios de rodada não são obrigatórios.

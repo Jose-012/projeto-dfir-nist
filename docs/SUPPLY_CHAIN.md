@@ -33,7 +33,7 @@ O projeto trata mudanças de dependências e de toolchain como mudanças que afe
 - `cargo deny --workspace check` para advisories, licenças, bans e fontes (**sempre com `--workspace`**, ver abaixo);
 - ~~`cargo vet` for dependency audit policy;~~ dispensado no MVP (ADR-0018 D-2; confirmado pelo operador em 2026-11-04; Gap origem: INC-04);
 - `cargo nextest run --workspace` para a suíte de testes, quando disponível (Gap origem: INC-02);
-- **divergência aberta:** `proptest` está declarado, mas não há uso atual no workspace. A especificação exige propriedades críticas; a correção deve implementar propriedades úteis ou remover a dependência e atualizar a norma, sem ocultar o aviso do Cargo.
+- `proptest` é dev-dependency de `dfir-protocol` e é usado em `protocol/tests/properties.rs` para profundidade JSON, round-trip de eventos e referências lógicas; não entra no runtime.
 
 
 

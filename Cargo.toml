@@ -40,7 +40,6 @@ uuid = { version = "1.24.1", features = ["v4", "serde"] }
 libc = "0.2.189"
 
 [dev-dependencies]
-proptest = "1.11.0"
 tempfile = "3.27.0"
 # Testes de GUI sem janela (ADR-0022): consulta a árvore de acessibilidade e
 # simula clique e digitação. Só dev-dependency; não entra no binário.
