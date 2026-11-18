@@ -21,12 +21,14 @@
 > **Nota de implementação superseded — 2026-11-09 (9):** Esta versão (6.5.1) é uma revisão de integridade da 6.5.0 e não muda requisito de produto, exceto pela decisão do operador de **não ter SBOM** (`ADR-0028`): (a) o SBOM está fora do escopo — não há `SBOM.json`, receita nem gate de SBOM; (b) `RF-024` e `RF-031`, ausentes da tabela da seção 39 desde a 6.4.5 sem registro, voltam **reescritos** sem SBOM e sem imagens por digest (seção 39.2); (c) a seção 41 recuperou o título, o marcador `@section` e a entrada do índice normativo, e perdeu os trechos de SBOM, de imagens e de Podman; (d) o Apêndice F.8.1 (staleness da evidência) e o item 2 da F.12 foram restaurados sem SBOM e sem imagem; (e) no índice normativo, `D04` passa a `PARTIALLY-SUPERSEDED` (por `D47`/ADR-0017) e `D12` e `D13` a `SUPERSEDED` (por ADR-0018 e ADR-0021); (f) `<data>`, `<ajuste-de-escopo>` e a seção 53 foram atualizados. IDs normativos preservados. A 6.5.0 está em `docs/archive/PROJECT_SPEC_v6_5_0.md`.
 
 
+> **Nota de implementação superseded — 2026-11-18 (10):** **ADR-0029** reavalia a interface após auditoria prática e mantém `eframe/egui/egui_extras` 0.37, sem alterar RF ou escopo. Os defeitos de rolagem, foco, IDs, respostas assíncronas e exportação foram tratados na implementação, sem nova stack. A feature `accesskit` do `eframe` permanece desativada; a árvore interna de testes não é AT-SPI e não comprova leitor de tela externo. Se AT-SPI virar aceite obrigatório, a decisão será reavaliada com protótipo e evidência prática.
+
 ```xml
 <documento-projeto>
   <identificacao>
     <versao>6.5.1</versao>
     <status>ESPECIFICAÇÃO REALINHADA À DEMANDA ORIGINAL — ARQUITETURA FECHADA E BASE CONTROLADA DE IMPLEMENTAÇÃO</status>
-    <data>2026-11-09</data>
+    <data>2026-11-18</data>
     <programa>SAGA SENAI de Inovação 2026/01 — Projeto Integrador</programa>
     <escola>(SP) 1.32 Escola SENAI de Informática</escola>
     <empresa-parceira>Avivatec Soluções em Tecnologia da Informação Ltda.</empresa-parceira>
