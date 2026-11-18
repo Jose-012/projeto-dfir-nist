@@ -366,23 +366,43 @@ pub(crate) async fn insert_on_connection(
     let provenance = canonicalize_json(input.provenance_json)?;
 
     if let Some(supersedes_id) = input.supersedes {
-        let superseded_correlation_key: Option<String> =
-            sqlx::query_scalar("SELECT correlation_key FROM analytical_results WHERE id = ?")
-                .bind(supersedes_id)
-                .fetch_optional(&mut *connection)
-                .await?;
-        match superseded_correlation_key {
+        let superseded_identity: Option<(String, String, Option<String>, Option<String>)> =
+            sqlx::query_as(
+                "SELECT correlation_key,result_type,evidence_id,incident_id FROM analytical_results WHERE id = ?",
+            )
+            .bind(supersedes_id)
+            .fetch_optional(&mut *connection)
+            .await?;
+        match superseded_identity {
             None => {
                 return Err(validation_error(format!(
                     "supersedes references unknown analytical result: {supersedes_id}"
                 )));
             }
-            Some(key) if key != input.correlation_key => {
-                return Err(validation_error(
-                    "supersedes must reference a result with the same correlation_key",
-                ));
+            Some((key, result_type, evidence_id, incident_id)) => {
+                if key != input.correlation_key {
+                    return Err(validation_error(
+                        "supersedes must reference a result with the same correlation_key",
+                    ));
+                }
+                if result_type != input.result_type.as_str() {
+                    return Err(validation_error(
+                        "supersedes must reference a result with the same result_type",
+                    ));
+                }
+                if input.result_type != AnalyticalResultType::Ioc
+                    && evidence_id.as_deref() != input.evidence_id
+                {
+                    return Err(validation_error(
+                        "supersedes must reference a result with the same evidence_id",
+                    ));
+                }
+                if incident_id.as_deref() != input.incident_id {
+                    return Err(validation_error(
+                        "supersedes must reference a result with the same incident_id",
+                    ));
+                }
             }
-            Some(_) => {}
         }
         let already_superseded: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM analytical_results WHERE supersedes = ?)",
@@ -731,6 +751,54 @@ mod tests {
         .execute(pool)
         .await
         .expect("evidence insert");
+    }
+
+    fn result_input<'a>(
+        result_type: AnalyticalResultType,
+        correlation_key: &'a str,
+        evidence_id: Option<&'a str>,
+        incident_id: Option<&'a str>,
+        supersedes: Option<&'a str>,
+    ) -> NewAnalyticalResult<'a> {
+        NewAnalyticalResult {
+            result_type,
+            correlation_key,
+            evidence_id,
+            incident_id,
+            analysis_job_id: None,
+            rule_or_model_id: None,
+            rule_or_model_version: None,
+            confidence: result_type
+                .requires_confidence()
+                .then_some(Confidence::High),
+            payload_json: "{}",
+            provenance_json: "{}",
+            supersedes,
+            related: &[],
+            actor_id: None,
+        }
+    }
+
+    async fn assert_only_current(pool: &SqlitePool, correlation_key: &str, first_id: &str) {
+        let selected = current_for_correlation_key(pool, correlation_key)
+            .await
+            .expect("current query")
+            .expect("current row");
+        assert_eq!(selected.id, first_id);
+        assert_eq!(
+            history_for_correlation_key(pool, correlation_key)
+                .await
+                .expect("history")
+                .len(),
+            1
+        );
+        let audit_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM audit_events WHERE action = 'ANALYTICAL_RESULT_RECORDED'",
+        )
+        .fetch_one(pool)
+        .await
+        .expect("audit count");
+        assert_eq!(audit_count, 1);
     }
 
     #[test]
@@ -1179,6 +1247,156 @@ mod tests {
         )
         .await;
         assert!(mismatched.is_err());
+    }
+
+    #[tokio::test]
+    async fn supersedes_preserves_evidence_scope() {
+        let pool = test_pool().await;
+        seed_evidence(&pool, "ev-a").await;
+        seed_evidence(&pool, "ev-b").await;
+        let first = insert(
+            &pool,
+            result_input(
+                AnalyticalResultType::YaraMatch,
+                "corr-evidence-scope",
+                Some("ev-a"),
+                None,
+                None,
+            ),
+        )
+        .await
+        .expect("first");
+        let revision = insert(
+            &pool,
+            result_input(
+                AnalyticalResultType::YaraMatch,
+                "corr-evidence-scope",
+                Some("ev-b"),
+                None,
+                Some(&first),
+            ),
+        )
+        .await;
+        let original_current = list_current_by_evidence(&pool, "ev-a")
+            .await
+            .expect("original current")
+            .len();
+        let destination_current = list_current_by_evidence(&pool, "ev-b")
+            .await
+            .expect("destination current")
+            .len();
+        assert!(
+            revision.is_err(),
+            "evidence revision accepted=true original_current={original_current} destination_current={destination_current}"
+        );
+        let error = revision.expect_err("cross-evidence revision must fail");
+        assert!(
+            error.to_string().contains("same evidence_id"),
+            "unexpected error: {error}"
+        );
+        assert_only_current(&pool, "corr-evidence-scope", &first).await;
+        assert_eq!(
+            list_current_by_evidence(&pool, "ev-a")
+                .await
+                .expect("original current")
+                .len(),
+            1
+        );
+        assert!(
+            list_current_by_evidence(&pool, "ev-b")
+                .await
+                .expect("destination current")
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn supersedes_preserves_incident_scope() {
+        let pool = test_pool().await;
+        seed_incident(&pool, "inc-a").await;
+        seed_incident(&pool, "inc-b").await;
+        let first = insert(
+            &pool,
+            result_input(
+                AnalyticalResultType::AttackMapping,
+                "corr-incident-scope",
+                None,
+                Some("inc-a"),
+                None,
+            ),
+        )
+        .await
+        .expect("first");
+        let revision = insert(
+            &pool,
+            result_input(
+                AnalyticalResultType::AttackMapping,
+                "corr-incident-scope",
+                None,
+                Some("inc-b"),
+                Some(&first),
+            ),
+        )
+        .await;
+        let selected = current_for_correlation_key(&pool, "corr-incident-scope")
+            .await
+            .expect("current")
+            .expect("current row");
+        assert!(
+            revision.is_err(),
+            "incident revision accepted=true selected_incident={:?}",
+            selected.incident_id
+        );
+        let error = revision.expect_err("cross-incident revision must fail");
+        assert!(
+            error.to_string().contains("same incident_id"),
+            "unexpected error: {error}"
+        );
+        assert_only_current(&pool, "corr-incident-scope", &first).await;
+    }
+
+    #[tokio::test]
+    async fn supersedes_preserves_result_type() {
+        let pool = test_pool().await;
+        seed_evidence(&pool, "ev-a").await;
+        let first = insert(
+            &pool,
+            result_input(
+                AnalyticalResultType::YaraMatch,
+                "corr-result-type",
+                Some("ev-a"),
+                None,
+                None,
+            ),
+        )
+        .await
+        .expect("first");
+        let revision = insert(
+            &pool,
+            result_input(
+                AnalyticalResultType::Ioc,
+                "corr-result-type",
+                Some("ev-a"),
+                None,
+                Some(&first),
+            ),
+        )
+        .await;
+        let selected = current_for_correlation_key(&pool, "corr-result-type")
+            .await
+            .expect("current")
+            .expect("current row");
+        assert!(
+            revision.is_err(),
+            "type revision accepted=true selected_type={}",
+            selected.result_type
+        );
+        let error = revision.expect_err("cross-type revision must fail");
+        assert!(
+            error.to_string().contains("same result_type"),
+            "unexpected error: {error}"
+        );
+        assert_only_current(&pool, "corr-result-type", &first).await;
     }
 
     #[tokio::test]
