@@ -1,0 +1,31 @@
+EVD-018 - scroll horizontal da visão NIST por Function
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T06:23Z..06:28Z
+commit-tree: 8d80b8741e7f2b5ed65d221f3efcbae51e175821
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: o scroll horizontal acrescentado à grade NIST em 26cc8b3 não tinha
+teste direto de acesso à última coluna em uma viewport estreita.
+
+O teste, sem snapshots:
+  Renderiza function_section a 600 px e exige que Gap baixo comece fora da
+  viewport, em x=674,4..731,3. Um evento real MouseWheel de -300 px no eixo X
+  sobre Function move o conteúdo e deixa a última coluna inteiramente visível.
+
+Prova de sensibilidade por mutação temporária:
+  ScrollArea::horizontal foi substituído por vertical. O conteúdo não se moveu:
+  antes e depois Gap baixo permaneceu em x=674,4..731,3, e o teste falhou.
+  A implementação horizontal foi restaurada imediatamente e o teste voltou a
+  passar. A mutação não foi commitada.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 438 passed, 1 skipped.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Não houve mudança de produção nesta rodada, somente o novo teste. Supply chain
+e e2e não foram repetidos e permanecem em EVD-014. Nenhuma janela real foi
+aberta. Windows x86_64, Linux aarch64, incidente real e CI automático continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - scroll da grade NIST coberto por teste (`EVD-018`)
+
+- Novo teste sem snapshots renderiza `function_section` a 600 px, exige `Gap baixo` inicialmente fora da viewport e usa um evento real `MouseWheel` para revelar a última coluna.
+- Prova de sensibilidade: a mutação temporária para scroll vertical não moveu o conteúdo, que permaneceu em x=674,4..731,3, e falhou; a restauração horizontal passou. A mutação não foi commitada.
+- `EVD-018`: `just verify` com 438 passed/1 skipped e doc-gate PASS. Nenhum código de produção mudou; supply chain/e2e permanecem em `EVD-014`, sem janela real ou verificação externa nova nesta etapa.
+
 ## Unreleased - 2026-11-18 - ações de evidência e scroll cobertos por teste (`EVD-017`)
 
 - Novo teste sem snapshots verifica as quatro ações na faixa vertical de 48 px e sem sobreposição a 780 px. Após resize a 600 px, `Destruir` começa fora da viewport, dois eventos reais `MouseWheel` o revelam e o clique confirma `pending_destroy`.
