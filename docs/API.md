@@ -66,6 +66,8 @@ Ao indexar ou reindexar `results.jsonl`, JSON inválido ou profundidade acima de
 | `async create_root_cause` | `incident_id: &str, input: &RootCauseInput` | `AppResult<String>` | — |
 | `async findings_view` | `incident_id: &str` | `AppResult<FindingsView>` | — |
 
+`create_ioc` valida o agregado vigente antes de acrescentar uma ocorrência: `sightings` deve ser array, `sighting_count` presente deve ser inteiro não negativo e pelo menos igual ao tamanho do array, e o incremento não pode exceder `u64`. Qualquer falha impede a nova versão. O legado sem `sighting_count` continua válido e infere o total do array (`EVD-027`).
+
 ### `src/service/plan.rs` — Plano de fortalecimento
 
 | Função | Parâmetros relevantes | Retorno | Descrição |

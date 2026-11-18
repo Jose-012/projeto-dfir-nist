@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - agregado IOC inválido não gera nova versão (`EVD-027`)
+
+- `sightings` não-array virava vetor vazio e `sighting_count` inválido virava zero/`max(len)`. A reprodução com contador 7 e `sightings = {}` criou uma sucessora com contador 8 e apenas uma ocorrência retida.
+- A agregação agora valida array, inteiro e consistência da contagem, e usa `checked_add` antes de qualquer inserção. Apenas o legado sem `sighting_count` infere o total do array; os quatro casos inválidos falham sem nova linha.
+- `EVD-027`: um teste com quatro casos, seis testes de agregação incluindo o legado, `just verify` com 451 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-020`; nenhuma janela real nova foi aberta.
+
 ## Unreleased - 2026-11-18 - `RESULT` persistido exige array `items` (`EVD-026`)
 
 - `ResultMessage` exige `items: Vec<Value>`, mas os leitores de timeline e resultados analíticos aceitavam campo ausente ou de outro tipo como zero itens. As reproduções retornavam `Ok([])` e `Ok((2, 0))` durante reindexação.

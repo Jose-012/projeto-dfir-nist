@@ -1,0 +1,52 @@
+EVD-027 - agregado IOC invalido nao gera nova versao
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T08:14Z..08:24Z
+commit-tree: 128af44e91d39c0fcbc8abc15e622113e0600c9a (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-05/IOC. aggregate_sightings convertia sightings nao-array em vetor
+vazio, sighting_count invalido em zero/max(len) e incrementava sem checked_add.
+record_ioc_sighting podia entao supersedar a linha vigente com historico reconstruido.
+
+Reproducao antes da correcao, sobre a arvore 2ceddd4 mais o teste novo:
+  cargo nextest run --locked malformed_current_ioc_history
+    exit 100 esperado para a reproducao. Um IOC vigente com sighting_count=7 e
+    sightings={} foi substituido com sucesso. A sucessora tinha sighting_count=8
+    e stored_sightings=1: o total numerico foi preservado, mas o array anterior
+    foi descartado. Nao houve update nem remocao de triggers na fixture.
+  A primeira execucao mostrou apenas count=8; a repeticao com a assercao de
+  stored_sightings esta no log final e a primeira foi preservada em *-first.txt.
+
+Correcao no commit 128af44:
+  aggregate_sightings agora retorna Result e valida sightings array, o inteiro
+  nao negativo de sighting_count quando presente e count >= sightings.len().
+  O incremento usa checked_add. Somente a ausencia de sighting_count no formato
+  legado infere o total do array. Nenhum valor de IOC ou payload entra nos erros.
+
+Regressao depois da correcao:
+  cargo nextest run --locked malformed_current_ioc_history
+    exit 0; 1 teste com quatro casos: sightings objeto, count string, count menor
+    que o array e count=u64::MAX. Todos falham sem nova linha; a linha invalida
+    permanece vigente. A reproducao antes da correcao foi o primeiro caso; os
+    outros tres sao cobertura adicional executada depois.
+  cargo nextest run --locked aggregate_
+    exit 0; 6 passed. O legado sem sighting_count continua aceito e infere seis
+    ocorrencias anteriores, totalizando sete apos a nova, com o teto aplicado.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 451 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  IOCs, achados, deteccao, documentos deterministicos e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa um agregado propositalmente invalido em banco descartavel;
+nao declara reparo automatico de dados legados nem execucao sobre incidente real.
+Supply chain nao foi repetido porque Cargo.lock nao mudou; EVD-020 permanece a
+execucao vigente. Nenhuma janela real nova foi aberta; o smoke anterior e EVD-020.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.
