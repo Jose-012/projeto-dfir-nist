@@ -384,6 +384,17 @@ pub(crate) async fn insert_on_connection(
             }
             Some(_) => {}
         }
+        let already_superseded: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM analytical_results WHERE supersedes = ?)",
+        )
+        .bind(supersedes_id)
+        .fetch_one(&mut *connection)
+        .await?;
+        if already_superseded {
+            return Err(validation_error(format!(
+                "supersedes references an analytical result that is already superseded: {supersedes_id}"
+            )));
+        }
     }
 
     let id = Uuid::new_v4().to_string();
@@ -927,6 +938,71 @@ mod tests {
             .await
             .expect("count query");
         assert_eq!(total, 2, "superseding must not delete the prior row");
+    }
+
+    #[tokio::test]
+    async fn a_superseded_result_cannot_gain_a_second_successor() {
+        let pool = test_pool().await;
+        seed_evidence(&pool, "ev-branch").await;
+        fn new(supersedes: Option<&str>) -> NewAnalyticalResult<'_> {
+            NewAnalyticalResult {
+                result_type: AnalyticalResultType::YaraMatch,
+                correlation_key: "corr-branch",
+                evidence_id: Some("ev-branch"),
+                incident_id: None,
+                analysis_job_id: None,
+                rule_or_model_id: Some("rule-1"),
+                rule_or_model_version: Some("1.0.0"),
+                confidence: None,
+                payload_json: "{}",
+                provenance_json: "{}",
+                supersedes,
+                related: &[],
+                actor_id: None,
+            }
+        }
+        let first = insert(&pool, new(None)).await.expect("first");
+        let second = insert(&pool, new(Some(&first)))
+            .await
+            .expect("second supersedes first");
+
+        let third = insert(&pool, new(Some(&first))).await;
+        let current_rows = list_current_by_evidence(&pool, "ev-branch")
+            .await
+            .expect("current rows");
+        let selected = current_for_correlation_key(&pool, "corr-branch")
+            .await
+            .expect("selected current")
+            .expect("current exists");
+        assert!(
+            third.is_err(),
+            "second successor accepted={} current_rows={} selected_is_third={}",
+            third.is_ok(),
+            current_rows.len(),
+            third.as_ref().is_ok_and(|id| id == &selected.id)
+        );
+        let error = third.expect_err("second successor must fail");
+        assert!(
+            error.to_string().contains("already superseded"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(current_rows.len(), 1);
+        assert_eq!(current_rows[0].id, second);
+        assert_eq!(selected.id, second);
+        assert_eq!(
+            history_for_correlation_key(&pool, "corr-branch")
+                .await
+                .expect("history")
+                .len(),
+            2
+        );
+        let audit_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM audit_events WHERE action='ANALYTICAL_RESULT_RECORDED'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("audit count");
+        assert_eq!(audit_count, 2, "rejected successor must not write audit");
     }
 
     #[tokio::test]
