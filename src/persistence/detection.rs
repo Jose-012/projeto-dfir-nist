@@ -5,6 +5,7 @@
 //! mapeamento, achado e IOC. O que a regra afirmou fica imutável no banco; só a
 //! decisão (e os vínculos criados ao confirmar) mudam, uma vez.
 
+use super::validation_error;
 use chrono::Utc;
 use dfir_protocol::{CandidateIoc, DetectionCandidate};
 use serde::Serialize;
@@ -52,12 +53,20 @@ pub struct CandidateRow {
 }
 
 impl CandidateRow {
-    pub fn event_refs(&self) -> Vec<String> {
-        serde_json::from_str(&self.event_refs).unwrap_or_default()
+    pub fn event_refs(&self) -> Result<Vec<String>, sqlx::Error> {
+        serde_json::from_str(&self.event_refs).map_err(|error| {
+            validation_error(format!(
+                "stored detection candidate event_refs are malformed JSON: {error}"
+            ))
+        })
     }
 
-    pub fn iocs(&self) -> Vec<CandidateIoc> {
-        serde_json::from_str(&self.iocs).unwrap_or_default()
+    pub fn iocs(&self) -> Result<Vec<CandidateIoc>, sqlx::Error> {
+        serde_json::from_str(&self.iocs).map_err(|error| {
+            validation_error(format!(
+                "stored detection candidate iocs are malformed JSON: {error}"
+            ))
+        })
     }
 }
 
@@ -86,8 +95,16 @@ pub async fn insert_on_connection(
     job_id: &str,
     candidate: &DetectionCandidate,
 ) -> Result<bool, sqlx::Error> {
-    let event_refs = serde_json::to_string(&candidate.event_refs).unwrap_or_else(|_| "[]".into());
-    let iocs = serde_json::to_string(&candidate.iocs).unwrap_or_else(|_| "[]".into());
+    let event_refs = serde_json::to_string(&candidate.event_refs).map_err(|error| {
+        validation_error(format!(
+            "could not encode detection candidate event_refs as JSON: {error}"
+        ))
+    })?;
+    let iocs = serde_json::to_string(&candidate.iocs).map_err(|error| {
+        validation_error(format!(
+            "could not encode detection candidate iocs as JSON: {error}"
+        ))
+    })?;
     let result = sqlx::query(
         "INSERT OR IGNORE INTO detection_candidates (id,evidence_id,job_id,candidate_key,rule_id,rule_version,rule_set_version,title,description,tactic,technique_id,sub_technique_id,severity,confidence,aggregation,event_count,first_seen,last_seen,event_refs,refs_truncated,host,user_name,src_ip,iocs,limitations,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'PENDING',?)",
     )

@@ -72,19 +72,21 @@ fn clean_option(value: Option<String>) -> Option<String> {
     value.map(clean)
 }
 
-impl From<CandidateRow> for CandidateView {
-    fn from(row: CandidateRow) -> Self {
-        let event_refs = row.event_refs();
+impl TryFrom<CandidateRow> for CandidateView {
+    type Error = sqlx::Error;
+
+    fn try_from(row: CandidateRow) -> Result<Self, Self::Error> {
+        let event_refs = row.event_refs()?;
         let iocs = row
-            .iocs()
+            .iocs()?
             .into_iter()
             .map(|ioc| CandidateIoc {
                 ioc_type: ioc.ioc_type,
                 value: clean(ioc.value),
                 event_ref: ioc.event_ref,
             })
-            .collect();
-        Self {
+            .collect::<Vec<_>>();
+        Ok(Self {
             id: row.id,
             evidence_id: row.evidence_id,
             job_id: row.job_id,
@@ -118,7 +120,7 @@ impl From<CandidateRow> for CandidateView {
             incident_id: row.incident_id,
             attack_mapping_id: row.attack_mapping_id,
             finding_id: row.finding_id,
-        }
+        })
     }
 }
 
@@ -164,8 +166,8 @@ pub async fn list_candidates(
     Ok(store::list(&services.db, evidence_id, status)
         .await?
         .into_iter()
-        .map(Into::into)
-        .collect())
+        .map(CandidateView::try_from)
+        .collect::<Result<Vec<_>, _>>()?)
 }
 
 pub async fn candidate_counts(
@@ -192,10 +194,9 @@ pub struct ConfirmOutcome {
 }
 
 /// Texto de base (proveniência) do mapeamento e do achado.
-fn basis_text(row: &CandidateRow) -> String {
-    let refs = row.event_refs();
-    let shown: Vec<&str> = refs.iter().take(8).map(String::as_str).collect();
-    let more = if row.refs_truncated != 0 || refs.len() > shown.len() {
+fn basis_text(row: &CandidateRow, event_refs: &[String]) -> String {
+    let shown: Vec<&str> = event_refs.iter().take(8).map(String::as_str).collect();
+    let more = if row.refs_truncated != 0 || event_refs.len() > shown.len() {
         ", ..."
     } else {
         ""
@@ -232,8 +233,12 @@ pub async fn confirm_candidate(
             row.status
         )));
     }
+    // Valida todo o dado persistido antes de criar qualquer resultado: uma
+    // falha de leitura não pode deixar uma confirmação parcial sem proveniência.
+    let event_refs = row.event_refs()?;
+    let iocs = row.iocs()?;
     let note = analyst_note.map(str::trim).filter(|text| !text.is_empty());
-    let basis = basis_text(&row);
+    let basis = basis_text(&row, &event_refs);
 
     if row.attack_mapping_id.is_none() {
         let mapping_id = findings::create_attack_mapping(
@@ -281,7 +286,7 @@ pub async fn confirm_candidate(
     // IOCs: cada um com a referência do evento onde apareceu. `record_ioc_sighting`
     // já agrupa avistamentos do mesmo valor, então repetir não duplica o IOC.
     let mut ioc_ids = Vec::new();
-    for ioc in row.iocs() {
+    for ioc in iocs {
         let context = format!("{} ({}) em {}", row.rule_id, row.tactic, ioc.event_ref);
         match findings::create_ioc(
             services,
@@ -473,6 +478,31 @@ mod tests {
             .expect("insert")
     }
 
+    /// Clona um candidato válido já no banco, mas introduz JSON inválido na
+    /// coluna escolhida. Inserir a linha corrompida evita o trigger que impede
+    /// alterar os fatos de um candidato existente.
+    async fn insert_malformed_clone(fx: &Fixture, original_id: &str, column: &str) -> String {
+        let malformed_id = format!("malformed-{column}");
+        sqlx::query(
+            "INSERT INTO detection_candidates
+             SELECT ?,evidence_id,job_id,?,rule_id,rule_version,rule_set_version,title,description,tactic,technique_id,sub_technique_id,severity,confidence,aggregation,event_count,first_seen,last_seen,
+                    CASE WHEN ?='event_refs' THEN 'not-json' ELSE event_refs END,
+                    refs_truncated,host,user_name,src_ip,
+                    CASE WHEN ?='iocs' THEN 'not-json' ELSE iocs END,
+                    limitations,status,created_at,decided_at,decision_note,incident_id,attack_mapping_id,finding_id
+             FROM detection_candidates WHERE id=?",
+        )
+        .bind(&malformed_id)
+        .bind(&malformed_id)
+        .bind(column)
+        .bind(column)
+        .bind(original_id)
+        .execute(&fx.services.db)
+        .await
+        .expect("malformed fixture");
+        malformed_id
+    }
+
     async fn only_candidate(fx: &Fixture) -> CandidateView {
         let mut all = list_candidates(&fx.services, "ev1", None)
             .await
@@ -634,6 +664,74 @@ mod tests {
         );
         assert_eq!(count_results(&fx, "ATTACK_MAPPING").await, 1);
         assert_eq!(count_results(&fx, "FINDING").await, 1);
+    }
+
+    #[tokio::test]
+    async fn malformed_stored_candidate_event_refs_fail_before_any_confirmation_write() {
+        let fx = fixture().await;
+        seed_evidence(&fx, "ev1").await;
+        insert(&fx, &candidate("k1", "R-AUTH-002")).await;
+        let original_id = only_candidate(&fx).await.id;
+        let malformed_id = insert_malformed_clone(&fx, &original_id, "event_refs").await;
+        let incident = service::create_incident(&fx.services, "Incidente")
+            .await
+            .expect("incident");
+
+        let error = confirm_candidate(&fx.services, &malformed_id, &incident.id, None)
+            .await
+            .expect_err("event_refs inválido deve impedir a confirmação");
+        assert!(
+            error
+                .user_message()
+                .contains("stored detection candidate event_refs"),
+            "{error:?}"
+        );
+        for result_type in ["ATTACK_MAPPING", "FINDING", "IOC"] {
+            assert_eq!(count_results(&fx, result_type).await, 0, "{result_type}");
+        }
+        let list_error = list_candidates(&fx.services, "ev1", None)
+            .await
+            .expect_err("listar não pode esconder event_refs inválido");
+        assert!(list_error.user_message().contains("event_refs"));
+        let row = store::get(&fx.services.db, &malformed_id)
+            .await
+            .expect("get")
+            .expect("candidate");
+        assert_eq!(row.status, store::STATUS_PENDING);
+    }
+
+    #[tokio::test]
+    async fn malformed_stored_candidate_iocs_fail_before_any_confirmation_write() {
+        let fx = fixture().await;
+        seed_evidence(&fx, "ev1").await;
+        insert(&fx, &candidate("k1", "R-AUTH-002")).await;
+        let original_id = only_candidate(&fx).await.id;
+        let malformed_id = insert_malformed_clone(&fx, &original_id, "iocs").await;
+        let incident = service::create_incident(&fx.services, "Incidente")
+            .await
+            .expect("incident");
+
+        let error = confirm_candidate(&fx.services, &malformed_id, &incident.id, None)
+            .await
+            .expect_err("IOCs inválidos devem impedir a confirmação");
+        assert!(
+            error
+                .user_message()
+                .contains("stored detection candidate iocs"),
+            "{error:?}"
+        );
+        for result_type in ["ATTACK_MAPPING", "FINDING", "IOC"] {
+            assert_eq!(count_results(&fx, result_type).await, 0, "{result_type}");
+        }
+        let list_error = list_candidates(&fx.services, "ev1", None)
+            .await
+            .expect_err("listar não pode esconder IOCs inválidos");
+        assert!(list_error.user_message().contains("iocs"));
+        let row = store::get(&fx.services.db, &malformed_id)
+            .await
+            .expect("get")
+            .expect("candidate");
+        assert_eq!(row.status, store::STATUS_PENDING);
     }
 
     #[tokio::test]
