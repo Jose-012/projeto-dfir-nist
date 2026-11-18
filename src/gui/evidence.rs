@@ -409,6 +409,16 @@ impl EvidenceState {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, backend: &Backend, incidents: &[IncidentResponse]) {
+        egui::ScrollArea::vertical()
+            .id_salt("evidence_screen_vertical")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                self.ui_content(ui, backend, incidents);
+            });
+    }
+
+    fn ui_content(&mut self, ui: &mut egui::Ui, backend: &Backend, incidents: &[IncidentResponse]) {
         // Drena o seletor nativo: o resultado chega por canal, nunca por uma
         // chamada bloqueante dentro deste quadro (GUI-01).
         match self.picker.poll() {
@@ -1327,6 +1337,87 @@ mod provenance_ui_tests {
         harness.get_by_label("Destruir").click();
         harness.run();
         assert_eq!(harness.state().0.pending_destroy.as_deref(), Some("ev-1"));
+    }
+
+    #[test]
+    fn vertical_wheel_reveals_yara_content_below_the_viewport() {
+        let (backend, _commands) = Backend::for_test();
+        let patterns: Vec<_> = (0..40)
+            .map(|index| {
+                serde_json::json!({
+                    "pattern_id": format!("$padrao_{index}"),
+                    "offset": index * 128,
+                    "length": 68
+                })
+            })
+            .collect();
+        let item = AnalyticalResultResponse {
+            id: "yara-1".into(),
+            result_type: "YARA_MATCH".into(),
+            correlation_key: "yara:regra:ev-1".into(),
+            evidence_id: Some("ev-1".into()),
+            incident_id: None,
+            analysis_job_id: Some("job-1".into()),
+            rule_or_model_id: Some("regra_de_regressao".into()),
+            rule_or_model_version: None,
+            confidence: None,
+            payload: serde_json::json!({
+                "matched_patterns": patterns,
+                "matches_truncated": false
+            }),
+            provenance: serde_json::Value::Null,
+            supersedes: None,
+            created_at: "2026-11-18T00:00:00Z".into(),
+        };
+        let mut state = EvidenceState {
+            list: Loadable::Ready(vec![evidence("ev-1", "senai-demo.evtx", "evtx")]),
+            selected: Some("ev-1".into()),
+            ..EvidenceState::default()
+        };
+        state.on_analytical_results("ev-1", Ok(vec![item]));
+        let viewport = egui::vec2(960.0, 600.0);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(viewport)
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.step();
+        harness.get_by_label("Resultados analíticos (YARA)").click();
+        harness.run();
+
+        let marker = "Ocorrências truncadas: não";
+        let initial = harness.get_by_label(marker).rect();
+        assert!(
+            initial.min.y > viewport.y,
+            "o marcador deve começar abaixo da viewport: {initial:?}"
+        );
+
+        harness.get_by_label("Evidência").hover();
+        for _ in 0..5 {
+            harness.input_mut().events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -300.0),
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Unknown,
+                modifiers: egui::Modifiers::default(),
+            });
+        }
+        harness.run();
+
+        let revealed = harness.get_by_label(marker).rect();
+        assert!(
+            revealed.min.y < initial.min.y,
+            "a roda vertical não moveu o conteúdo: antes={initial:?}, depois={revealed:?}"
+        );
+        assert!(
+            revealed.min.y >= 0.0 && revealed.max.y <= viewport.y,
+            "o marcador não ficou visível após a rolagem vertical: {revealed:?}"
+        );
+        assert!(
+            revealed.min.x >= 0.0 && revealed.max.x <= viewport.x,
+            "a rolagem vertical introduziu deslocamento horizontal espúrio: {revealed:?}"
+        );
     }
 
     #[test]
