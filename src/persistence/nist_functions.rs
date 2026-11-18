@@ -173,15 +173,10 @@ mod tests {
 
     fn entry(subcategory_id: &str, status: &str) -> ProfileEntryRecord {
         ProfileEntryRecord {
-            id: format!("e-{subcategory_id}"),
-            profile_id: "p".into(),
             subcategory_id: subcategory_id.into(),
             subcategory_label: "rótulo".into(),
             implementation_status: status.into(),
-            justification: None,
-            evidence_reference: None,
             confidence: None,
-            created_at: "2026-10-14T00:00:00Z".into(),
         }
     }
 

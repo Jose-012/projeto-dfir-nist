@@ -21,18 +21,11 @@ pub struct ProfileEntryInput {
 }
 
 #[derive(Debug, Clone)]
-// `id`/`supersedes` fazem parte do registro completo (paridade com
-// `nist_profiles::ProfileRecord`) e ficam prontos para uma futura tela de
-// histórico/diff entre versões; o resumo atual em `gui/nist.rs` só mostra a
-// versão vigente.
-#[allow(dead_code)]
 pub struct ProfileVersionView {
-    pub id: String,
     pub version_label: String,
     pub source: String,
     pub tier: Option<String>,
     pub tier_justification: Option<String>,
-    pub supersedes: Option<String>,
     pub created_at: String,
     pub entries: Vec<nist_profiles::ProfileEntryRecord>,
 }
@@ -126,12 +119,10 @@ pub async fn profile_history(
     for profile in history {
         let entries = nist_profiles::profile_entries(&services.db, &profile.id).await?;
         versions.push(ProfileVersionView {
-            id: profile.id,
             version_label: profile.version_label,
             source: profile.source,
             tier: profile.tier,
             tier_justification: profile.tier_justification,
-            supersedes: profile.supersedes,
             created_at: profile.created_at,
             entries,
         });

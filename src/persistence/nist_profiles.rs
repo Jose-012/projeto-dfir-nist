@@ -36,13 +36,6 @@
 //! `nist_profiles` (um valor por versão de profile), nunca em
 //! `nist_profile_entries`.
 //!
-//! ## Duplica a disciplina append-only/JCS de F1-01, deliberadamente
-//!
-//! Mesma razão documentada em `analytical_results.rs`: não há `cargo`
-//! disponível neste ambiente para verificar uma extração de helpers
-//! compartilhados sem risco de regressão silenciosa em código já aceito.
-#![allow(dead_code)]
-
 use sqlx::{SqliteConnection, SqlitePool};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -196,17 +189,14 @@ pub struct NewProfile<'a> {
 
 #[derive(Debug, Clone)]
 pub struct ProfileRecord {
-    pub sequence: i64,
     pub id: String,
-    pub incident_id: String,
-    pub profile_type: String,
     pub version_label: String,
     pub source: String,
     pub tier: Option<String>,
     pub tier_justification: Option<String>,
+    #[cfg(test)]
     pub supersedes: Option<String>,
     pub created_at: String,
-    pub actor_id: Option<String>,
 }
 
 type ProfileRow = (
@@ -226,32 +216,24 @@ type ProfileRow = (
 impl From<ProfileRow> for ProfileRecord {
     fn from(row: ProfileRow) -> Self {
         Self {
-            sequence: row.0,
             id: row.1,
-            incident_id: row.2,
-            profile_type: row.3,
             version_label: row.4,
             source: row.5,
             tier: row.6,
             tier_justification: row.7,
+            #[cfg(test)]
             supersedes: row.8,
             created_at: row.9,
-            actor_id: row.10,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ProfileEntryRecord {
-    pub id: String,
-    pub profile_id: String,
     pub subcategory_id: String,
     pub subcategory_label: String,
     pub implementation_status: String,
-    pub justification: Option<String>,
-    pub evidence_reference: Option<String>,
     pub confidence: Option<String>,
-    pub created_at: String,
 }
 
 type ProfileEntryRow = (
@@ -270,15 +252,10 @@ type ProfileEntryRow = (
 impl From<ProfileEntryRow> for ProfileEntryRecord {
     fn from(row: ProfileEntryRow) -> Self {
         Self {
-            id: row.1,
-            profile_id: row.2,
             subcategory_id: row.3,
             subcategory_label: row.4,
             implementation_status: row.5,
-            justification: row.6,
-            evidence_reference: row.7,
             confidence: row.8,
-            created_at: row.9,
         }
     }
 }
@@ -845,15 +822,10 @@ mod tests {
         confidence: Option<Confidence>,
     ) -> ProfileEntryRecord {
         ProfileEntryRecord {
-            id: "test-id".into(),
-            profile_id: "test-profile".into(),
             subcategory_id: subcategory_id.into(),
             subcategory_label: format!("label for {subcategory_id}"),
             implementation_status: status.as_str().into(),
-            justification: None,
-            evidence_reference: None,
             confidence: confidence.map(|c| c.as_str().to_string()),
-            created_at: "2026-08-27T00:00:00Z".into(),
         }
     }
 

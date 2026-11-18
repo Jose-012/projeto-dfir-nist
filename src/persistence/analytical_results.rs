@@ -37,23 +37,6 @@
 //! "reproduzível a partir dos dados") é o que claramente se encaixa no
 //! contrato de resultado analítico e está incluído.
 
-//! ## Por que `#![allow(dead_code)]` neste módulo
-//!
-//! F1-01 é um enabler: expõe deliberadamente mais superfície pública do que
-//! F1-02 (o único consumidor até agora) usa. `AnalyticalResultType`/
-//! `RelationType` têm variantes que só F1-03/04/05 vão construir; `get`,
-//! `current_for_correlation_key`, `history_for_correlation_key`,
-//! `list_by_incident`, `related_to`, `insert` (o wrapper de transação
-//! própria — `web/mod.rs` compõe via `insert_on_connection` na sua própria
-//! transação) e os dois `from_str` só são chamados pelos testes deste
-//! arquivo por enquanto. Isso é esperado, não código morto de verdade — daí
-//! o `allow` no nível do módulo em vez de channels per função, já que a
-//! causa é uma só (API compartilhada à frente de seus consumidores) e
-//! repetir a mesma justificativa uma dúzia de vezes seria menos honesto que
-//! declará-la uma vez aqui. Remover este `allow` deve voltar a mostrar
-//! avisos reais assim que cada símbolo tiver um chamador de produção.
-#![allow(dead_code)]
-
 use sqlx::{SqliteConnection, SqlitePool};
 use uuid::Uuid;
 
@@ -134,6 +117,7 @@ impl AnalyticalResultType {
         }
     }
 
+    #[cfg(test)]
     pub fn from_str(value: &str) -> Option<Self> {
         match value {
             "YARA_MATCH" => Some(Self::YaraMatch),
@@ -281,9 +265,7 @@ pub struct NewAnalyticalResult<'a> {
 /// Linha lida de `analytical_results`.
 #[derive(Debug, Clone)]
 pub struct AnalyticalResultRecord {
-    pub sequence: i64,
     pub id: String,
-    pub schema_version: String,
     pub result_type: String,
     pub correlation_key: String,
     pub evidence_id: Option<String>,
@@ -319,9 +301,7 @@ type ResultRow = (
 impl From<ResultRow> for AnalyticalResultRecord {
     fn from(row: ResultRow) -> Self {
         Self {
-            sequence: row.0,
             id: row.1,
-            schema_version: row.2,
             result_type: row.3,
             correlation_key: row.4,
             evidence_id: row.5,
@@ -531,6 +511,7 @@ pub async fn current_for_correlation_key(
     Ok(row.map(AnalyticalResultRecord::from))
 }
 
+#[cfg(test)]
 /// Histórico completo de uma `correlation_key`, em ordem de inserção.
 pub async fn history_for_correlation_key(
     pool: &SqlitePool,
@@ -546,6 +527,7 @@ pub async fn history_for_correlation_key(
     Ok(rows.into_iter().map(AnalyticalResultRecord::from).collect())
 }
 
+#[cfg(test)]
 pub async fn list_by_evidence(
     pool: &SqlitePool,
     evidence_id: &str,

@@ -1,6 +1,11 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased — 2026-11-18 — supressões amplas de dead code removidas
+
+- Removidos os allows de módulo em `analytical_results.rs` e `nist_profiles.rs` e o allow da view NIST. Helpers usados só por testes ficaram em `cfg(test)`; campos nunca lidos saíram das views sem alterar banco, migrations ou consultas de ordenação. O histórico `supersedes` usado por asserção permanece disponível nos testes.
+- Verificação: `just verify` com nextest 432 passed/1 skipped, doc-tests, fmt/check/clippy verdes; resta apenas o allow condicionado por plataforma no sandbox.
+
 ## Unreleased — 2026-11-18 — verify sem duplicação de testes
 
 - `just verify` agora executa nextest e `just doctest`, sem repetir toda a suíte com `cargo test`. `just test` permanece como opção explícita do runner padrão.
