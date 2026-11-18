@@ -373,7 +373,11 @@ impl IncidentsState {
                                                     ui.label(
                                                         &event.event_hash
                                                             [..12.min(event.event_hash.len())],
-                                                    );
+                                                    )
+                                                    .on_hover_text(format!(
+                                                        "Hash completo: {}",
+                                                        event.event_hash
+                                                    ));
                                                 });
                                             });
                                         }
@@ -611,6 +615,45 @@ mod tests {
         harness.get_by_label("ev-1");
         harness.get_by_label("Security.evtx");
         harness.get_by_label("analisada automaticamente");
+    }
+
+    #[test]
+    fn audit_hash_hover_exposes_the_complete_hash_at_minimum_width() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        state.tab = Tab::Audit;
+        let full_hash = "0123456789abcdef".repeat(4);
+        let mut event = audit_event(1, "EVIDENCE_LINKED_TO_INCIDENT");
+        event.event_hash = full_hash.clone();
+        state.audit = Loadable::Ready(vec![event]);
+        let width = 780.0;
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(width, 600.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+        harness.get_by_label("Seq").hover();
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(-600.0, 0.0),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Unknown,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run();
+
+        let tooltip = format!("Hash completo: {full_hash}");
+        assert_eq!(
+            harness.query_all_by_label(&tooltip).count(),
+            0,
+            "o hash completo só deve aparecer no tooltip após o hover"
+        );
+        harness.get_by_label(&full_hash[..12]).hover();
+        harness.run();
+
+        harness.get_by_label(&tooltip);
     }
 
     #[test]
