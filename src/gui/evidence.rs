@@ -1052,6 +1052,71 @@ mod provenance_ui_tests {
     }
 
     #[test]
+    fn evidence_actions_fit_the_row_and_remain_reachable_at_minimum_width() {
+        let (backend, _commands) = Backend::for_test();
+        let filename = "Security-with-a-much-longer-name-that-cannot-fit.evtx";
+        let state = EvidenceState {
+            list: Loadable::Ready(vec![evidence("ev-1", filename, "evtx")]),
+            ..EvidenceState::default()
+        };
+        let width = 780.0;
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(width, 700.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.step();
+
+        let filename_rect = harness.get_by_label(filename).rect();
+        let row_top = filename_rect.min.y;
+        let row_bottom = row_top + 48.0;
+        let mut action_rects = Vec::new();
+        for label in ["Analisar EVTX", "Detectar", "Analisar YARA", "Destruir"] {
+            let rect = harness.get_by_label(label).rect();
+            assert!(
+                rect.min.y >= row_top && rect.max.y <= row_bottom,
+                "ação {label:?} fora da faixa vertical de 48 px: ação={rect:?}, topo={row_top}, fundo={row_bottom}"
+            );
+            for (other_label, other_rect) in &action_rects {
+                assert!(
+                    !rect.intersects(*other_rect),
+                    "ações {label:?} e {other_label:?} sobrepostas: {rect:?} e {other_rect:?}"
+                );
+            }
+            action_rects.push((label, rect));
+        }
+
+        let scroll_width = 600.0;
+        harness.set_size(egui::vec2(scroll_width, 700.0));
+        harness.step();
+        let initial_destroy = harness.get_by_label("Destruir").rect();
+        assert!(
+            initial_destroy.max.x > scroll_width,
+            "a fixture deve começar fora da viewport para provar o scroll: {initial_destroy:?}"
+        );
+        harness.get_by_label("Arquivo").hover();
+        for _ in 0..2 {
+            harness.input_mut().events.push(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(-100.0, 0.0),
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Unknown,
+                modifiers: egui::Modifiers::default(),
+            });
+        }
+        harness.run();
+        let destroy = harness.get_by_label("Destruir").rect();
+        assert!(
+            destroy.min.x >= 0.0 && destroy.max.x <= scroll_width,
+            "Destruir não ficou acessível pelo scroll horizontal: {destroy:?}"
+        );
+        harness.get_by_label("Destruir").click();
+        harness.run();
+        assert_eq!(harness.state().0.pending_destroy.as_deref(), Some("ev-1"));
+    }
+
+    #[test]
     fn evidence_controls_do_not_depend_on_missing_emoji_fonts() {
         let (backend, _commands) = Backend::for_test();
         let state = EvidenceState {
