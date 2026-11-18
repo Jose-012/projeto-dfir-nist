@@ -1862,6 +1862,87 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn collect_rejects_malformed_finding_risk_fields() {
+        let fx = fixture().await;
+        for (label, severity, confidence, expected) in [
+            (
+                "severity-unknown",
+                serde_json::json!("SEVERE"),
+                Some("MEDIUM"),
+                "invalid severity",
+            ),
+            (
+                "severity-none",
+                serde_json::json!("NONE"),
+                Some("MEDIUM"),
+                "invalid severity",
+            ),
+            (
+                "confidence-missing",
+                serde_json::json!("HIGH"),
+                None,
+                "invalid confidence",
+            ),
+        ] {
+            let incident = crate::service::create_incident(&fx.services, label)
+                .await
+                .expect("incident");
+            let finding = crate::service::findings::create_finding(
+                &fx.services,
+                &incident.id,
+                &crate::service::findings::FindingInput {
+                    kind: "MISSING_CONTROL".into(),
+                    title: "RDP sem MFA".into(),
+                    severity: "HIGH".into(),
+                    basis: "EVTX 4625".into(),
+                    confidence: "MEDIUM".into(),
+                    ..crate::service::findings::FindingInput::default()
+                },
+            )
+            .await
+            .expect("valid finding");
+            let record = crate::persistence::analytical_results::get(&fx.services.db, &finding)
+                .await
+                .expect("get valid finding")
+                .expect("valid finding exists");
+            let mut payload: serde_json::Value =
+                serde_json::from_str(&record.payload).expect("valid finding payload");
+            payload["severity"] = severity;
+            let bad_id = format!("bad-finding-risk-{label}");
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,confidence,payload,provenance,supersedes,created_at) VALUES(?,'analytical-result-v1','FINDING',?,?,?,?,?,?,'2026-10-03T00:00:00Z')")
+                .bind(&bad_id)
+                .bind(&record.correlation_key)
+                .bind(&incident.id)
+                .bind(confidence)
+                .bind(payload.to_string())
+                .bind(record.provenance.to_string())
+                .bind(&finding)
+                .execute(&fx.services.db)
+                .await
+                .expect("malformed current finding");
+
+            let error = match collect(&fx.services, &incident.id).await {
+                Ok(data) => {
+                    let finding_count = data.findings.findings.len();
+                    let risk_cells = data.findings.risk_matrix.len();
+                    let rendered = render_all(&data).expect("pre-fix render");
+                    let zero_critical_row = doc(&rendered, FILE_E2)
+                        .content
+                        .contains("| `CRITICAL` | 0 | 0 | 0 | 0 |");
+                    panic!(
+                        "malformed {label} reached Entregável 2; findings={finding_count} risk_cells={risk_cells} zero_critical_row={zero_critical_row}"
+                    );
+                }
+                Err(error) => error,
+            };
+            assert!(
+                matches!(&error, AppError::Config(message) if message.contains(expected) && message.contains(&bad_id)),
+                "unexpected error for {label}: {error:?}"
+            );
+        }
+    }
+
     #[test]
     fn the_manifest_records_what_was_masked_by_count_and_never_by_value() {
         let (_root, paths) = storage_for_tests();

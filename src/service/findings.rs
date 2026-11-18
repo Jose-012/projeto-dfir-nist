@@ -475,23 +475,31 @@ pub async fn create_root_cause(
     Ok(id)
 }
 
-fn risk_matrix_of(findings: &[AnalyticalResultResponse]) -> Vec<finding_model::RiskCell> {
-    let pairs: Vec<(attack_impact::ImpactLevel, analytical_results::Confidence)> = findings
+fn risk_matrix_of(
+    findings: &[AnalyticalResultResponse],
+) -> AppResult<Vec<finding_model::RiskCell>> {
+    let pairs = findings
         .iter()
-        .filter_map(|finding| {
+        .map(|finding| {
+            let invalid = |field| {
+                AppError::Config(format!("stored finding {} has invalid {field}", finding.id))
+            };
             let severity = finding
                 .payload
-                .get("severity")?
-                .as_str()
-                .and_then(attack_impact::ImpactLevel::from_str)?;
+                .get("severity")
+                .and_then(serde_json::Value::as_str)
+                .and_then(attack_impact::ImpactLevel::from_str)
+                .filter(|severity| *severity != attack_impact::ImpactLevel::None)
+                .ok_or_else(|| invalid("severity"))?;
             let confidence = finding
                 .confidence
                 .as_deref()
-                .and_then(analytical_results::Confidence::from_str)?;
-            Some((severity, confidence))
+                .and_then(analytical_results::Confidence::from_str)
+                .ok_or_else(|| invalid("confidence"))?;
+            Ok((severity, confidence))
         })
-        .collect();
-    finding_model::risk_matrix(&pairs)
+        .collect::<AppResult<Vec<_>>>()?;
+    Ok(finding_model::risk_matrix(&pairs))
 }
 
 /// Tudo que a aba "Achados" mostra, numa só consulta: achados e conclusões
@@ -511,7 +519,7 @@ pub async fn findings_view(services: &AppServices, incident_id: &str) -> AppResu
     let root_causes = current_results_for_incident(&services.db, incident_id, "ROOT_CAUSE").await?;
     let attack_mappings =
         current_results_for_incident(&services.db, incident_id, "ATTACK_MAPPING").await?;
-    let risk_matrix = risk_matrix_of(&findings);
+    let risk_matrix = risk_matrix_of(&findings)?;
     Ok(FindingsView {
         findings,
         root_causes,
