@@ -228,134 +228,140 @@ impl DetectionState {
         incidents: &[IncidentResponse],
         backend: &Backend,
     ) {
-        ui.group(|ui| {
-            ui.horizontal_wrapped(|ui| {
-                let color = match item.severity.as_str() {
-                    "CRITICAL" | "HIGH" => egui::Color32::from_rgb(200, 60, 60),
-                    "MEDIUM" => egui::Color32::from_rgb(200, 140, 0),
-                    _ => egui::Color32::GRAY,
-                };
-                ui.colored_label(color, item.severity.as_str());
-                ui.strong(&item.title);
+        // Os labels se repetem; o escopo estável evita IDs persistentes compartilhados.
+        ui.push_id(("detection-candidate", evidence_id, &item.id), |ui| {
+            ui.group(|ui| {
+                ui.horizontal_wrapped(|ui| {
+                    let color = match item.severity.as_str() {
+                        "CRITICAL" | "HIGH" => egui::Color32::from_rgb(200, 60, 60),
+                        "MEDIUM" => egui::Color32::from_rgb(200, 140, 0),
+                        _ => egui::Color32::GRAY,
+                    };
+                    ui.colored_label(color, item.severity.as_str());
+                    ui.strong(&item.title);
+                    ui.label(format!(
+                        "[{} v{}]  {} · {}{}",
+                        item.rule_id,
+                        item.rule_version,
+                        item.tactic,
+                        item.technique_id,
+                        item.sub_technique_id
+                            .as_deref()
+                            .map(|sub| format!(" ({sub})"))
+                            .unwrap_or_default()
+                    ));
+                    ui.label(format!("confiança da regra: {}", item.confidence));
+                    ui.label(format!("situação: {}", item.status));
+                });
+                ui.label(&item.description);
                 ui.label(format!(
-                    "[{} v{}]  {} · {}{}",
-                    item.rule_id,
-                    item.rule_version,
-                    item.tactic,
-                    item.technique_id,
-                    item.sub_technique_id
-                        .as_deref()
-                        .map(|sub| format!(" ({sub})"))
-                        .unwrap_or_default()
+                    "{} · {} evento(s) · {} a {}",
+                    item.aggregation, item.event_count, item.first_seen, item.last_seen
                 ));
-                ui.label(format!("confiança da regra: {}", item.confidence));
-                ui.label(format!("situação: {}", item.status));
-            });
-            ui.label(&item.description);
-            ui.label(format!(
-                "{} · {} evento(s) · {} a {}",
-                item.aggregation, item.event_count, item.first_seen, item.last_seen
-            ));
-            let refs: Vec<&str> = item
-                .event_refs
-                .iter()
-                .take(REFS_SHOWN)
-                .map(String::as_str)
-                .collect();
-            let more = if item.event_refs.len() > REFS_SHOWN || item.refs_truncated {
-                ", …"
-            } else {
-                ""
-            };
-            ui.label(format!("Eventos de origem: {}{}", refs.join(", "), more));
-            if !item.iocs.is_empty() {
-                let list: Vec<String> = item
-                    .iocs
+                let refs: Vec<&str> = item
+                    .event_refs
                     .iter()
-                    .map(|ioc| format!("{} {}", ioc.ioc_type, ioc.value))
+                    .take(REFS_SHOWN)
+                    .map(String::as_str)
                     .collect();
-                ui.label(format!("IOCs: {}", list.join(" · ")));
-            }
-            ui.label(
-                egui::RichText::new(format!("O que esta regra não prova: {}", item.limitations))
-                    .weak(),
-            );
-
-            if item.status != "PENDING" {
-                if let Some(note) = &item.decision_note {
-                    ui.label(format!("Decisão: {note}"));
+                let more = if item.event_refs.len() > REFS_SHOWN || item.refs_truncated {
+                    ", …"
+                } else {
+                    ""
+                };
+                ui.label(format!("Eventos de origem: {}{}", refs.join(", "), more));
+                if !item.iocs.is_empty() {
+                    let list: Vec<String> = item
+                        .iocs
+                        .iter()
+                        .map(|ioc| format!("{} {}", ioc.ioc_type, ioc.value))
+                        .collect();
+                    ui.label(format!("IOCs: {}", list.join(" · ")));
                 }
-                return;
-            }
-            let form = self.forms.entry(item.id.clone()).or_default();
-            ui.horizontal(|ui| {
-                ui.label("Incidente:");
-                egui::ComboBox::from_label("Incidente")
-                    .selected_text(
-                        incidents
-                            .iter()
-                            .find(|incident| incident.id == form.incident_id)
-                            .map(|incident| incident.name.clone())
-                            .unwrap_or_else(|| "— selecione —".into()),
-                    )
-                    .show_ui(ui, |ui| {
-                        for incident in incidents {
-                            ui.selectable_value(
-                                &mut form.incident_id,
-                                incident.id.clone(),
-                                &incident.name,
-                            );
-                        }
-                    });
-                let note_label = ui.label("Nota (opcional):");
-                ui.add(
-                    egui::TextEdit::singleline(&mut form.note)
-                        .hint_text("nota do analista (opcional)")
-                        .desired_width(220.0),
-                )
-                .labelled_by(note_label.id);
-                let can_confirm = !form.incident_id.is_empty();
-                if ui
-                    .add_enabled(can_confirm, egui::Button::new("Confirmar"))
-                    .on_hover_text("Cria o mapeamento ATT&CK, o achado e os IOCs no incidente")
-                    .clicked()
-                {
-                    let note = form.note.trim();
-                    backend.send(Command::ConfirmCandidate {
-                        evidence_id: evidence_id.to_string(),
-                        candidate_id: item.id.clone(),
-                        incident_id: form.incident_id.clone(),
-                        note: (!note.is_empty()).then(|| note.to_string()),
-                    });
-                }
-            });
-            if incidents.is_empty() {
                 ui.label(
-                    egui::RichText::new(
-                        "Crie um incidente na tela Incidentes para poder confirmar.",
-                    )
+                    egui::RichText::new(format!(
+                        "O que esta regra não prova: {}",
+                        item.limitations
+                    ))
                     .weak(),
                 );
-            }
-            ui.horizontal(|ui| {
-                let reason_label = ui.label("Motivo da rejeição:");
-                ui.add(
-                    egui::TextEdit::singleline(&mut form.reason)
-                        .hint_text("motivo da rejeição (obrigatório)")
-                        .desired_width(300.0),
-                )
-                .labelled_by(reason_label.id);
-                let can_reject = !form.reason.trim().is_empty();
-                if ui
-                    .add_enabled(can_reject, egui::Button::new("Rejeitar"))
-                    .clicked()
-                {
-                    backend.send(Command::RejectCandidate {
-                        evidence_id: evidence_id.to_string(),
-                        candidate_id: item.id.clone(),
-                        reason: form.reason.trim().to_string(),
-                    });
+
+                if item.status != "PENDING" {
+                    if let Some(note) = &item.decision_note {
+                        ui.label(format!("Decisão: {note}"));
+                    }
+                    return;
                 }
+                let form = self.forms.entry(item.id.clone()).or_default();
+                ui.horizontal(|ui| {
+                    ui.label("Incidente:");
+                    egui::ComboBox::from_label("Incidente")
+                        .selected_text(
+                            incidents
+                                .iter()
+                                .find(|incident| incident.id == form.incident_id)
+                                .map(|incident| incident.name.clone())
+                                .unwrap_or_else(|| "— selecione —".into()),
+                        )
+                        .show_ui(ui, |ui| {
+                            for incident in incidents {
+                                ui.selectable_value(
+                                    &mut form.incident_id,
+                                    incident.id.clone(),
+                                    &incident.name,
+                                );
+                            }
+                        });
+                    let note_label = ui.label("Nota (opcional):");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut form.note)
+                            .hint_text("nota do analista (opcional)")
+                            .desired_width(220.0),
+                    )
+                    .labelled_by(note_label.id);
+                    let can_confirm = !form.incident_id.is_empty();
+                    if ui
+                        .add_enabled(can_confirm, egui::Button::new("Confirmar"))
+                        .on_hover_text("Cria o mapeamento ATT&CK, o achado e os IOCs no incidente")
+                        .clicked()
+                    {
+                        let note = form.note.trim();
+                        backend.send(Command::ConfirmCandidate {
+                            evidence_id: evidence_id.to_string(),
+                            candidate_id: item.id.clone(),
+                            incident_id: form.incident_id.clone(),
+                            note: (!note.is_empty()).then(|| note.to_string()),
+                        });
+                    }
+                });
+                if incidents.is_empty() {
+                    ui.label(
+                        egui::RichText::new(
+                            "Crie um incidente na tela Incidentes para poder confirmar.",
+                        )
+                        .weak(),
+                    );
+                }
+                ui.horizontal(|ui| {
+                    let reason_label = ui.label("Motivo da rejeição:");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut form.reason)
+                            .hint_text("motivo da rejeição (obrigatório)")
+                            .desired_width(300.0),
+                    )
+                    .labelled_by(reason_label.id);
+                    let can_reject = !form.reason.trim().is_empty();
+                    if ui
+                        .add_enabled(can_reject, egui::Button::new("Rejeitar"))
+                        .clicked()
+                    {
+                        backend.send(Command::RejectCandidate {
+                            evidence_id: evidence_id.to_string(),
+                            candidate_id: item.id.clone(),
+                            reason: form.reason.trim().to_string(),
+                        });
+                    }
+                });
             });
         });
     }
@@ -366,7 +372,10 @@ mod ui_tests {
     use super::*;
     use crate::gui::test_harness::drain;
     use dfir_protocol::CandidateIoc;
-    use egui_kittest::{Harness, kittest::Queryable};
+    use egui_kittest::{
+        Harness,
+        kittest::{NodeT, Queryable},
+    };
 
     type State = (DetectionState, Backend, Vec<IncidentResponse>);
 
@@ -460,6 +469,77 @@ mod ui_tests {
         harness.get_by_label_contains("IP 185.220.101.5");
         harness.get_by_label_contains("O que esta regra não prova");
         harness.get_by_label_contains("Nada vira achado sem a sua confirmação");
+    }
+
+    #[test]
+    fn pending_candidate_incident_combos_have_unique_ids_and_independent_decisions() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = DetectionState::default();
+        state.on_loaded("ev_1", Ok(vec![view("a", "PENDING"), view("b", "PENDING")]));
+        let mut harness = harness(
+            state,
+            backend,
+            vec![incident("inc-1", "Caso BEC"), incident("inc-2", "Caso RDP")],
+        );
+        harness.set_size(egui::vec2(1000.0, 2400.0));
+        harness.run();
+        drain(&mut commands);
+
+        let all_combos: Vec<_> = harness
+            .get_all_by_role(egui::accesskit::Role::ComboBox)
+            .collect();
+        let combos: Vec<_> = all_combos
+            .iter()
+            .filter(|node| {
+                node.accesskit_node()
+                    .label()
+                    .is_some_and(|label| label == "Incidente")
+            })
+            .copied()
+            .collect();
+        assert_eq!(
+            combos.len(),
+            2,
+            "dois seletores devem preservar o nome acessível 'Incidente': {all_combos:#?}"
+        );
+        assert_ne!(
+            combos[0].accesskit_node().id(),
+            combos[1].accesskit_node().id(),
+            "cada candidato precisa de um ID persistente próprio"
+        );
+
+        combos[1].click();
+        harness.run();
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::Button, "Caso RDP")
+            .click();
+        harness.run();
+
+        let (state, _, _) = harness.state();
+        assert_eq!(state.forms["a"].incident_id, "");
+        assert_eq!(state.forms["b"].incident_id, "inc-2");
+
+        harness
+            .get_all_by_role_and_label(egui::accesskit::Role::Button, "Confirmar")
+            .nth(1)
+            .expect("botão Confirmar do segundo candidato")
+            .click();
+        harness.run();
+        let sent = drain(&mut commands);
+        let confirmations: Vec<_> = sent
+            .iter()
+            .filter(|command| matches!(command, Command::ConfirmCandidate { .. }))
+            .collect();
+        assert_eq!(confirmations.len(), 1, "somente uma decisão: {sent:?}");
+        assert!(matches!(
+            confirmations[0],
+            Command::ConfirmCandidate {
+                evidence_id,
+                candidate_id,
+                incident_id,
+                ..
+            } if evidence_id == "ev_1" && candidate_id == "b" && incident_id == "inc-2"
+        ));
     }
 
     #[test]
