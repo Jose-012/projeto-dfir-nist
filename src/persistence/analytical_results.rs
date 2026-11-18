@@ -395,6 +395,18 @@ pub(crate) async fn insert_on_connection(
                 "supersedes references an analytical result that is already superseded: {supersedes_id}"
             )));
         }
+    } else {
+        let correlation_key_exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM analytical_results WHERE correlation_key = ?)",
+        )
+        .bind(input.correlation_key)
+        .fetch_one(&mut *connection)
+        .await?;
+        if correlation_key_exists {
+            return Err(validation_error(
+                "correlation_key already exists; supersedes is required to record a revision",
+            ));
+        }
     }
 
     let id = Uuid::new_v4().to_string();
@@ -1054,6 +1066,72 @@ mod tests {
             602,
             "sem LIMIT: todas as linhas, inclusive o histórico"
         );
+    }
+
+    #[tokio::test]
+    async fn a_correlation_key_cannot_have_two_root_results() {
+        let pool = test_pool().await;
+        seed_evidence(&pool, "ev-1").await;
+        fn new() -> NewAnalyticalResult<'static> {
+            NewAnalyticalResult {
+                result_type: AnalyticalResultType::YaraMatch,
+                correlation_key: "corr-root",
+                evidence_id: Some("ev-1"),
+                incident_id: None,
+                analysis_job_id: None,
+                rule_or_model_id: Some("rule-1"),
+                rule_or_model_version: Some("1.0.0"),
+                confidence: None,
+                payload_json: "{}",
+                provenance_json: "{}",
+                supersedes: None,
+                related: &[],
+                actor_id: None,
+            }
+        }
+        let first = insert(&pool, new()).await.expect("first root");
+        let second = insert(&pool, new()).await;
+        let current = list_current_by_evidence(&pool, "ev-1").await.unwrap();
+        let selected = current_for_correlation_key(&pool, "corr-root")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            second.is_err(),
+            "second root accepted=true current_rows={} selected_is_second={}",
+            current.len(),
+            second.as_ref().is_ok_and(|id| id == &selected.id)
+        );
+        let error = second.unwrap_err().to_string();
+        assert!(
+            error.contains("supersedes is required"),
+            "unexpected error: {error}"
+        );
+        let current = list_current_by_evidence(&pool, "ev-1").await.unwrap();
+        assert_eq!(current.len(), 1);
+        assert_eq!(current[0].id, first);
+        assert_eq!(
+            current_for_correlation_key(&pool, "corr-root")
+                .await
+                .unwrap()
+                .unwrap()
+                .id,
+            first
+        );
+        assert_eq!(
+            history_for_correlation_key(&pool, "corr-root")
+                .await
+                .expect("history")
+                .len(),
+            1
+        );
+        let audit_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM audit_events WHERE action = 'ANALYTICAL_RESULT_RECORDED'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(audit_count, 1);
     }
 
     #[tokio::test]
