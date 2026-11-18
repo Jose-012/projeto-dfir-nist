@@ -1,0 +1,5 @@
+EVD-008 — Gate documental (just doc-gate) após upgrade eframe/egui 0.37.0 e atualização de docs
+executed-at: 2026-11-14T21:56:05Z
+comando: just doc-gate (scripts/validate_fase0.py + scripts/doc_gate.py)
+resultado: PASS — Fase 0 0 erros/0 avisos; documentation gate PASS (LICENSES_THIRD_PARTY.md regenerado para 612 pacotes; EVD-005..007 registrados)
+ambiente: Python 3.13.5 (QA), Linux x86_64

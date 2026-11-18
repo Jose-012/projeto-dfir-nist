@@ -1,0 +1,40 @@
+EVD-007 — Supply chain APÓS upgrade eframe/egui 0.37.0 + remoção da cadeia zbus/atspi
+executed-at: 2026-11-14T21:21:30Z .. 2026-11-14T21:33:17Z
+comandos: cargo audit; cargo audit --no-yanked; cargo deny --workspace check; just supply-chain
+resultado: audit 0 vulnerabilidades, 1 aviso permitido (RUSTSEC-2025-0141 bincode, exceção documentada em deny.toml); deny: advisories ok, bans ok, licenses ok, sources ok
+grafo: zbus/zvariant/zbus_names/zvariant_derive/atspi/accesskit_unix/ashpd/sctk-adwaita/ttf-parser FORA do grafo de build normal (612 pacotes no lock; accesskit 0.25.2 permanece só como dep não-optional de egui 0.37, sem a feature accesskit do egui-winit — cadeia D-Bus/AT-SPI não é compilada)
+exceções restantes em deny.toml: RUSTSEC-2026-0459 (libsqlite3-sys, SEC-02) e RUSTSEC-2025-0141 (bincode via yara-x)
+
+----- cargo audit -----
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1509 security advisories (from /home/jose/.cargo/advisory-db)
+    Updating crates.io index
+    Scanning Cargo.lock for vulnerabilities (612 crate dependencies)
+Crate:     bincode
+Version:   2.0.1
+Warning:   unmaintained
+Title:     Bincode is unmaintained
+Date:      2025-12-16
+ID:        RUSTSEC-2025-0141
+URL:       https://rustsec.org/advisories/RUSTSEC-2025-0141
+
+warning: 1 allowed warning found
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1509 security advisories (from /home/jose/.cargo/advisory-db)
+    Scanning Cargo.lock for vulnerabilities (612 crate dependencies)
+Crate:     bincode
+Version:   2.0.1
+Warning:   unmaintained
+Title:     Bincode is unmaintained
+Date:      2025-12-16
+ID:        RUSTSEC-2025-0141
+URL:       https://rustsec.org/advisories/RUSTSEC-2025-0141
+
+warning: 1 allowed warning found
+----- cargo deny --workspace check -----
+          │           └── wasmtime-internal-unwinder v48.0.8
+          │               ├── wasmtime v48.0.8 (*)
+          │               └── wasmtime-internal-cranelift v48.0.8 (*)
+          └── walkdir v2.5.0 (*)
+
+advisories ok, bans ok, licenses ok, sources ok

@@ -1,0 +1,47 @@
+[workspace]
+resolver = "3"
+members = [".", "engine", "protocol"]
+
+[package]
+name = "dfir-app"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "Apache-2.0"
+
+[dependencies]
+blake3 = "1.8.6"
+chrono = { version = "0.4.45", features = ["serde", "clock"] }
+clap = { version = "4.6.6", features = ["derive"] }
+dfir-protocol = { path = "protocol", version = "0.1.0" }
+# `accesskit` desligado de propósito: o app não expõe ponte de acessibilidade
+# AT-SPI (zbus/atspi) e os testes de GUI (egui_kittest) usam a árvore interna do
+# egui. Remove zbus/zvariant/atspi do grafo de produção (RUSTSEC-2026-0370/0371/0372).
+eframe = { version = "0.37.0", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland", "clipboard", "links"] }
+egui = "0.37.0"
+egui_extras = { version = "0.37.0", default-features = true, features = ["datepicker"] }
+rfd = { version = "0.18.0", default-features = true }
+serde_json_canonicalizer = "0.3.2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.10.9"
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros", "chrono"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "signal", "process", "net", "time", "io-util", "fs", "sync"] }
+tokio-util = { version = "0.7.19", features = ["codec"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+thiserror = "2.0.20"
+uuid = { version = "1.24.1", features = ["v4", "serde"] }
+
+[target.'cfg(unix)'.dependencies]
+# present transitively (pulled in by tokio et al.); declared directly here
+# because we now call it explicitly.
+libc = "0.2.189"
+
+[dev-dependencies]
+proptest = "1.11.0"
+tempfile = "3.27.0"
+# Testes de GUI sem janela (ADR-0022): consulta a árvore de acessibilidade e
+# simula clique e digitação. Só dev-dependency; não entra no binário.
+egui_kittest = "0.37.0"

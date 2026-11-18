@@ -1,0 +1,58 @@
+[advisories]
+# cargo-deny 0.20+ denies advisories by default. Every exception below is an
+# explicit, reviewable decision (docs/SUPPLY_CHAIN.md); none is a blanket ignore.
+# NOTE: run cargo-deny with --workspace (see justfile). Without it only the
+# root package (dfir-app) is checked and the engine's dependency graph
+# (evtx, yara-x, wasmtime) is silently skipped.
+ignore = [
+  { id = "RUSTSEC-2026-0459", reason = "SQLite < 3.54.0 bundled by libsqlite3-sys 0.37.0 can return uninitialized page-cache memory when it opens a database together with a sibling -wal whose page size differs (CVE-2026-119375). The fix needs libsqlite3-sys >= 0.39.0, but sqlx 0.9.0 (latest published) requires >=0.30.1,<0.38.0; `cargo update -p libsqlite3-sys --precise 0.39.0` fails and no sqlx release admits 0.39. Reachability: only the local database under DFIR_DATA_ROOT, created and owned by the app, in WAL mode on a protected volume; an attacker who can plant a crafted -wal there can already modify the evidence and the database. No database/wal from an untrusted source is opened. Compensating controls: protected data volume (docs/OPERATION.md §2), single local operator (ADR-0007), no remote input. Formalizado como WVR-004 em docs/EVIDENCE_REGISTER.md (aprovado pelo operador em 2026-11-14T22:00:30Z). Re-evaluate when sqlx/sqlx-sqlite admits libsqlite3-sys >= 0.39.0; review by 2026-12-31." },
+  # 2026-11-14: RUSTSEC-2026-0370/0371/0372 (zvariant/zbus_names/zvariant_derive) e
+  # RUSTSEC-2026-0192 (ttf-parser) saíram do grafo: eframe 0.37.0 com a feature
+  # `accesskit` desligada remove zbus/atspi/accesskit_unix, e sctk-adwaita/ttf-parser
+  # sumiram com a atualização do winit. Exceções removidas porque
+  # "advisory-not-detected" é warning no deny 0.20. Ver docs/SUPPLY_CHAIN.md.
+  { id = "RUSTSEC-2025-0141", reason = "bincode 2.0.1 is a mandatory (non-optional) dependency of yara-x 1.20.0. The advisory is informational ('unmaintained': the maintainers ceased development), not a vulnerability. yara-x uses bincode for Rules::serialize/deserialize, which this project never calls, and to decode its own in-memory compiled-rules data; the ruleset is embedded in the binary and compiled at runtime, so no serialized rules from outside are ever loaded. Re-evaluate on every yara-x upgrade." },
+  # 2026-11-18: RUSTSEC-2026-0543 (chrono 0.4.45 'unmaintained', informational, sem CVE)
+  # apareceu no deny após o pin subir para 1.100.0. Uso no projeto: só timestamps
+  # locais (Utc::now) e parsing RFC 3339 de dados internos (timeline do próprio
+  # banco); sem parsing de entrada não confiável de fora. Migração para jiff fica
+  # como backlog; rever a cada upgrade do chrono.
+  { id = "RUSTSEC-2026-0543", reason = "chrono 0.4.45 marked 'unmaintained' (informational advisory, no CVE, no known vulnerability). The project uses chrono only for local timestamps (Utc::now) and RFC 3339 parsing of its own database rows (timeline sort, audit, backups); it never parses untrusted external input with chrono. No fix release exists; evaluate migrating to jiff (already in the graph via egui) in a future round. Review by 2026-12-31." },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow = []
+
+[licenses]
+version = 2
+# Unlicensed crates are denied implicitly in cargo-deny 0.20+; the removed
+# legacy `unlicensed` key must not be used.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  # Permissive (Apache-2.0 plus an exception that relaxes attribution for
+  # compiled distribution). Required by wasmtime/cranelift, pulled in by yara-x.
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-3-Clause",
+  "Zlib",
+  "Unicode-3.0",
+  "CC0-1.0",
+  # Permissivas adicionadas em 2026-10-11 após o primeiro `cargo deny` sobre a
+  # árvore de UI (AUD-13): arrayref (BSD-2-Clause), libloading (ISC),
+  # clipboard-win e error-code (BSL-1.0, Boost). Todas aprovadas pela OSI.
+  "BSD-2-Clause",
+  "ISC",
+  "BSL-1.0",
+]
+# Fontes embutidas do egui: licenças de FONTE (OFL-1.1, Ubuntu Font Licence),
+# permitidas somente para esta crate, não para o resto da árvore.
+exceptions = [
+  { allow = ["OFL-1.1", "Ubuntu-font-1.0"], crate = "epaint_default_fonts" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -1,0 +1,15 @@
+Title:     chrono is unmaintained
+Date:      2026-09-14
+ID:        RUSTSEC-2026-0543
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0543
+
+warning: 2 allowed warnings found
+===
+     ├── sqlx-sqlite v0.9.0 (*)
+     └── winstructs v0.3.2
+         └── evtx v0.15.1
+             └── dfir-engine v0.1.0
+
+advisories FAILED, bans ok, licenses ok, sources ok
+
+--- Command finished with exit code: 0 ---

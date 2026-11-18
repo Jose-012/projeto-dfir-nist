@@ -1,0 +1,6 @@
+EVD-006 — Ponta a ponta com engine real APÓS upgrade eframe/egui 0.37.0
+executed-at: 2026-11-14T21:22:25Z .. 2026-11-14T21:27:32Z
+comando: just e2e <security.evtx>
+nota-de-versionamento: caminho local redigido em 2026-11-18; resultado e demais campos preservados
+resultado: PASS — 110/110 etapas passaram (exit 0)
+ambiente: rustc/cargo 1.99.1, Linux x86_64, sandbox required (Landlock + seccomp)

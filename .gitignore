@@ -1,0 +1,38 @@
+/target
+
+# Dados operacionais e de casos nunca entram no versionamento.
+/storage/db/*
+/storage/runtime/*
+/storage/evidence/*
+/storage/staging/*
+/storage/sanitized/*
+/storage/exports/*
+/storage/quarantine/*
+/storage/logs/*
+/storage/backups/*
+!storage/**/.gitkeep
+/reports/
+/exports/
+
+# Configuração local e segredos. `.envrc` pode ser versionado se contiver só
+# configuração pública; `.env.example` continua disponível como modelo.
+.env
+.env.*
+!.env.example
+
+# Artefatos de casos e formatos sensiveis listados em CONVENTIONS.md.
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.pcap
+*.pcapng
+*.evtx
+
+# A unica EVTX versionada e a fixture sanitizada e deterministica do e2e.
+!tests/fixtures/senai-demo.evtx
+
+# Artefatos locais do tooling Python.
+__pycache__/
+*.py[cod]
+.pytest_cache/

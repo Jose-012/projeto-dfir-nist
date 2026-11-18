@@ -1,0 +1,12 @@
+EVD-004 — Gate documental (`just doc-gate`)
+
+executed-at: 2026-11-14T19:43:47Z
+toolchain:   Python 3.13.5 (QA), rustc 1.99.1 citado pelos documentos
+environment: Linux x86_64
+command:     just doc-gate
+             (scripts/validate_fase0.py; scripts/doc_gate.py)
+
+result: PASS (exit 0)
+
+- Fase 0 static checks: 0 erro(s), 0 aviso(s)
+- documentation gate: PASS

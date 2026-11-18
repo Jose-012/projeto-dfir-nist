@@ -1,0 +1,21 @@
+EVD-003 — Supply chain (`cargo audit` e `cargo deny --workspace check`)
+
+executed-at: 2026-11-14T19:41:54Z .. 2026-11-14T19:42:14Z
+toolchain:   cargo 1.99.1, cargo-audit 0.22.2, cargo-deny 0.20.2
+environment: Linux x86_64
+command:     cargo audit
+             cargo audit --no-yanked
+             cargo deny --workspace check
+             just supply-chain
+
+result: PASS (exit 0)
+
+- cargo audit: 0 vulnerabilidades; 5 avisos informativos
+    bincode (RUSTSEC-2025-0141), ttf-parser (RUSTSEC-2026-0192),
+    zbus_names (RUSTSEC-2026-0371), zvariant (RUSTSEC-2026-0370),
+    zvariant_derive (RUSTSEC-2026-0372)
+- cargo deny --workspace check: advisories ok, bans ok, licenses ok, sources ok
+  Exceção de vulnerabilidade aceita e documentada: RUSTSEC-2026-0459
+  (libsqlite3-sys 0.37.0 / CVE-2026-119375), em deny.toml e .cargo/audit.toml,
+  com análise de alcance e revisão até 2026-12-31.
+- async-executor 1.14.0 (yanked) corrigido para 1.14.1.

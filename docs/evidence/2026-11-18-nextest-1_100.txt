@@ -1,0 +1,3 @@
+cargo nextest: 426 passed, 1 skipped (4 binaries, 64.493s)
+
+--- Command finished with exit code: 0 ---

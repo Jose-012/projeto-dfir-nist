@@ -1,0 +1,37 @@
+[package]
+name = "dfir-engine"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "Apache-2.0"
+
+[dependencies]
+dfir-protocol = { path = "../protocol", version = "0.1.0" }
+# 0.15.1 corrige RUSTSEC-2026-0431 (alocação sem limite em .wevtcache) e,
+# desde 0.13, não depende mais do crate sem manutenção `encoding`
+# (RUSTSEC-2021-0153). Ver docs/SUPPLY_CHAIN.md.
+evtx = { version = "0.15.1", default-features = false }
+serde = "1.0.229"
+serde_json = "1.0.151"
+sha2 = "0.10.9"
+yara-x = { version = "1.20.0", default-features = false, features = ["constant-folding", "exact-atoms", "fast-regexp"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
+tokio-util = { version = "0.7.19", features = ["codec"] }
+tokio = { version = "1.53.1", features = ["macros", "io-util", "rt-multi-thread", "io-std"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Já presente no grafo (tokio e o app a usam); aqui para as chamadas de sistema
+# do sandbox (Landlock, seccomp, prctl). Ver ADR-0024.
+libc = "0.2.189"
+
+[target.'cfg(windows)'.dependencies]
+# Job Object do Windows (limite de memória, sem processo filho, sem interface).
+# Já está no grafo (egui, tokio); só as features usadas. Ver ADR-0024.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+tempfile = "3.27.0"

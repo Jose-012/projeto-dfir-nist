@@ -1,0 +1,16 @@
+# Toolchain policy for development/release reproducibility.
+# These tools are NOT all part of the production runtime image.
+
+[rust]
+channel = "1.100.0"
+role = "production-build-and-test"
+
+[python]
+implementation = "CPython"
+version = "3.14.6"
+role = "engineering-and-qa"
+runtime_production = false
+
+[shell]
+role = "development-and-qa"
+runtime_production = false

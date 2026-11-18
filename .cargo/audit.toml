@@ -1,0 +1,17 @@
+# Espelho local das exceções de advisories já justificadas em `deny.toml`.
+# O `cargo audit` não lê o `deny.toml`; sem esta lista ele falharia na mesma
+# vulnerabilidade que o `cargo deny` aceita com análise de alcance. Qualquer
+# ID novo aqui precisa da mesma justificativa e da mesma data de revisão no
+# `deny.toml` e em `docs/SUPPLY_CHAIN.md`.
+#
+# RUSTSEC-2026-0459 (libsqlite3-sys 0.37.0 / CVE-2026-119375): sem versão de
+# sqlx que admita libsqlite3-sys >= 0.39.0; só o banco local no volume
+# protegido é aberto (revisar até 2026-12-31). Formalizado como WVR-004 em
+# docs/EVIDENCE_REGISTER.md (aprovado pelo operador em 2026-11-14T22:00:30Z).
+#
+# RUSTSEC-2026-0543 (chrono 0.4.45 'unmaintained', informativo, sem CVE):
+# uso só para timestamps locais e parsing RFC 3339 do próprio banco;
+# sem parsing de entrada não confiável (apareceu no deny em 2026-11-18
+# com o pin 1.100.0; revisar até 2026-12-31; avaliar migrar para jiff).
+[advisories]
+ignore = ["RUSTSEC-2026-0459", "RUSTSEC-2026-0543"]

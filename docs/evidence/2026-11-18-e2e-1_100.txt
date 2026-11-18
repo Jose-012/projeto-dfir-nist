@@ -1,0 +1,10 @@
+[PASS] disco: análise recusada quando falta margem de espaço livre
+[PASS] disco: importação recusada quando falta margem de espaço livre
+[PASS] demo: comando concluiu (EVTX e engine reais)
+[PASS] demo: versão do conjunto de dados — bec-demo-1
+[PASS] demo: nome do incidente rotulado [DEMO] — [DEMO] Phishing/BEC — cenário sintético (dados fictícios)
+[PASS] demo: contagens do cenário — {"attack_mappings": 9, "critical_path_stages": 6, "findings": 7, "iocs": 6, "nist_gaps": 10, "plan_items": 13, ...
+... (62 lines truncated)
+[full output: rtk recall 255c11b7f26d]
+
+--- Command finished with exit code: 0 ---

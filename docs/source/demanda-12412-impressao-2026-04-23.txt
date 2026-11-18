@@ -1,0 +1,158 @@
+23/04/26, 18:04
+
+SAGA SENAI de Inovação
+Formulário de pesquisa
+
+Q Buscar
+
+Olá KELVEN
+Sair
+
+* Fechar menu
+• Perfil
+·
+Demandas da indústria
+Soluções
+Desafios
+Discussões
+SAGA SENAI de Inovação
+
+Pessoas
+Demandas da indústria
+Projeto Integrador 2026/01 1.32 01: Avaliação Forense de Incidente Cibernético e Fortalecimento da Resiliência com Base no NIST CSF 2.0
+
+Descrição resumida:
+A organização enfrenta incidentes cibernéticos cada vez mais sofisticados que podem comprometer sistemas críticos, dados sensíveis e a continuidade operacional. A falta de um processo estruturado de investigação dificulta identificar a causa raiz e prevenir novos ataques. Propõe-se realizar uma avaliação baseada no NIST CSF 2.0, com análise forense das evidências, identificação de vulnerabilidades e elaboração de um plano de hardening e criptografia para aumentar a resiliência cibernética.
+
+Benefícios esperados:
+Identificar a causa raiz do incidente cibernético ocorrido. Melhorar a capacidade de resposta a incidentes de segurança. Reduzir vulnerabilidades existentes na infraestrutura de TI.
+Aumentar a resiliência cibernética da organização.
+Fortalecer a proteção de dados sensíveis e informações críticas.
+Reduzir riscos de novos ataques cibernéticos.
+Melhorar o monitoramento e detecção de ameaças.
+Implementar práticas adequadas de hardening de sistemas.
+Implantar criptografia adequada para proteção de dados em trânsito e em repouso. Alinhar a organização às boas práticas internacionais de segurança da informação (NIST).
+
+Detalhamento:
+A demanda consiste na realização de uma avaliação técnica e forense de um incidente cibernético, seguida da elaboração de um plano estruturado de melhoria da segurança da informação. Inicialmente será conduzido um processo de investigação forense digital, envolvendo a coleta, preservação e análise de evidências digitais provenientes de diferentes fontes da infraestrutura tecnológica, como: logs de servidores, registros de autenticação, tráfego de rede, sistemas de monitoramento, endpoints e estações de trabalho, dispositivos de segurança.
+	Durante essa etapa serão utilizadas ferramentas de análise forense e monitoramento, como plataformas de SIEM, análise de logs, análise de tráfego de rede e investigação de artefatos digitais, com o objetivo de identificar: vetor inicial do ataque, vulnerabilidades exploradas, movimentação lateral dentro da rede, escalonamento de privilégios, possíveis tentativas de exfiltração de dados, impacto sobre sistemas e serviços. Com base nas evidências coletadas, será construída uma linha do tempo do incidente, permitindo compreender de forma detalhada o comportamento do atacante e os mecanismos utilizados para comprometer a infraestrutura.
+Após a investigação forense, será realizada uma avaliação da postura de segurança da organização com base no NIST Cybersecurity Framework 2.0, analisando aspectos relacionados à governança, identificação de ativos, controles de proteção, monitoramento, resposta a incidentes e capacidade de recuperação.
+A partir dessa análise será desenvolvido um plano de fortalecimento da segurança, incluindo:
+- implementação de políticas de hardening de sistemas operacionais e servidores.
+- revisão de configurações de segurança em redes e dispositivos.
+- melhoria de mecanismos de autenticação e controle de acesso.
+- implantação ou aprimoramento de soluções de monitoramento de segurança.
+- implementação de criptografia adequada para dados armazenados e dados em trânsito.
+- revisão da gestão de chaves criptográficas.
+- definição de políticas e procedimentos de resposta a incidentes
+
+O resultado final do projeto será um conjunto de entregáveis técnicos, incluindo:
+- relatório completo de análise forense do incidente
+- identificação das vulnerabilidades exploradas
+- avaliação de maturidade em segurança baseada no NIST CSF 2.0
+- recomendações de melhoria da postura de segurança
+- plano de hardening e fortalecimento da infraestrutura
+- plano de implementação de criptografia e proteção de dados
+
+https://plataforma.gpinovacao.senai.br/plataforma/demandas-da-industria/interna/12412
+1/4
+23/04/26, 18:04
+SAGA SENAI de Inovação
+Essas ações contribuirão diretamente para o aumento da resiliência cibernética da organização, reduzindo a probabilidade de novos incidentes e aumentando a capacidade de resposta a ameaças.
+
+Escola:
+(SP) 1.32 Escola SENAI de Informática
+
+Restrições (O que a solução não pode ter):
+1. Disponibilidade limitada de logs ou evidências digitais devido a retenção insuficiente de registros
+
+2. Dependência da colaboração de diferentes áreas técnicas da organização para levantamento de informações
+3. Possível indisponibilidade temporária de sistemas durante análises ou testes de segurança
+4. Limitações de orçamento para implementação imediata de todas as recomendações de segurança
+5. Necessidade de alinhamento com políticas internas e requisitos regulatórios da organização
+6. Restrições relacionadas à confidencialidade de dados e privacidade durante o processo de investigação
+
+	Estado: SP
+Área de atuação:
+Tecnologia da Informação
+
+Empresa:
+Avivatec Soluções em Tecnologia da Informação Ltda.
+
+Data de cadastro:
+04/03/2026 21:26
+
+Data de início da vigência: 04/03/2026
+Vigência:
+04/03/2027 - (12 mes(es))
+
+Ativo: Sim
+Participe
+Ideias da demanda
+Comprometimento de Credenciais e Fraude Financeira via Phishing (Business Email Compromise).
+1
+São Paulo
+Código: 310326
+Desafio: UniSENAI SP 2026/01 - Projeto Integrador
+Escola: (SP) 1.32 Escola SENAI de Informática
+Cadastro: 17/04/2026
+
+Comprometimento de Credenciais e Fraude Financeira via Phishing (Business Email Compromise)
+https://plataforma.gpinovacao.senai.br/plataforma/demandas-da-industria/interna/12412
+2/4
+23/04/26, 18:04
+1
+São Paulo
+Código: 310327
+Desafio: UniSENAI SP 2026/01 - Projeto Integrador Escola: (SP) 1.32 Escola SENAI de Informática
+Cadastro: 17/04/2026
+
+Guard
+1
+São Paulo
+Código: 309664
+	Desafio: UniSENAI SP 2026/01 - Projeto Integrador Escola: (SP) 1.32 Escola SENAI de Informática Cadastro: 13/04/2026
+SAGA SENAI de Inovação
+
+HEAVY
+Heavy API
+1
+São Paulo
+Código: 309967
+Desafio: UniSENAI SP 2026/01 - Projeto Integrador Escola: (SP) 1.32 Escola SENAI de Informática Cadastro: 15/04/2026
+
+OT Integrity: Monitoramento e proteção de processos industriais.
+1
+São Paulo
+Código: 309966
+Desafio: UniSENAI SP 2026/01 - Projeto Integrador
+Escola: (SP) 1.32 Escola SENAI de Informática
+Cadastro: 15/04/2026
+
+Projeto Integrador
+1
+https://plataforma.gpinovacao.senai.br/plataforma/demandas-da-industria/interna/12412
+110110
+
+3/4
+23/04/26, 18:04
+São Paulo
+Código: 310562
+	Desafio: UniSENAI SP 2026/01 - Projeto Integrador Escola: (SP) 1.32 Escola SENAI de Informática Cadastro: 22/04/2026
+
+• 1
+• 2
+
+Comentários
+
+L
+Salvar comentário
+
+	• Política de privacidade Administração
+·
+SAGA SENAI de Inovação
+
+1
+
+https://plataforma.gpinovacao.senai.br/plataforma/demandas-da-industria/interna/12412
+4/4

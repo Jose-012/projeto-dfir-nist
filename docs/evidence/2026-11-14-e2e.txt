@@ -1,0 +1,27 @@
+EVD-002 — Ponta a ponta com engine real (`just e2e`)
+
+executed-at: 2026-11-14T19:37:59Z .. 2026-11-14T19:41:47Z
+toolchain:   rustc/cargo 1.99.1
+environment: Linux x86_64, sandbox do engine em `required` (Landlock + seccomp)
+command:     just e2e <security.evtx>
+artifact:    security.evtx, 2 166 784 bytes,
+             SHA-256 5f29a03cf8c1b4bfbd82c4074ccc81ecfe85d7ee15375afc352ed5025c9a4d8d
+
+result: PASS — 110/110 etapas
+
+- import: SHA-256 e tamanho preservados; formato EVTX
+- analyze EVTX: job COMPLETED, item_count=2261, sem avisos do parser
+- timeline: 2261/2261 eventos lidos, ordem cronológica, filtros `campo:valor` conferidos
+- sandbox: todas as camadas aplicadas; leitura permitida só do arquivo do job;
+  outro arquivo, criação, rede, exec e ptrace negados
+- YARA: fixtures ASCII e UTF-16LE casam; reexecução não duplica
+- EVTX truncado: conclui com EVTX_TRUNCATED e EVTX_RECORDS_MISSING
+- guarda de disco: importação e análise recusadas com mensagem acionável
+- demo: versão bec-demo-1, 3 análises reais, contagens do cenário
+- detecção: 6 candidatos PENDENTES; confirmação cria 1 achado; rejeição exige motivo;
+  nova execução não duplica nem desfaz decisões
+- entregáveis: 5 documentos + manifest.json; hashes e tamanhos conferem;
+  máscara e geração sem máscara; determinismo byte a byte; audit-verify íntegro
+- descarte: arquivo removido, evidência some do catálogo, documentos preservam hash/custódia
+
+Não coberto: Windows, Linux aarch64, incidente real.

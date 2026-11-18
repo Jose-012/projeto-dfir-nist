@@ -1,0 +1,7 @@
+EVD-005 — Gate Rust (just verify) APÓS upgrade eframe/egui 0.37.0 + cargo update geral
+executed-at: 2026-11-14T21:21:01Z .. 2026-11-14T21:25:39Z
+comando: just verify (fmt --check, clippy --workspace --locked --all-targets --all-features -D warnings, check --workspace --locked --all-targets, nextest run --workspace --locked)
+resultado: PASS — exit 0; 410/410 testes nextest passaram (inclui 58 testes gui:: com egui_kittest 0.37)
+ambiente: rustc/cargo 1.99.1 (rust-toolchain.toml), Linux x86_64
+commit/árvore: árvore de trabalho 2026-11-14 (sem VCS neste diretório)
+observações: após bump eframe 0.37.0 (accesskit desativado) nenhuma mudança de código foi necessária no app; os testes de GUI exigiram harness com allow_missing_glyphs e nomes acessíveis nos campos (labelled_by/from_label) devido a checagens novas do egui_kittest 0.37

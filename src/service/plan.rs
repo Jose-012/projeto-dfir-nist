@@ -1,0 +1,345 @@
+//! F1-29 (RF-052) — itens do plano de fortalecimento, camada de serviço.
+//!
+//! As regras (prioridade, esforço, custo e fase obrigatórios; detalhes de
+//! proteção só nos domínios de criptografia e chaves; recomendação geral
+//! quando não há achado) vivem em `persistence/plan_items.rs`.
+
+use super::findings::non_blank;
+use super::{AnalyticalResultResponse, AppServices, current_results_for_incident, incident_exists};
+use crate::error::{AppError, AppResult};
+use crate::persistence::plan_items as plan_model;
+use serde::Serialize;
+
+/// Os cinco detalhes do Entregável 5, como a interface os recebe.
+#[derive(Debug, Clone, Default)]
+pub struct CryptoInput {
+    pub data_class: String,
+    pub location: String,
+    pub mechanism: String,
+    pub rotation: String,
+    pub recovery: String,
+}
+
+/// Dados de um item de plano como a interface os recebe (tudo texto).
+#[derive(Debug, Clone, Default)]
+pub struct PlanItemInput {
+    pub domain: String,
+    pub title: String,
+    pub rationale: String,
+    pub priority: String,
+    pub effort: String,
+    pub cost_class: String,
+    pub phase: String,
+    pub precondition: String,
+    pub postcondition: String,
+    pub verification: String,
+    pub framework_reference: Option<String>,
+    pub regulatory_reference: Option<String>,
+    pub nist_subcategory_ids: Vec<String>,
+    pub finding_ids: Vec<String>,
+    pub depends_on: Vec<String>,
+    pub crypto: Option<CryptoInput>,
+    pub supersedes: Option<String>,
+}
+
+fn invalid(what: &str, value: &str) -> AppError {
+    AppError::Config(format!("invalid {what}: {value}"))
+}
+
+pub async fn create_plan_item(
+    services: &AppServices,
+    incident_id: &str,
+    input: &PlanItemInput,
+) -> AppResult<String> {
+    incident_exists(&services.db, incident_id).await?;
+    let domain = plan_model::PlanDomain::from_str(&input.domain)
+        .ok_or_else(|| invalid("plan domain", &input.domain))?;
+    let priority = plan_model::PlanPriority::from_str(&input.priority)
+        .ok_or_else(|| invalid("priority", &input.priority))?;
+    let effort = plan_model::PlanEffort::from_str(&input.effort)
+        .ok_or_else(|| invalid("effort", &input.effort))?;
+    let cost_class = plan_model::CostClass::from_str(&input.cost_class)
+        .ok_or_else(|| invalid("cost class", &input.cost_class))?;
+    let phase = plan_model::PlanPhase::from_str(&input.phase)
+        .ok_or_else(|| invalid("phase", &input.phase))?;
+    let nist: Vec<&str> = input
+        .nist_subcategory_ids
+        .iter()
+        .map(String::as_str)
+        .collect();
+    let findings: Vec<&str> = input.finding_ids.iter().map(String::as_str).collect();
+    let depends_on: Vec<&str> = input.depends_on.iter().map(String::as_str).collect();
+    let crypto = input
+        .crypto
+        .as_ref()
+        .map(|crypto| plan_model::CryptoDetail {
+            data_class: &crypto.data_class,
+            location: &crypto.location,
+            mechanism: &crypto.mechanism,
+            rotation: &crypto.rotation,
+            recovery: &crypto.recovery,
+        });
+    let id = plan_model::insert_plan_item(
+        &services.db,
+        plan_model::NewPlanItem {
+            incident_id,
+            domain,
+            title: &input.title,
+            rationale: &input.rationale,
+            priority,
+            effort,
+            cost_class,
+            phase,
+            precondition: &input.precondition,
+            postcondition: &input.postcondition,
+            verification: &input.verification,
+            framework_reference: non_blank(&input.framework_reference),
+            regulatory_reference: non_blank(&input.regulatory_reference),
+            nist_subcategory_ids: nist.as_slice(),
+            finding_ids: findings.as_slice(),
+            depends_on: depends_on.as_slice(),
+            crypto,
+            supersedes: non_blank(&input.supersedes),
+            actor_id: None,
+        },
+    )
+    .await
+    .map_err(AppError::Database)?;
+    Ok(id)
+}
+
+/// Tudo que a aba "Plano" mostra, numa só consulta: os itens vigentes (por
+/// domínio e prioridade), os achados vigentes (para ligar a um item) e a
+/// cobertura das ações da demanda.
+#[derive(Debug, Clone, Serialize)]
+pub struct PlanView {
+    pub items: Vec<AnalyticalResultResponse>,
+    pub findings: Vec<AnalyticalResultResponse>,
+    pub coverage: Vec<plan_model::DomainCoverage>,
+}
+
+fn payload_str<'a>(item: &'a AnalyticalResultResponse, key: &str) -> Option<&'a str> {
+    item.payload.get(key).and_then(|value| value.as_str())
+}
+
+pub async fn plan_view(services: &AppServices, incident_id: &str) -> AppResult<PlanView> {
+    incident_exists(&services.db, incident_id).await?;
+    let mut items = current_results_for_incident(&services.db, incident_id, "PLAN_ITEM").await?;
+    // Estável: dentro do mesmo domínio e prioridade, mantém a ordem recebida.
+    items.sort_by_key(|item| {
+        let domain = payload_str(item, "domain")
+            .and_then(plan_model::PlanDomain::from_str)
+            .map_or(usize::MAX, plan_model::PlanDomain::position);
+        let priority = payload_str(item, "priority")
+            .and_then(plan_model::PlanPriority::from_str)
+            .map_or(u8::MAX, plan_model::PlanPriority::rank);
+        (domain, priority)
+    });
+    let findings = current_results_for_incident(&services.db, incident_id, "FINDING").await?;
+    let entries: Vec<(plan_model::PlanDomain, bool)> = items
+        .iter()
+        .filter_map(|item| {
+            let domain = payload_str(item, "domain").and_then(plan_model::PlanDomain::from_str)?;
+            let general = payload_str(item, "support_kind") == Some("GENERAL_RECOMMENDATION");
+            Some((domain, general))
+        })
+        .collect();
+    let coverage = plan_model::domain_coverage(&entries);
+    Ok(PlanView {
+        items,
+        findings,
+        coverage,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::findings::{FindingInput, create_finding};
+    use crate::service::test_support::fixture;
+
+    fn plan_input(domain: &str, title: &str, priority: &str) -> PlanItemInput {
+        PlanItemInput {
+            domain: domain.into(),
+            title: title.into(),
+            rationale: "motivo".into(),
+            priority: priority.into(),
+            effort: "M".into(),
+            cost_class: "LOW".into(),
+            phase: "SHORT_TERM".into(),
+            verification: "checagem objetiva".into(),
+            ..PlanItemInput::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn plan_view_orders_items_and_reports_coverage_with_empty_domains() {
+        let fx = fixture().await;
+        let incident = crate::service::create_incident(&fx.services, "incidente")
+            .await
+            .expect("incident");
+        let finding = create_finding(
+            &fx.services,
+            &incident.id,
+            &FindingInput {
+                kind: "MISSING_CONTROL".into(),
+                title: "RDP sem MFA".into(),
+                severity: "HIGH".into(),
+                basis: "EVTX 4625".into(),
+                confidence: "MEDIUM".into(),
+                ..FindingInput::default()
+            },
+        )
+        .await
+        .expect("finding");
+
+        // Criados fora de ordem de propósito.
+        create_plan_item(
+            &fx.services,
+            &incident.id,
+            &plan_input("MONITORAMENTO", "Alertar logons em massa", "P2"),
+        )
+        .await
+        .expect("monitoring");
+        create_plan_item(
+            &fx.services,
+            &incident.id,
+            &PlanItemInput {
+                finding_ids: vec![finding],
+                // Campos opcionais em branco valem como ausentes.
+                regulatory_reference: Some("   ".into()),
+                ..plan_input("AUTENTICACAO_ACESSO", "MFA no acesso remoto", "P1")
+            },
+        )
+        .await
+        .expect("auth p1");
+        create_plan_item(
+            &fx.services,
+            &incident.id,
+            &plan_input("AUTENTICACAO_ACESSO", "Revisar política de senhas", "P3"),
+        )
+        .await
+        .expect("auth p3");
+        create_plan_item(
+            &fx.services,
+            &incident.id,
+            &PlanItemInput {
+                crypto: Some(CryptoInput {
+                    data_class: "dados pessoais".into(),
+                    location: "DB01".into(),
+                    mechanism: "AES-256".into(),
+                    rotation: "anual".into(),
+                    recovery: "cofre".into(),
+                }),
+                ..plan_input("CRIPTO_REPOUSO", "Cifrar o banco", "P1")
+            },
+        )
+        .await
+        .expect("crypto");
+
+        let view = plan_view(&fx.services, &incident.id).await.expect("view");
+        let order: Vec<&str> = view
+            .items
+            .iter()
+            .map(|item| item.payload["title"].as_str().unwrap_or(""))
+            .collect();
+        assert_eq!(
+            order,
+            vec![
+                "MFA no acesso remoto",
+                "Revisar política de senhas",
+                "Alertar logons em massa",
+                "Cifrar o banco",
+            ],
+            "por domínio na ordem da demanda e, dentro dele, por prioridade"
+        );
+        assert_eq!(view.findings.len(), 1);
+
+        assert_eq!(view.coverage.len(), 8);
+        let shape: Vec<(&str, usize, usize)> = view
+            .coverage
+            .iter()
+            .map(|c| (c.domain.as_str(), c.items, c.general_items))
+            .collect();
+        assert_eq!(
+            shape,
+            vec![
+                ("OS_HARDENING", 0, 0),
+                ("REDE_DISPOSITIVOS", 0, 0),
+                ("AUTENTICACAO_ACESSO", 2, 1),
+                ("MONITORAMENTO", 1, 1),
+                ("CRIPTO_REPOUSO", 1, 1),
+                ("CRIPTO_TRANSITO", 0, 0),
+                ("GESTAO_CHAVES", 0, 0),
+                ("POLITICA_IR", 0, 0),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn revising_an_item_shows_only_the_current_revision() {
+        let fx = fixture().await;
+        let incident = crate::service::create_incident(&fx.services, "incidente")
+            .await
+            .expect("incident");
+        let first = create_plan_item(
+            &fx.services,
+            &incident.id,
+            &plan_input("OS_HARDENING", "Aplicar baseline CIS", "P3"),
+        )
+        .await
+        .expect("first");
+        create_plan_item(
+            &fx.services,
+            &incident.id,
+            &PlanItemInput {
+                supersedes: Some(first),
+                ..plan_input("OS_HARDENING", "Aplicar baseline CIS", "P1")
+            },
+        )
+        .await
+        .expect("revision");
+
+        let view = plan_view(&fx.services, &incident.id).await.expect("view");
+        assert_eq!(view.items.len(), 1);
+        assert_eq!(view.items[0].payload["priority"], "P1");
+    }
+
+    #[tokio::test]
+    async fn service_rejects_unknown_incident_vocabulary_and_missing_protection_details() {
+        let fx = fixture().await;
+        assert!(
+            create_plan_item(&fx.services, "nope", &plan_input("OS_HARDENING", "x", "P1"))
+                .await
+                .is_err()
+        );
+        let incident = crate::service::create_incident(&fx.services, "incidente")
+            .await
+            .expect("incident");
+        for input in [
+            plan_input("BOGUS", "x", "P1"),
+            plan_input("OS_HARDENING", "x", "P9"),
+            PlanItemInput {
+                effort: "XL".into(),
+                ..plan_input("OS_HARDENING", "x", "P1")
+            },
+            PlanItemInput {
+                cost_class: "FREE".into(),
+                ..plan_input("OS_HARDENING", "x", "P1")
+            },
+            PlanItemInput {
+                phase: "NOW".into(),
+                ..plan_input("OS_HARDENING", "x", "P1")
+            },
+            // Domínio de criptografia sem os cinco detalhes.
+            plan_input("GESTAO_CHAVES", "x", "P1"),
+        ] {
+            assert!(
+                create_plan_item(&fx.services, &incident.id, &input)
+                    .await
+                    .is_err(),
+                "{input:?}"
+            );
+        }
+    }
+}

@@ -1,0 +1,26 @@
+EVD-001 — Gate Rust (`just verify`)
+
+executed-at: 2026-11-14T19:35:15Z .. 2026-11-14T19:37:44Z
+toolchain:   rustc 1.99.1 (58cf8f9c3 2026-10-13)
+             cargo 1.99.1 (5f94df478 2026-08-27)
+environment: Linux x86_64, Debian 13
+command:     just verify
+             (validate-fase0; fmt --all -- --check; check --workspace --locked --all-targets;
+              test --workspace --locked; nextest run --workspace --locked;
+              clippy --workspace --all-targets --all-features --locked -- -D warnings)
+
+result: PASS (exit 0)
+
+- Fase 0 static checks: 0 erro(s), 0 aviso(s)
+- cargo test --workspace:
+    dfir-app      294 passed, 0 failed, 1 ignored
+    dfir-engine    83 passed, 0 failed
+    engine/tests/sandbox.rs  7 passed, 0 failed
+    dfir-protocol  26 passed, 0 failed
+- cargo nextest: 410 tests run, 410 passed, 1 skipped
+- cargo clippy -D warnings: limpo
+- Comandos adicionais do Gate Rust executados na mesma árvore:
+    cargo metadata --locked --format-version 1   ok
+    cargo tree --locked -e features              ok
+
+Não coberto: Windows, Linux aarch64, janela real da GUI, incidente real.

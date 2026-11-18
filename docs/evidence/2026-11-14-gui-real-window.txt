@@ -1,0 +1,7 @@
+EVD-009 — Janela real da GUI aberta no display X11 local (GUI-01/GFX-01)
+executed-at: 2026-11-14T22:14:58Z .. 2026-11-14T22:15:23Z
+comando: timeout 25 ./target/debug/dfir-app  (DISPLAY=:0, Xorg real do host, sem Xvfb)
+resultado: PASS — exit 124 (timeout, ou seja, a janela abriu e ficou aberta até o limite); log registrou a inicialização do winit/wgpu
+GFX-01 confirmado na prática: linha 'native UI GPU adapter' em ~/.local/share/dfir/storage/logs/dfir.log às 2026-11-14T22:14:58Z: adapter='Mesa Intel(R) HD Graphics 2000 (SNB GT1)', backend=Gl, device_type=IntegratedGpu, driver_info='3.3 (Core Profile) Mesa 25.0.7-2+deb13u1', candidates=2 (o outro candidato era llvmpipe/Vulkan CPU); os erros EGL 0x3009/0x3005 do wgpu_hal continuaram visíveis como diagnóstico, e a linha do adaptador permite interpretá-los
+detalhe: o log também avisou 'No font has 📁' (glifo do botão Evidência fora das fontes padrão) — sem system_fonts; não quebra a janela, só desenha caixa no lugar do emoji
+ambiente: rustc/cargo 1.99.1, Linux x86_64, Xorg :0 do host (Debian 13), build debug do próprio target/debug/dfir-app
