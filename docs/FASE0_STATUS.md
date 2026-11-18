@@ -22,21 +22,17 @@ Ferramenta forense local/offline. Autenticação, RBAC, sessões e server-mode f
 | Podman/containerização | RETIRADO | adendo à ADR-0007 | não aplicável |
 | UI local server-rendered (`templates/`, `src/web`) | RETIRADO | ADR-0017 | substituída por interface nativa, ver linha abaixo |
 | Frontend TypeScript/Node.js/npm (`frontend/`) | RETIRADO | ADR-0017 | removido por inteiro junto com `src/web`/`templates/`; ADR-0009 (Bun→Node) fica só de valor histórico |
-| Interface nativa (eframe/egui/egui_extras) | IMPLEMENTED / PENDING-HUMAN | `src/gui/`, `src/service/`, ADR-0017, `docs/NATIVE_UI_ARCHITECTURE.md` | Histórico (2026-09-22, toolchain não pinado): `cargo check`/`test`/`fmt`/`clippy` verdes; UI não renderizada visualmente nessa sessão. Estado vigente: `docs/rtm.md`; log cronológico: `docs/FASE1_STATUS.md`. Verificação no toolchain pinado: [PENDING-HUMAN → `docs/EVIDENCE_REGISTER.md`] |
-| EVTX via `evtx` (requisito 0.15.1, lock 0.15.1) | IMPLEMENTED / PENDING-HUMAN | `engine/` | sem fixture EVTX sanitizada versionada (F1-16); e2e com `security.evtx` real passou (`EVD-002`) |
+| Interface nativa (eframe/egui/egui_extras) | VERIFIED (Linux x86_64) | `src/gui/`, `src/service/`, ADR-0017, `docs/NATIVE_UI_ARCHITECTURE.md` | `EVD-009` (janela real X11) e `EVD-012` (426/426 no Rust 1.100.0); Windows/aarch64 seguem `WVR-001`/`WVR-002` |
+| EVTX via `evtx` (requisito e lock 0.15.1) | VERIFIED (Linux x86_64) | `engine/`, `tests/fixtures/senai-demo.evtx` | `EVD-011`/`EVD-012`: fixture sanitizada versionada e e2e 110/110 sem arquivo externo |
 | Auth/RBAC/server-mode | RETIRADO | ADR-0007 | não aplicável |
 
-## Gates pendentes
+## Gates e limites de verificação
 
-Sem `EVD-*` em [`docs/EVIDENCE_REGISTER.md`](EVIDENCE_REGISTER.md), nenhum gate abaixo é declarado `PASS`. **Atualização 2026-11-14:** `cargo test/clippy/nextest` (`EVD-001`), e2e (`EVD-002`), `cargo audit`/`cargo deny` (`EVD-003`) e `doc-gate` (`EVD-004`) foram executados em Linux x86_64 e estão registrados; o que permanece sem execução está indicado abaixo.
-
-- `cargo test --workspace --locked`;
-- `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`;
-- `cargo nextest run --workspace --locked`;
-- testes adversariais Linux;
-- revisão de instalação Windows sem privilégios administrativos;
-- `cargo audit` e `cargo deny --workspace check` (`cargo vet` está dispensado no MVP — ADR-0018 D-2, confirmado pelo operador em 2026-11-04);
-- SBOM (`cyclonedx`): fora do escopo, decisão do operador (ADR-0028); não é gate.
+- `PASS` em Linux x86_64 com Rust/Cargo 1.100.0: validação estática, fmt, check, test, nextest 426/426, clippy e e2e 110/110 (`EVD-012`); supply chain verde (`EVD-012`).
+- `WAIVED`: Windows (`WVR-001`), Linux aarch64 (`WVR-002`) e CI automático (`WVR-003`), todos com validade e escopo em `docs/EVIDENCE_REGISTER.md`.
+- `WVR-004`: exceção temporária para `RUSTSEC-2026-0459`; risco aceito não equivale a verificação de inexploração.
+- `PENDING-HUMAN`: execução sobre incidente real. A fixture sanitizada e o cenário DEMO não substituem essa verificação.
+- SBOM (`cyclonedx`): fora do escopo por ADR-0028, não é gate.
 
 > Gap origem: INC-07 e INC-04 (2026-11-04): migrations atualizadas para 0001–0012, verificação de 2026-09-22 marcada como histórica e gates reescritos com ponteiro para o registro de evidências.
 

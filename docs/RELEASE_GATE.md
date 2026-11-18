@@ -17,7 +17,7 @@ O release é fechado somente com evidência executada.
 
 ## Gate documental
 
-Estado: `PASS` em 2026-11-14 (`EVD-004`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-18 (`EVD-012`; anteriores `EVD-004`/`EVD-008`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -28,7 +28,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-14 (`EVD-001`, reexecutado após o upgrade egui 0.37.0 como `EVD-005`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-012`, nextest 426/426; anteriores `EVD-001`/`EVD-005`/`EVD-010`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -45,7 +45,7 @@ cargo nextest run --workspace --locked
 
 ## Supply chain
 
-Estado: `PASS` em 2026-11-14 (`EVD-003`, reexecutado após o upgrade egui 0.37.0 como `EVD-007`, com a cadeia zbus/AT-SPI removida do grafo), com **uma** exceção de vulnerabilidade justificada (`RUSTSEC-2026-0459`, formalizada como `WVR-004`, válida até 2026-12-31; ver `docs/SUPPLY_CHAIN.md` e `deny.toml`; a exceção informativa `RUSTSEC-2025-0141` do `bincode` também segue documentada). A exceção é risco aceito, não verificação de inexploração.
+Estado: `PASS` em 2026-11-18 (`EVD-012`; anteriores `EVD-003`/`EVD-007`), com **uma** exceção de vulnerabilidade justificada (`RUSTSEC-2026-0459`, `WVR-004`) e duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono). SQLite e chrono têm revisão até 2026-12-31. Exceção é risco aceito ou aviso analisado, não prova de inexploração.
 
 ```bash
 cargo deny --workspace check
@@ -80,4 +80,4 @@ A interface é nativa (eframe/egui/egui_extras), parte do próprio binário `dfi
 - **Documentação em dia:** `scripts/validate_fase0.py` falha se uma ADR ≥ 0018 não for citada na especificação ou se a documentação viva citar identificadores removidos do código.
 - **Documentos sobre o incidente de demonstração:** o mesmo `scripts/e2e_headless.py` roda `dfir-app demo` e confere os cinco documentos e o `manifest.json` (contagens do cenário, rótulo DEMO, hashes, tabelas, máscara, determinismo, descarte da evidência) — `PASS` (`EVD-002`). Qualquer alteração em `service/demo.rs` sobe `DEMO_DATASET_VERSION` e ajusta as contagens esperadas (`docs/DEMO.md`).
 - **Operação documentada:** `docs/OPERATION.md` cobre proteção do volume (RF-030) e o procedimento manual de backup, atualização e rollback (RF-032, parte documental). ~~A cópia automática do banco antes de migration continua pendente e **deve constar como lacuna** em qualquer release candidate enquanto não existir.~~ Substituído em 2026-11 por esta nota.
-  - **Nota (2026-11-04) — Gap origem: INC-01.** A cópia automática do banco antes de migration foi implementada em 2026-10-27 (ADR-0026, RF-032) e é verificada por `migrate_with_backup` (cópia consistente, SHA-256 e verificação antes de publicar; `src/persistence/backup.rs`) e por `verify_published` (reconferência da pasta publicada, `dfir-app backup-verify <pasta>`). Deixa de constar como lacuna de release candidate (`docs/OPERATION.md` §3.1; item de RF-032 acima). A execução real continua `[PENDING-HUMAN → EVIDENCE_REGISTER]`.
+  - **Nota (2026-11-04) — Gap origem: INC-01.** A cópia automática do banco antes de migration foi implementada em 2026-10-27 (ADR-0026, RF-032) e é verificada por `migrate_with_backup` (cópia consistente, SHA-256 e verificação antes de publicar; `src/persistence/backup.rs`) e por `verify_published` (reconferência da pasta publicada, `dfir-app backup-verify <pasta>`). Deixa de constar como lacuna de release candidate (`docs/OPERATION.md` §3.1; item de RF-032 acima). Testes e e2e cobrem o mecanismo (`EVD-005`/`EVD-006`/`EVD-012`); uma migração sobre banco de caso real do operador continua `PENDING-HUMAN`.

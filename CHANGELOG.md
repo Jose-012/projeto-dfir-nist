@@ -12,14 +12,14 @@
 - **Gates executados em rustc/cargo 1.100.0, Linux x86_64 (`EVD-012`, artefatos em `docs/evidence/2026-11-18-*.txt`):** `fmt --check` ok; `check --workspace --locked --all-targets` ok; `clippy -D warnings` limpo; `nextest 426/426` (1 ignorado); `just e2e tests/fixtures/senai-demo.evtx` **110/110** com engine real e sandbox `required`; `cargo deny --workspace check` + `cargo audit` verdes; `validate_fase0.py` 0/0; `doc_gate.py` PASS.
 - **Docs:** `EVD-012` em `docs/EVIDENCE_REGISTER.md`; linhas RF-003/RF-027 e "Atualização 2026-11-18" em `docs/rtm.md`; entrada no histórico de `docs/FASE1_STATUS.md`; nota no cabeçalho de `docs/RELEASE_GATE.md`.
 
-## Unreleased — 2026-11-15 — pistas C e D do plano remanescente concluídas (F1-16, F1-19/20/21/23/24/33)
-
 ## Unreleased — 2026-11-18 — micro-consolidações de helpers duplicados
 
 - **`persistence/mod.rs`**: `validation_error` consolidada (7 definições idênticas removidas de `analytical_results.rs`, `attack_impact.rs`, `findings.rs`, `ioc_recommendations.rs`, `nist_profiles.rs`, `plan_items.rs`, `source_gaps.rs`). A função vive agora em `persistence::validation_error` com doc comentando o canal de erro (Protocol) que a camada de serviço já traduz.
 - **`gui/mod.rs`**: helpers de UI movidos para `crate::gui::{non_empty, str_field, string_list, toggle, split_ids}` e reutilizados por `findings.rs`, `plan.rs`, `gaps.rs`, `attack.rs`, `critical_path.rs`, `impact.rs`, `iocs.rs`, `nist.rs`, `recommendations.rs` (≈133 linhas removidas, 0 risco: funções puras, testadas via UI).
 - **`gui/mod.rs::test_harness::drain`**: helper de teste único substitui 11 cópias idênticas em `detection.rs`, `evidence.rs`, `deliverables.rs`, `findings.rs`, `gaps.rs`, `nist.rs`, `incidents.rs`, `plan.rs`, `timeline.rs` (≈77 linhas removidas).
 - Gates: `fmt`, `check --workspace --locked --all-targets`, `clippy --workspace --locked --all-targets --all-features -- -D warnings`, `nextest run --workspace --locked` (426 pass, 1 skipped) — comportamento preservado.
+
+## Unreleased — 2026-11-15 — pistas C e D do plano remanescente concluídas (F1-16, F1-19/20/21/23/24/33)
 
 - **Pista C (F1-16) — `EVD-011`:** fixture EVTX sanitizada e determinística versionada em `tests/fixtures/senai-demo.evtx` (SHA-256 `256a655a…d448be`); `just e2e tests/fixtures/senai-demo.evtx` roda sem arquivo externo e passou **110/110**. `docs/OPERATION.md` §5 atualizado.
 - **Pista D — `EVD-010`:** F1-19 vínculo evidência↔incidente idempotente com auditoria (`link-evidence`, `incident-evidence`, painel na GUI, vigentes sem janela); F1-20 limites YARA formalizados (`wide ascii` provado em UTF-16LE, timeout por tamanho, sem descarte silencioso); F1-21 ordem/retomada da destruição com testes de falha de banco/I-O e purga completa; F1-23 nenhum `let _ =` em produção (`rollback_loudly`, `discard_temp_*`, `mark_job_failed_loudly`, sends logados); F1-24 custódia/auditoria visíveis na GUI e CLI (`custody`, `audit`); F1-33/AUD-32 corrigido (YARA não sobrescreve a timeline). Cada ticket com teste próprio: nextest **424/424**, suíte `gui::` 62/62, clippy `-D warnings` limpo.

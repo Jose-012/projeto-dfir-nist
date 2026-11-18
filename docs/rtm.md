@@ -15,11 +15,11 @@ A implementação abaixo pertence à base já concluída e não redefine os `RF-
 | Storage/staging | `src/infrastructure/storage.rs` | testes adversariais | ACCEPTED |
 | Engine separado | `src/application/engine.rs`, `engine/` | subprocesso real | ACCEPTED |
 | JSONL | `protocol/`, `src/application/engine.rs` | protocolo/smoke | ACCEPTED |
-| Evidência + hash + custódia | `src/service/mod.rs` (`import_evidence`), migrations 0004/0005 | testes/runtime da era HTTP; fluxo reescrito em ADR-0017 e sem teste de serviço | STALE |
-| EVTX + timeline | `engine/src/main.rs`, `src/service/mod.rs` (`job_results`), `src/gui/evidence.rs` | evidência da era HTTP/frontend; sem fixture EVTX positiva (F1-16) | STALE |
-| Descarte governado local | `src/service/mod.rs` (`destroy_evidence`) + audit/custody | teste da era HTTP; ordem arquivo→transação é defeito conhecido (F1-21) | STALE |
+| Evidência + hash + custódia | `src/service/mod.rs` (`import_evidence_with_provenance`), migrations 0004/0005 | `EVD-010`/`EVD-012`: custódia visível, importação, SHA-256 e `audit-verify`; RF-003 com preservação byte a byte | ACCEPTED |
+| EVTX + timeline | `engine/src/main.rs`, `src/service/mod.rs` (`job_results`), `src/gui/evidence.rs` | `EVD-011`/`EVD-012`: fixture EVTX sanitizada versionada, e2e 110/110, timeline persistida e filtrável | ACCEPTED |
+| Descarte governado local | `src/service/mod.rs` (`destroy_evidence`) + audit/custody | `EVD-010`/`EVD-011`/`EVD-012`: ordem registro→arquivo→jobs, retomada, purga e preservação da custódia | ACCEPTED |
 
-> Linhas `STALE` (2026-10-02): a evidência apontava para código removido (`src/web/`, `frontend/`, rota `DELETE`) ou para comportamento reescrito pela ADR-0017. Voltam a `ACCEPTED` somente com evidência executada (F1-14, F1-16, F1-21).
+> Estas três linhas ficaram `STALE` em 2026-10-02 porque a evidência apontava para código removido ou comportamento reescrito pela ADR-0017. Voltaram a `ACCEPTED` em 2026-11-18 somente após as evidências executadas exigidas por esta regra: F1-14/`EVD-012`, F1-16/`EVD-011` e F1-21/`EVD-010`.
 
 ## RTM Fase 1 — backlog do MVP (rebaselined em 2026-10-02, ADR-0018)
 
@@ -40,8 +40,8 @@ A implementação abaixo pertence à base já concluída e não redefine os `RF-
 | F1-11 | RF-016, RF-017, RF-046 (RF-045 → Fase 4) | Dataset BEC e testes de segurança | IMPLEMENTED / PENDING-HUMAN (reduzido: ADR-0023, Etapa 7; só EVTX, sem CSV/JSONL; testado em rustc 1.97.1 em 2026-10-27) |
 | F1-12 | RF-014, RF-030, RF-032, RF-047 + RFs MVP restantes | Release candidate e reconciliação | PARCIAL (documentos reconciliados em 2026-10-27; RF-032 automático; F1-26 e F1-28 implementados; RF-049 adiado por decisão do operador; **pendentes:** CI no toolchain pinado (F1-14), ~~`cargo audit` (F1-15)~~ [executado em 2026-10-29, ver a linha F1-15; nota de 2026-11-04, Gap origem: INC-03], execução em Windows e em incidente real) |
 | F1-13 | RF-047 | Lock regenerado e compilação corrigida | IMPLEMENTED / PENDING-HUMAN |
-| F1-14 | (gates) | Baseline de verificação e CI | PARCIAL (2026-11-14: `just verify` — `fmt`, `check --workspace`, `test`, `nextest` e `clippy -D warnings` — e `e2e_headless` rodados **no 1.99.1**, de forma manual; `EVD-001`/`EVD-002`. CI automático segue PLANNED) |
-| F1-15 | (supply chain) | Supply chain da árvore de UI | PARCIAL (2026-11-14: `cargo audit` e `cargo deny --workspace check` **executados** e verdes com **uma** exceção de vulnerabilidade justificada, `RUSTSEC-2026-0459`, formalizada como `WVR-004` (válida até 2026-12-31); `EVD-003`/`EVD-007`; manual, sem CI (`WVR-003`); `cargo vet` dispensado no MVP; as exceções informativas da UI (zbus/ttf-parser) foram **removidas do grafo** com o eframe 0.37.0 sem accesskit) |
+| F1-14 | (gates) | Baseline de verificação e CI | PARCIAL (2026-11-18: `just verify` — `fmt`, `check --workspace`, `test`, `nextest` e `clippy -D warnings` — e `e2e_headless` executados manualmente em **1.100.0**, `EVD-012`; CI automático não implementado e `WAIVED` por `WVR-003` até 2026-12-31) |
+| F1-15 | (supply chain) | Supply chain da árvore de UI | PARCIAL (2026-11-18: `cargo audit` e `cargo deny --workspace check` verdes em `EVD-012`; uma vulnerabilidade aceita por `WVR-004` e duas exceções informativas documentadas; manual, sem CI (`WVR-003`); `cargo vet` dispensado no MVP; exceções informativas da UI removidas do grafo com eframe 0.37.0 sem accesskit) |
 | F1-16 | RF-005, RF-006 | Fixtures EVTX e testes de integração | VERIFIED (2026-11-15, `EVD-011`): fixture EVTX sanitizada versionada `tests/fixtures/senai-demo.evtx` (determinística) e e2e 110/110 sem arquivo externo |
 | F1-17 | RF-006 | Erros de parsing persistidos | IMPLEMENTED / PENDING-HUMAN (ADR-0021) |
 | F1-18 | RF-007, RF-046 | Timeline persistida e filtrável | IMPLEMENTED / PENDING-HUMAN (ADR-0020/0021/0025; filtros estruturados `campo:valor` implementados) |

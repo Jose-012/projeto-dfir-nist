@@ -11,7 +11,7 @@
 - `cargo vet`: dispensado no MVP (ADR-0018 D-2; confirmado pelo operador em 2026-11-04).
 - As execuções anteriores permanecem registradas como `EVD-001` a `EVD-009`; pistas C/D usam `EVD-010`/`EVD-011`. Não se reescrevem evidências históricas.
 
-| Crate | Versão no lock | Estado em 2026-11-14 | EVD |
+| Crate | Versão no lock | Estado e evidência registrados | EVD |
 |---|---|---|---|
 | `wasmtime` | 48.0.8 | os 8 avisos de 2026-10-29 (`RUSTSEC-2026-0222`, `-0269`, `-0316`, `-0327`, `-0362`, `-0363`, `-0359`, `-0379`) vinham do `45.0.3`; resolvidos pela atualização; as 4 exceções do `deny.toml` foram removidas | `[PENDING-HUMAN]` |
 | `yara-x` | 1.22.1 | atualizado de `1.20.0`; destrava `wasmtime >= 48`; repetir `cargo test --workspace` e e2e a cada atualização (seccomp/Landlock validados contra o JIT de cada versão) | `[PENDING-HUMAN]` |
