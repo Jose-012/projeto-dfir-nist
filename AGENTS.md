@@ -192,7 +192,7 @@ Toolchains de referência: `toolchains.toml`.
 
 ## 15. Ferramentas preferidas do agente (economia de contexto)
 
-Atualizado em 2026-11-18 (verificado no host: `rtk 0.49.0`, `rg`, `ast-grep 0.51.2`/`sg` (sg depreciado), `fd`, `zoxide`, `bat`, `eza`, `git-delta` instalados; `jcodemunch` não instalado neste host).
+Atualizado em 2026-11-18 (verificado no host: `rtk 0.49.0`, `rg`, `ast-grep 0.51.2`/`sg` (sg depreciado), `fd`, `zoxide`, `bat` e `eza` instalados; pager `delta`, `jcodemunch` não instalados).
 
 **Busca e leitura de código — use as ferramentas nativas, não o shell:**
 
@@ -204,7 +204,7 @@ Atualizado em 2026-11-18 (verificado no host: `rtk 0.49.0`, `rg`, `ast-grep 0.51
 
 - Agrupe comandos independentes em uma única chamada `batch` ou em um único comando composto (`&&`), em vez de várias chamadas bash sequenciais.
 - Prefira `rtk <cmd>` (ex.: `rtk cargo test`, `rtk git ...`, `rtk grep ...`, `rtk test`, `rtk err`) para saída condensada de comandos barulhentos; se a saída filtrada ficar irrecuperável, re rode com `rtk proxy <cmd>` (o truncamento informa o caminho de recuperação). `rtk init` já está refletido no `CLAUDE.md` deste projeto.
-- Navegação: `zoxide` (`z <dir>`) em vez de `cd` com caminhos longos; arquivos grandes legíveis com `bat --paging=never` (ou `bat -p`) em vez de `cat` quando precisar paginar; diffs com `git diff | git-delta` quando quiser coloração. `git diff --delta` não é uma opção válida do Git.
+- Navegação: `zoxide` (`z <dir>`) em vez de `cd` com caminhos longos; arquivos grandes legíveis com `bat --paging=never` (ou `bat -p`) em vez de `cat` quando precisar paginar; diffs com `git diff`. Não presuma que o pager `delta` esteja instalado: `/usr/bin/git-delta` pode ser o comando homônimo do git-extras.
 - Arquivos temporários de trabalho vão em `$JCODE_SCRATCH_DIR`, nunca em `/tmp`.
 - Nunca use shell intermediário para subprocessos de produção nem registre secrets; as regras de segurança do §6 prevalecem sobre qualquer preferência de ferramenta.
 

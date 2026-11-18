@@ -108,6 +108,7 @@ Valores, padrões e fallback de instalação: `docs/OPERATION.md` e `src/config.
 ## Validação
 
 ```bash
+just doctor
 just doc-gate
 just verify
 just supply-chain

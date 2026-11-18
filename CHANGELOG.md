@@ -5,6 +5,7 @@
 
 - `docs/rtm.md` passou a ser a única matriz de tickets; `docs/FASE1_STATUS.md` ficou somente com histórico. README e prompt perderam narrativas datadas; DoR e plano de backlog concluídos foram arquivados; atualizações passam a cobrir apenas documentos afetados e novos relatórios de rodada não são obrigatórios.
 - A lista de variáveis internas foi completada, o comando inválido `git diff --delta` foi corrigido e `docs/TOOLCHAINS.md` passou a separar referência de versões realmente observadas, incluindo Python 3.13.5 versus referência 3.14.6.
+- Novo `just doctor` (`scripts/doctor.py`) para diagnosticar ferramentas sem instalação; `release-tools` passou a fixar cargo-nextest 0.9.151, igual ao ambiente validado. O doctor terminou com 0 erros e 1 aviso esperado de Python; o pager `delta` ficou explicitamente ausente/opcional.
 
 ## Unreleased — 2026-11-18 — upgrade do pin para Rust 1.100.0 e lacunas RF-003/RF-027 fechadas (`EVD-012`)
 

@@ -56,10 +56,11 @@ Engineering/QA Tooling
 ## 5. Gates por mudança
 
 ```text
-Documentação/contratos: just doc-gate
-Código Rust:           just verify
-Dependências:          just supply-chain
-Fluxo com engine real: just e2e tests/fixtures/senai-demo.evtx
+Diagnóstico do ambiente: just doctor
+Documentação/contratos:  just doc-gate
+Código Rust:            just verify
+Dependências:           just supply-chain
+Fluxo com engine real:  just e2e tests/fixtures/senai-demo.evtx
 ```
 
 Antes de mudar dependências, use `cargo metadata --locked`, `cargo tree --locked -e features` e `cargo tree --locked -d`. Preserve `Cargo.lock` quando a tarefa não exigir atualização.

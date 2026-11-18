@@ -11,6 +11,9 @@ python := if os_family() == "windows" { "python" } else { "python3" }
 default:
     @just --list
 
+doctor:
+    {{python}} scripts/doctor.py
+
 validate-fase0:
     {{python}} scripts/validate_fase0.py
 
@@ -91,7 +94,7 @@ verify:
 release-tools:
     cargo install --locked cargo-audit@0.22.2
     cargo install --locked cargo-deny@0.20.2
-    cargo install --locked cargo-nextest@0.9.140
+    cargo install --locked cargo-nextest@0.9.151
 
 # Documentation checks intentionally remain lightweight; runtime/build gates remain authoritative.
 doc-gate:

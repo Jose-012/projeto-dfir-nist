@@ -42,7 +42,7 @@ Isto **não** substitui o `rustup` do operador; é só o caminho que funcionou o
 
 ## Evidência
 
-A versão efetiva de Rust/Cargo/Python usada em um gate deve ser registrada. Manifests pinam a referência; eles não provam que uma ferramenta foi executada.
+A versão efetiva de Rust/Cargo/Python usada em um gate deve ser registrada. Manifests pinam a referência; eles não provam que uma ferramenta foi executada. `just doctor` consulta as versões sem instalar ou alterar ferramentas; divergência de Python/nextest é aviso, ausência de Rust/Cargo/nextest ou Rust fora do pin é erro.
 
 ### Ambiente observado em 2026-11-18
 
