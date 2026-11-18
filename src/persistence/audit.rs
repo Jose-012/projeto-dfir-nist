@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use super::jcs::{canonicalize_json, canonicalize_value};
 use super::rollback_loudly;
+use super::validation_error;
 
 struct EventHashInput<'a> {
     id: &'a str,
@@ -400,8 +401,7 @@ pub async fn list_custody(
     .bind(evidence_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
+    rows.into_iter()
         .map(
             |(
                 sequence,
@@ -414,8 +414,12 @@ pub async fn list_custody(
                 previous_entry_hash,
                 entry_hash,
             )| {
-                let metadata = serde_json::from_str(&metadata).unwrap_or(Value::Null);
-                CustodyEntry {
+                let metadata = serde_json::from_str(&metadata).map_err(|error| {
+                    validation_error(format!(
+                        "stored custody metadata is malformed JSON: {error}"
+                    ))
+                })?;
+                Ok(CustodyEntry {
                     sequence,
                     entry_id,
                     evidence_id: evidence_id.to_string(),
@@ -426,10 +430,10 @@ pub async fn list_custody(
                     metadata,
                     previous_entry_hash,
                     entry_hash,
-                }
+                })
             },
         )
-        .collect())
+        .collect()
 }
 
 /// Evento de auditoria pronto para exibir/listar (F1-24).
@@ -470,8 +474,7 @@ pub async fn list_events(
         .fetch_all(pool)
         .await?,
     };
-    Ok(rows
-        .into_iter()
+    rows.into_iter()
         .map(
             |(
                 sequence,
@@ -485,8 +488,12 @@ pub async fn list_events(
                 metadata,
                 event_hash,
             )| {
-                let metadata = serde_json::from_str(&metadata).unwrap_or(Value::Null);
-                AuditEventView {
+                let metadata = serde_json::from_str(&metadata).map_err(|error| {
+                    validation_error(format!(
+                        "stored audit event metadata is malformed JSON: {error}"
+                    ))
+                })?;
+                Ok(AuditEventView {
                     sequence,
                     id,
                     timestamp,
@@ -497,10 +504,10 @@ pub async fn list_events(
                     incident_id,
                     metadata,
                     event_hash,
-                }
+                })
             },
         )
-        .collect())
+        .collect()
 }
 
 pub async fn verify_custody(pool: &SqlitePool, evidence_id: &str) -> Result<bool, sqlx::Error> {
@@ -561,8 +568,8 @@ pub async fn verify_custody(pool: &SqlitePool, evidence_id: &str) -> Result<bool
 mod tests {
     use super::{
         AUDIT_HASH_V2_PREFIX, EventHashInput, append, append_custody,
-        append_import_records_on_connection, canonicalize_json, event_hash, event_hash_v1, verify,
-        verify_custody,
+        append_import_records_on_connection, canonicalize_json, event_hash, event_hash_v1,
+        list_custody, list_events, verify, verify_custody,
     };
 
     #[test]
@@ -726,6 +733,76 @@ mod tests {
             !verify_custody(&pool, "ev-test")
                 .await
                 .expect("verify custody")
+        );
+    }
+
+    #[tokio::test]
+    async fn list_custody_rejects_malformed_stored_metadata() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let url = format!(
+            "sqlite://{}",
+            temp.path().join("custody-list.sqlite").display()
+        );
+        let pool = crate::persistence::db::connect(&url)
+            .await
+            .expect("database connection");
+        crate::persistence::db::migrate(&pool)
+            .await
+            .expect("migrations");
+        sqlx::query("INSERT INTO evidence(id,original_filename,storage_reference,format,size_bytes,blake3,sha256,imported_at,status) VALUES('ev-bad','test.evtx','evidence/ev-bad.evtx','evtx',1,'b3','sha','2026-08-20T00:00:00Z','FORENSIC')")
+            .execute(&pool)
+            .await
+            .expect("evidence fixture");
+        // Uma linha já inválida entra sem remover ou contornar os triggers de
+        // imutabilidade: o teste não enfraquece o mecanismo que pretende medir.
+        sqlx::query("INSERT INTO chain_of_custody(entry_id,evidence_id,action,actor,timestamp,reason,metadata,entry_hash) VALUES('bad-entry','ev-bad','IMPORTED','local-analyst','2026-08-20T00:00:00Z','fixture','not-json','invalid-hash')")
+            .execute(&pool)
+            .await
+            .expect("malformed custody fixture");
+
+        let error = list_custody(&pool, "ev-bad")
+            .await
+            .expect_err("metadata inválido não pode virar null");
+        assert!(
+            matches!(&error, sqlx::Error::Protocol(reason) if reason.contains("stored custody metadata is malformed JSON")),
+            "{error:?}"
+        );
+        assert!(
+            !verify_custody(&pool, "ev-bad")
+                .await
+                .expect("verification remains fail closed")
+        );
+    }
+
+    #[tokio::test]
+    async fn list_events_rejects_malformed_stored_metadata() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let url = format!(
+            "sqlite://{}",
+            temp.path().join("audit-list.sqlite").display()
+        );
+        let pool = crate::persistence::db::connect(&url)
+            .await
+            .expect("database connection");
+        crate::persistence::db::migrate(&pool)
+            .await
+            .expect("migrations");
+        sqlx::query("INSERT INTO audit_events(id,timestamp,action,object_type,object_id,metadata,event_hash) VALUES('bad-event','2026-08-20T00:00:00Z','TEST','test','object','not-json','invalid-hash')")
+            .execute(&pool)
+            .await
+            .expect("malformed audit fixture");
+
+        let error = list_events(&pool, None, 10)
+            .await
+            .expect_err("metadata inválido não pode virar null");
+        assert!(
+            matches!(&error, sqlx::Error::Protocol(reason) if reason.contains("stored audit event metadata is malformed JSON")),
+            "{error:?}"
+        );
+        assert!(
+            !verify(&pool)
+                .await
+                .expect("verification remains fail closed")
         );
     }
 
