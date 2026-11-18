@@ -56,10 +56,12 @@ O release é fechado somente com evidência executada.
 > **Atualização 2026-11-18 (verificação ambiental final).** Sobre `7080dd5`, sem mudança de código, `EVD-032`: supply chain verde e janela real isolada aberta por 25 s até timeout 124 esperado, backend Gl/Mesa Intel, sem diagnósticos de fonte/glyph/scroll ou nomes de fixtures. Não houve navegação manual ou incidente real. `just verify`/e2e não foram repetidos e continuam em `EVD-031`; doc-gate PASS.
 >
 > **Atualização 2026-11-18 (resultado analítico com uma só sucessora por pai).** No commit `d5b7840`, `EVD-033`: uma segunda sucessora do mesmo pai gerava duas linhas vigentes na listagem enquanto a leitura singular escolhia a terceira. A transação agora rejeita pai já substituído antes do INSERT/auditoria; histórico sequencial e listagem continuam verdes. `just verify` terminou com 458 passed/1 skipped, e2e 110/110 e doc-gate PASS. Sem reparo de histórico ramificado; supply chain/smoke permanecem em `EVD-032`.
+>
+> **Atualização 2026-11-18 (uma só raiz por correlation_key).** No commit `ecc324d`, `EVD-034`: duas raízes com a mesma chave geravam duas linhas vigentes e a leitura singular escolhia a segunda. Nova raiz agora exige `supersedes` quando a chave já existe, antes do INSERT/auditoria; 18 controles centrais passaram. `just verify` terminou com 459 passed/1 skipped, e2e 110/110 e doc-gate PASS. Sem reparo de histórico antigo; supply chain/smoke permanecem em `EVD-032`.
 
 ## Gate documental
 
-Estado: `PASS` em 2026-11-18 (`EVD-033`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-18 (`EVD-034`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -70,7 +72,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-033`, nextest 458 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-034`, nextest 459 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-033`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -107,8 +109,8 @@ cargo audit
 - `PASS` **contenção do engine provada com o engine de verdade** (ADR-0024): `cargo test --locked --workspace` (inclui `engine/tests/sandbox.rs`, que exige `EACCES`/`EPERM` onde devido e tem controle com a política `off`) e `scripts/e2e_headless.py` (repete a prova sobre o EVTX real) — `EVD-005`, `EVD-006`. **Rodar sempre pelo workspace**: `cargo test -p dfir-engine` não unifica as features do tokio e esconde falhas do runtime sob seccomp. Em Linux sem Landlock os testes de enforcement avisam e saem: o release no Linux **não** pode ser fechado nesse ambiente;
 - `WAIVED` **Windows** (`WVR-001`, aprovado pelo operador em 2026-11-14, válido até 2026-12-31): o Job Object só foi compilado; o release **não declara suporte a Windows** nesta rodada. Condição de saída: `dfir-app engine-smoke` + `just e2e <evtx>` em Windows, conferindo o aviso esperado `SANDBOX_NOT_FULLY_APPLIED`;
 - `WAIVED` **aarch64** (`WVR-002`, mesma validade): provado só em x86_64;
-- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-033`);
-- `PASS` **uma só sucessora por resultado:** pai já substituído falha na transação antes de nova linha/auditoria; histórico ramificado antigo não é reparado (`EVD-033`);
+- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-034`);
+- `PASS` **versão analítica linear:** uma só raiz por `correlation_key` e uma só sucessora por pai; violações falham na transação antes de nova linha/auditoria, sem reparar histórico antigo (`EVD-033`/`EVD-034`);
 - `PASS` **janela real na árvore final:** build e abertura isolada por 25 s até timeout 124 esperado, backend Gl/Mesa Intel, sem diagnósticos de fonte/glyph/scroll ou nomes de fixtures; sem navegação manual (`EVD-032`);
 - `PASS` **matriz de risco sem perda silenciosa:** severity inválida/`NONE` ou confidence inválida/ausente falha com ID/campo antes dos entregáveis (`EVD-031`);
 - `PASS` **caminho crítico limitado ao incidente:** os dois lados de `SEQUENCE_NEXT` devem pertencer ao incidente solicitado; relações antigas não são reparadas automaticamente (`EVD-030`);

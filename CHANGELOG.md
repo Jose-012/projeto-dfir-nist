@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - correlation_key analítica não aceita duas raízes vigentes (`EVD-034`)
+
+- Após a guarda de sucessora única, `supersedes=None` ainda aceitava duas raízes com a mesma `correlation_key`. A reprodução obteve duas linhas vigentes na listagem e a leitura singular escolheu a segunda.
+- A transação agora exige `supersedes` quando a chave já existe, antes do INSERT e da auditoria. A primeira raiz permanece única vigente; revisões sequenciais e os demais controles analíticos continuam verdes.
+- `EVD-034`: 18 testes centrais, `just verify` com 459 passed/1 skipped, e2e 110/110 e doc-gate PASS. Histórico com raízes duplicadas não é reparado; supply chain e smoke permanecem em `EVD-032`.
+
 ## Unreleased - 2026-11-18 - resultado analítico não aceita segunda sucessora do mesmo pai (`EVD-033`)
 
 - A checagem central validava `correlation_key`, mas aceitava duas sucessoras para o mesmo pai. A reprodução obteve duas linhas vigentes na listagem enquanto `current_for_correlation_key` escolhia a terceira.

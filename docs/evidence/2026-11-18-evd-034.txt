@@ -1,0 +1,52 @@
+EVD-034 - correlation_key analitica nao aceita duas raizes vigentes
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T10:40Z..10:58Z
+commit-tree: ecc324d6c1f52345dd5bbe1aff885dcb00b6539b (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-01. A correcao EVD-033 impedia duas sucessoras para o mesmo pai,
+mas supersedes=None ainda permitia duas raizes com a mesma correlation_key.
+Elas tambem produziam duas linhas vigentes e divergencia na leitura singular.
+
+Reproducao antes da correcao, sobre a arvore 2aefc05 mais o teste novo:
+  cargo nextest run --locked --no-fail-fast a_correlation_key_cannot_have_two_root_results
+    exit 100 esperado para a reproducao. O caminho central aceitou a segunda
+    raiz; list_current_by_evidence retornou duas linhas e
+    current_for_correlation_key selecionou a segunda. O assert registra
+    second root accepted=true current_rows=2 selected_is_second=true.
+    Tudo ocorreu via insert publico do modulo, sem UPDATE/DELETE ou SQL manual.
+
+Correcao no commit ecc324d:
+  dentro da mesma transacao BEGIN IMMEDIATE, o ramo supersedes=None consulta se
+  a correlation_key ja existe. Se existir, retorna erro
+  "supersedes is required" antes do INSERT e da auditoria. Revisao explicita
+  continua no ramo supersedes=Some, com as guardas de mesma chave e pai vigente.
+
+Regressao depois da correcao:
+  cargo nextest run --locked --no-fail-fast persistence::analytical_results::tests
+    exit 0; 18/18 testes centrais. A segunda raiz falha, a primeira permanece a
+    unica vigente, o historico fica com uma linha e a auditoria com um evento.
+    Os controles cobrem revisao sequencial, pai ja substituido, chave divergente,
+    relacoes, append-only e listagem vigente sem limite.
+
+Tentativas de setup nao contadas como evidencia comportamental:
+  duas versoes da fixture pararam na compilacao por uso incorreto da API central
+  e do ID String retornado. Os logs estao em task-022-before-setup.txt. A
+  reproducao comportamental valida, apos corrigir somente o setup, e
+  task-022-before.txt.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 459 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  resultados versionados, cinco documentos, hardening, determinismo e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa SQLite descartavel e nao repara raizes duplicadas ja
+persistidas. Supply chain e janela real nao foram repetidos; EVD-032 permanece a
+execucao ambiental mais recente. Windows x86_64, Linux aarch64, incidente real e
+CI automatico continuam PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.
