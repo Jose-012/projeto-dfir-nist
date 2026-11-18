@@ -142,9 +142,13 @@ engine_src = (ROOT / "engine/src/main.rs").read_text(encoding="utf-8")
 if "run_process_smoke_probe" not in engine_src:
     errors.append("engine smoke entrypoint is missing run_process_smoke_probe")
 
-for marker in ["BEGIN IMMEDIATE", "event_count", "head_hash", "BLAKE3-256-v2-JCS", "BLAKE3-256-v1", "serde_json_canonicalizer"]:
+for marker in ["BEGIN IMMEDIATE", "event_count", "head_hash", "BLAKE3-256-v2-JCS", "BLAKE3-256-v1", "canonicalize_json", "canonicalize_value", "audit_hash_v1_and_v2_match_known_vectors"]:
     if marker not in audit:
         errors.append(f"audit integrity policy missing: {marker}")
+jcs = (ROOT / "src/persistence/jcs.rs").read_text(encoding="utf-8")
+for marker in ["ensure_jcs_safe", "canonicalize_json", "canonicalize_value", "serde_json_canonicalizer"]:
+    if marker not in jcs:
+        errors.append(f"shared JCS policy missing: {marker}")
 
 process = (ROOT / "src/application/process.rs").read_text(encoding="utf-8")
 for marker in ["launch_process", "ProcessHandle", "ProcessInput", "current_dir", "DFIR_ENGINE_INPUT_ROOT", "DFIR_ENGINE_OUTPUT_ROOT"]:

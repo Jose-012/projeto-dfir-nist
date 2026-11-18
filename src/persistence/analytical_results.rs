@@ -22,15 +22,11 @@
 //! elimina qualquer necessidade de UPDATE na tabela, permitindo os mesmos
 //! triggers append-only já usados em `audit_events`/`chain_of_custody`.
 //!
-//! ## Decisão de design: duplicação proposital do helper JCS
+//! ## Canonicalização compartilhada
 //!
-//! `ensure_jcs_safe`/`canonicalize_json` duplicam a lógica equivalente em
-//! `audit.rs` em vez de extraí-la para um módulo compartilhado. Isso é
-//! deliberado: `audit.rs` é uma capacidade ACCEPTED, de integridade forense
-//! (cadeia de hash), e este ambiente de implementação não tem `cargo`
-//! disponível para rodar `cargo nextest run` e confirmar que uma extração
-//! não alterou nenhum hash produzido. Consolidar os dois em um módulo comum
-//! é candidato a um ticket futuro, testado com os gates Rust reais.
+//! A validação e a canonicalização JCS vivem em `persistence::jcs`, também
+//! usados pela audit chain e pela custódia. Vetores fixos em `audit.rs`
+//! protegem a compatibilidade dos hashes v1/v2.
 //!
 //! ## Fora de escopo desta migration (decisão deliberada de F1-01)
 //!
@@ -58,64 +54,15 @@
 //! avisos reais assim que cada símbolo tiver um chamador de produção.
 #![allow(dead_code)]
 
-use serde_json::Value;
 use sqlx::{SqliteConnection, SqlitePool};
 use uuid::Uuid;
 
+use super::jcs::canonicalize_json;
 use super::{rollback_loudly, validation_error};
 
 /// Versão do envelope (não confundir com `rule_or_model_version`, que é a
 /// versão da regra/modelo que produziu o resultado).
 pub const SCHEMA_VERSION: &str = "analytical-result-v1";
-
-// ---------------------------------------------------------------------
-// JCS canonicalization (cópia intencional de audit.rs — ver módulo docs)
-// ---------------------------------------------------------------------
-
-fn ensure_jcs_safe(value: &Value) -> Result<(), sqlx::Error> {
-    const MAX_EXACT_INTEGER: i128 = 9_007_199_254_740_992; // 2^53
-
-    match value {
-        Value::Number(number) => {
-            if let Some(integer) = number.as_i64()
-                && i128::from(integer).abs() > MAX_EXACT_INTEGER
-            {
-                return Err(sqlx::Error::Protocol(
-                    "RFC 8785 canonicalization rejects integers outside +/-2^53; encode them as strings"
-                        .into(),
-                ));
-            }
-            if let Some(integer) = number.as_u64()
-                && u128::from(integer) > MAX_EXACT_INTEGER as u128
-            {
-                return Err(sqlx::Error::Protocol(
-                    "RFC 8785 canonicalization rejects integers outside +/-2^53; encode them as strings"
-                        .into(),
-                ));
-            }
-        }
-        Value::Array(values) => {
-            for value in values {
-                ensure_jcs_safe(value)?;
-            }
-        }
-        Value::Object(map) => {
-            for value in map.values() {
-                ensure_jcs_safe(value)?;
-            }
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-fn canonicalize_json(raw_json: &str) -> Result<String, sqlx::Error> {
-    let value: Value =
-        serde_json::from_str(raw_json).map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-    ensure_jcs_safe(&value)?;
-    serde_json_canonicalizer::to_string(&value)
-        .map_err(|error| sqlx::Error::Protocol(error.to_string()))
-}
 
 fn validate_correlation_key(correlation_key: &str) -> Result<(), sqlx::Error> {
     if correlation_key.is_empty() || correlation_key.chars().count() > 200 {

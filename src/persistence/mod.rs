@@ -6,6 +6,7 @@ pub mod db;
 pub mod detection;
 pub mod findings;
 pub mod ioc_recommendations;
+mod jcs;
 pub mod nist_functions;
 pub mod nist_profiles;
 pub mod plan_items;

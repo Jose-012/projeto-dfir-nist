@@ -3,52 +3,8 @@ use serde_json::Value;
 use sqlx::{SqliteConnection, SqlitePool};
 use uuid::Uuid;
 
+use super::jcs::{canonicalize_json, canonicalize_value};
 use super::rollback_loudly;
-
-fn ensure_jcs_safe(value: &Value) -> Result<(), sqlx::Error> {
-    const MAX_EXACT_INTEGER: i128 = 9_007_199_254_740_992; // 2^53
-
-    match value {
-        Value::Number(number) => {
-            if let Some(integer) = number.as_i64()
-                && i128::from(integer).abs() > MAX_EXACT_INTEGER
-            {
-                return Err(sqlx::Error::Protocol(
-                        "RFC 8785 canonicalization rejects integers outside +/-2^53; encode them as strings"
-                            .into(),
-                    ));
-            }
-            if let Some(integer) = number.as_u64()
-                && u128::from(integer) > MAX_EXACT_INTEGER as u128
-            {
-                return Err(sqlx::Error::Protocol(
-                        "RFC 8785 canonicalization rejects integers outside +/-2^53; encode them as strings"
-                            .into(),
-                    ));
-            }
-        }
-        Value::Array(values) => {
-            for value in values {
-                ensure_jcs_safe(value)?;
-            }
-        }
-        Value::Object(map) => {
-            for value in map.values() {
-                ensure_jcs_safe(value)?;
-            }
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-fn canonical_metadata(metadata_json: &str) -> Result<String, sqlx::Error> {
-    let value: Value = serde_json::from_str(metadata_json)
-        .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-    ensure_jcs_safe(&value)?;
-    serde_json_canonicalizer::to_string(&value)
-        .map_err(|error| sqlx::Error::Protocol(error.to_string()))
-}
 
 struct EventHashInput<'a> {
     id: &'a str,
@@ -109,9 +65,8 @@ fn event_hash(input: &EventHashInput<'_>) -> Result<String, serde_json::Error> {
         "metadata": serde_json::from_str::<Value>(input.metadata)?,
         "previous_hash": input.previous_hash,
     });
-    ensure_jcs_safe(&value)
+    let canonical = canonicalize_value(&value)
         .map_err(|error| serde_json::Error::io(std::io::Error::other(error.to_string())))?;
-    let canonical = serde_json_canonicalizer::to_vec(&value)?;
     let mut hasher = Blake3Hasher::new();
     hasher.update(&canonical);
     Ok(format!(
@@ -141,7 +96,7 @@ pub(crate) async fn append_on_connection(
     incident_id: Option<&str>,
     metadata_json: &str,
 ) -> Result<(), sqlx::Error> {
-    let metadata = canonical_metadata(metadata_json)?;
+    let metadata = canonicalize_json(metadata_json)?;
     let previous_hash: Option<String> =
         sqlx::query_scalar("SELECT event_hash FROM audit_events ORDER BY sequence DESC LIMIT 1")
             .fetch_optional(&mut *connection)
@@ -315,7 +270,7 @@ pub(crate) async fn append_custody_on_connection(
     reason: &str,
     metadata_json: &str,
 ) -> Result<(), sqlx::Error> {
-    let metadata = canonical_metadata(metadata_json)?;
+    let metadata = canonicalize_json(metadata_json)?;
     let previous: Option<String> = sqlx::query_scalar(
         "SELECT entry_hash FROM chain_of_custody WHERE evidence_id=? ORDER BY sequence DESC LIMIT 1",
     )
@@ -336,9 +291,7 @@ pub(crate) async fn append_custody_on_connection(
             .map_err(|error| sqlx::Error::Protocol(error.to_string()))?,
         "previous_entry_hash": previous,
     });
-    ensure_jcs_safe(&value)?;
-    let canonical = serde_json_canonicalizer::to_vec(&value)
-        .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+    let canonical = canonicalize_value(&value)?;
     let mut hasher = Blake3Hasher::new();
     hasher.update(&canonical);
     let entry_hash = format!("BLAKE3-256-v1:{}", hasher.finalize().to_hex());
@@ -589,10 +542,7 @@ pub async fn verify_custody(pool: &SqlitePool, evidence_id: &str) -> Result<bool
             "metadata": metadata_value,
             "previous_entry_hash": previous,
         });
-        if ensure_jcs_safe(&value).is_err() {
-            return Ok(false);
-        }
-        let canonical = match serde_json_canonicalizer::to_vec(&value) {
+        let canonical = match canonicalize_value(&value) {
             Ok(canonical) => canonical,
             Err(_) => return Ok(false),
         };
@@ -611,7 +561,7 @@ pub async fn verify_custody(pool: &SqlitePool, evidence_id: &str) -> Result<bool
 mod tests {
     use super::{
         AUDIT_HASH_V2_PREFIX, EventHashInput, append, append_custody,
-        append_import_records_on_connection, canonical_metadata, event_hash, verify,
+        append_import_records_on_connection, canonicalize_json, event_hash, event_hash_v1, verify,
         verify_custody,
     };
 
@@ -646,9 +596,32 @@ mod tests {
     }
 
     #[test]
-    fn canonical_metadata_is_key_order_independent() {
-        let a = canonical_metadata(r#"{"z":1,"a":2}"#).expect("valid metadata");
-        let b = canonical_metadata(r#"{"a":2,"z":1}"#).expect("valid metadata");
+    fn audit_hash_v1_and_v2_match_known_vectors() {
+        let input = EventHashInput {
+            id: "evt-01",
+            timestamp: "2026-01-02T03:04:05Z",
+            actor_id: Some("analyst"),
+            action: "EVIDENCE_IMPORTED",
+            object_type: "evidence",
+            object_id: "ev-01",
+            incident_id: None,
+            metadata: r#"{"a":[true,"x"],"z":1}"#,
+            previous_hash: "",
+        };
+        assert_eq!(
+            event_hash_v1(&input),
+            "BLAKE3-256-v1:e83bf79c5ee23b0efafa2371b6c907b31c8dc1fefd55ad9dbf6dd56057bb9176"
+        );
+        assert_eq!(
+            event_hash(&input).expect("v2 hash"),
+            "BLAKE3-256-v2-JCS:191e3a21f14920b53d1218fcbbcb0b5a3aead657ef496ae50af768abbad1183a"
+        );
+    }
+
+    #[test]
+    fn canonicalize_json_is_key_order_independent() {
+        let a = canonicalize_json(r#"{"z":1,"a":2}"#).expect("valid metadata");
+        let b = canonicalize_json(r#"{"a":2,"z":1}"#).expect("valid metadata");
         assert_eq!(a, b);
     }
 
@@ -839,8 +812,8 @@ mod tests {
     }
     #[test]
     fn jcs_metadata_is_canonical_and_rejects_large_integers() {
-        let canonical = canonical_metadata(r#"{"b":2,"a":1}"#).unwrap();
+        let canonical = canonicalize_json(r#"{"b":2,"a":1}"#).unwrap();
         assert_eq!(canonical, r#"{"a":1,"b":2}"#);
-        assert!(canonical_metadata(r#"{"too_large":9007199254740993}"#).is_err());
+        assert!(canonicalize_json(r#"{"too_large":9007199254740993}"#).is_err());
     }
 }

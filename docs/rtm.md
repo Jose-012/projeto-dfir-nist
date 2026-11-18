@@ -11,7 +11,7 @@ A implementação abaixo pertence à base já concluída e não redefine os `RF-
 |---|---|---|---|
 | Arquitetura modular | `src/`, `engine/`, `protocol/` | build/test/gates | ACCEPTED |
 | SQLite/migrations | `src/persistence/db.rs`, `migrations/` | migração + testes | ACCEPTED |
-| Audit chain | `src/persistence/audit.rs` | testes de integridade/tamper | ACCEPTED |
+| Audit chain | `src/persistence/audit.rs`, `src/persistence/jcs.rs` | testes de integridade/tamper e vetores fixos v1/v2 | ACCEPTED |
 | Storage/staging | `src/infrastructure/storage.rs` | testes adversariais | ACCEPTED |
 | Engine separado | `src/application/engine.rs`, `engine/` | subprocesso real | ACCEPTED |
 | JSONL | `protocol/`, `src/application/engine.rs` | protocolo/smoke | ACCEPTED |

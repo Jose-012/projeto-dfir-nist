@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased — 2026-11-18 — canonicalização JCS consolidada sem mudança de hash
+
+- `src/persistence/jcs.rs` passou a centralizar validação de inteiros e canonicalização usadas por auditoria, custódia e resultados analíticos. A justificativa histórica de duplicação por ausência de Cargo foi removida.
+- Vetores capturados antes da extração fixam os hashes `BLAKE3-256-v1` e `BLAKE3-256-v2-JCS`; ambos permaneceram idênticos após a mudança. O gate estático agora exige o helper compartilhado e essa regressão.
+- Verificação: persistência 109/109; vetor v1/v2 explícito; check de todos os targets; nextest 432 passed/1 skipped; clippy limpo.
+
 ## Unreleased — 2026-11-18 — propriedades críticas do protocolo e remoção de resíduo
 
 - `proptest` passou de dependência não utilizada do app para dev-dependency de `dfir-protocol`. Novas propriedades cobrem profundidade JSON, round-trip de eventos e referências lógicas, com 128 casos cada. O lock manteve os mesmos 612 pacotes.
