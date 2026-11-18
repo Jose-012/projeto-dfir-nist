@@ -208,19 +208,34 @@ fn aggregate_sightings(
     new_sighting: serde_json::Value,
     observed_at: &str,
     max_stored: usize,
-) -> SightingAggregate {
-    let mut sightings: Vec<serde_json::Value> = previous
-        .and_then(|payload| payload.get("sightings"))
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+) -> Result<SightingAggregate, sqlx::Error> {
+    let mut sightings: Vec<serde_json::Value> = match previous {
+        Some(payload) => payload
+            .get("sightings")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| validation_error("stored IOC payload sightings is not an array"))?
+            .clone(),
+        None => Vec::new(),
+    };
 
-    let previous_total = previous
-        .and_then(|payload| payload.get("sighting_count"))
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or(0)
-        .max(sightings.len() as u64);
-    let total_count = previous_total + 1;
+    let previous_total = match previous.and_then(|payload| payload.get("sighting_count")) {
+        Some(value) => {
+            let count = value.as_u64().ok_or_else(|| {
+                validation_error("stored IOC payload sighting_count is not a non-negative integer")
+            })?;
+            if count < sightings.len() as u64 {
+                return Err(validation_error(
+                    "stored IOC payload sighting_count is smaller than stored sightings",
+                ));
+            }
+            count
+        }
+        // Formato legado anterior ao contador: o array é a única fonte disponível.
+        None => sightings.len() as u64,
+    };
+    let total_count = previous_total
+        .checked_add(1)
+        .ok_or_else(|| validation_error("stored IOC sighting_count cannot be incremented"))?;
 
     let previous_first = previous
         .and_then(|payload| payload.get("first_seen"))
@@ -275,12 +290,12 @@ fn aggregate_sightings(
             .collect();
     }
 
-    SightingAggregate {
+    Ok(SightingAggregate {
         sightings,
         total_count,
         first_seen,
         last_seen,
-    }
+    })
 }
 
 /// Registra uma ocorrência (sighting) de um IOC. Duplicatas (mesmo tipo +
@@ -323,7 +338,7 @@ pub async fn record_ioc_sighting(
         }),
         &observed_at,
         MAX_STORED_SIGHTINGS,
-    );
+    )?;
 
     let stored_count = aggregate.sightings.len() as u64;
     let payload_json = serde_json::json!({
@@ -608,7 +623,8 @@ mod tests {
                 sighting(&format!("ev-{index}"), at),
                 at,
                 max_stored,
-            );
+            )
+            .expect("valid sighting aggregate");
             payload = Some(serde_json::json!({
                 "first_seen": aggregate.first_seen,
                 "last_seen": aggregate.last_seen,
@@ -719,7 +735,8 @@ mod tests {
             sighting("ev-new", "2026-08-01T00:00:00Z"),
             "2026-08-01T00:00:00Z",
             3,
-        );
+        )
+        .expect("legacy payload without count remains valid");
         assert_eq!(aggregate.sightings.len(), 3);
         assert_eq!(aggregate.total_count, 7, "6 legadas + 1 nova");
         assert_eq!(aggregate.first_seen, "2026-07-01T00:00:00Z");
@@ -733,10 +750,111 @@ mod tests {
             sighting("ev-1", "2026-08-01T00:00:00Z"),
             "2026-08-01T00:00:00Z",
             MAX_STORED_SIGHTINGS,
-        );
+        )
+        .expect("first sighting aggregate");
         assert_eq!(aggregate.sightings.len(), 1);
         assert_eq!(aggregate.total_count, 1);
         assert_eq!(aggregate.first_seen, aggregate.last_seen);
+    }
+
+    #[tokio::test]
+    async fn record_ioc_sighting_rejects_malformed_current_ioc_history() {
+        let pool = test_pool().await;
+        let two_sightings = || {
+            serde_json::json!([
+                sighting("ev-old", "2026-08-01T00:00:00Z"),
+                sighting("ev-old", "2026-08-02T00:00:00Z")
+            ])
+        };
+        let cases = [
+            (
+                "shape",
+                serde_json::json!({"sighting_count": 7, "sightings": {}}),
+                "stored IOC payload sightings is not an array",
+            ),
+            (
+                "count",
+                serde_json::json!({"sighting_count": "seven", "sightings": two_sightings()}),
+                "stored IOC payload sighting_count is not a non-negative integer",
+            ),
+            (
+                "inconsistent",
+                serde_json::json!({"sighting_count": 1, "sightings": two_sightings()}),
+                "stored IOC payload sighting_count is smaller than stored sightings",
+            ),
+            (
+                "overflow",
+                serde_json::json!({"sighting_count": u64::MAX, "sightings": []}),
+                "stored IOC sighting_count cannot be incremented",
+            ),
+        ];
+
+        for (case, payload, expected) in cases {
+            let incident_id = format!("inc-bad-{case}");
+            let evidence_id = format!("ev-bad-{case}");
+            seed_incident(&pool, &incident_id).await;
+            seed_evidence(&pool, &evidence_id).await;
+            let correlation_key = format!("ioc:{incident_id}:IP:203.0.113.5");
+            let bad_id = format!("bad-ioc-{case}");
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,evidence_id,incident_id,payload,provenance,created_at) VALUES(?,'analytical-result-v1','IOC',?,?,?,?,'{}','2026-08-20T00:00:00Z')")
+                .bind(&bad_id)
+                .bind(&correlation_key)
+                .bind(&evidence_id)
+                .bind(&incident_id)
+                .bind(payload.to_string())
+                .execute(&pool)
+                .await
+                .expect("malformed current IOC fixture");
+
+            let error = match record_ioc_sighting(
+                &pool,
+                NewIocSighting {
+                    incident_id: &incident_id,
+                    evidence_id: &evidence_id,
+                    ioc_type: IocType::Ip,
+                    raw_value: "203.0.113.5",
+                    event_context: None,
+                    confidence: Confidence::High,
+                    observed_at: Some("2026-08-21T00:00:00Z"),
+                    actor_id: None,
+                },
+            )
+            .await
+            {
+                Ok(new_id) => {
+                    let record = analytical_results::get(&pool, &new_id)
+                        .await
+                        .expect("query accepted successor")
+                        .expect("accepted successor exists");
+                    let payload: serde_json::Value =
+                        serde_json::from_str(&record.payload).expect("accepted successor payload");
+                    panic!(
+                        "malformed current IOC was superseded for {case}: new sighting_count={}, stored_sightings={}",
+                        payload["sighting_count"],
+                        payload["sightings"].as_array().map_or(0, Vec::len)
+                    );
+                }
+                Err(error) => error,
+            };
+            assert!(
+                error.to_string().contains(expected),
+                "unexpected error for {case}: {error:?}"
+            );
+
+            let current = analytical_results::current_for_correlation_key(&pool, &correlation_key)
+                .await
+                .expect("current IOC query")
+                .expect("malformed IOC remains current");
+            assert_eq!(current.id, bad_id, "no successor allowed for {case}");
+            let rows: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM analytical_results WHERE correlation_key=?",
+            )
+            .bind(&correlation_key)
+            .fetch_one(&pool)
+            .await
+            .expect("IOC history count");
+            assert_eq!(rows, 1, "no new history row allowed for {case}");
+        }
     }
 
     #[tokio::test]
