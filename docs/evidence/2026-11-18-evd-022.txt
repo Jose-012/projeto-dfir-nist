@@ -1,0 +1,49 @@
+EVD-022 - metadata invalido de custodia e auditoria nao vira null
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T07:09Z..07:16Z
+commit-tree: 179183a9c63f9e7d4813f9cc6ffdaf5020388309 (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-24/RF-004/RF-029. list_custody e list_events convertiam metadata
+persistido invalido em Value::Null, escondendo a corrupcao nas views de proveniencia.
+
+Reproducao antes da correcao, sobre a arvore 6cca8dc mais os dois testes novos:
+  cargo nextest run --locked list_custody_rejects_malformed_stored_metadata
+    exit 100 esperado para a reproducao. list_custody retornou CustodyEntry com
+    metadata=Null para uma linha com metadata='not-json'.
+  cargo nextest run --locked list_events_rejects_malformed_stored_metadata
+    exit 100 esperado para a reproducao. list_events retornou AuditEventView com
+    metadata=Null para uma linha com metadata='not-json'.
+  As fixtures inserem linhas novas invalidas em SQLite descartavel, sem remover
+  ou contornar os triggers append-only e sem usar UPDATE em registros existentes.
+
+Correcao no commit 179183a:
+  As duas listagens desserializam metadata com map_err e coletam Result. O erro
+  sqlx::Error::Protocol identifica stored custody metadata ou stored audit event
+  metadata, sem incluir o JSON bruto. Nenhum hash ou caminho de escrita mudou.
+
+Regressao depois da correcao:
+  cargo nextest run --locked malformed_stored_metadata
+    exit 0; 2 passed, 322 skipped. Cada teste exige o Protocol especifico e
+    verifica que verify_custody/verify continuam retornando false para a linha
+    invalida, agora coerente com a listagem que tambem falha fechado.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 444 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required.
+  audit-verify confirmou a cadeia integra no cenario valido e apos os descartes;
+  os dados validos de custodia e auditoria continuam legiveis e verificaveis.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa registros propositalmente invalidos em banco descartavel;
+nao declara reparo de dados legados nem execucao sobre incidente real. Dados
+invalidos agora geram erro na listagem, enquanto a verificacao conserva false.
+Supply chain nao foi repetido porque Cargo.lock nao mudou; EVD-020 permanece a
+execucao vigente. Nenhuma janela real nova foi aberta; o smoke anterior e EVD-020.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

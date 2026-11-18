@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - metadados inválidos de custódia/auditoria não viram null (`EVD-022`)
+
+- As reproduções inseriram registros inválidos sem remover triggers append-only. Antes da correção, `list_custody` e `list_events` retornavam `metadata: Null` com sucesso; agora propagam `Protocol` com o tipo do registro e sem expor o JSON bruto.
+- `verify_custody` e `verify` continuam retornando `false` para esses registros. Nenhum hash, escrita ou comportamento de dados válidos mudou.
+- `EVD-022`: dois testes focados, `just verify` com 444 passed/1 skipped, e2e 110/110 com cadeia íntegra antes e depois dos descartes, e doc-gate PASS. Supply chain permanece em `EVD-020`; nenhuma janela real nova foi aberta.
+
 ## Unreleased - 2026-11-18 - warnings de análise não desaparecem em JSON inválido (`EVD-021`)
 
 - Antes da correção, `timeline_page_core` retornava `COMPLETED`, `warning_count: 1` e `warnings: []` tanto para JSON inválido quanto para um array vazio divergente. `JobStatusResponse` agora rejeita JSON inválido, contagem negativa e contagem divergente com diagnóstico específico.
