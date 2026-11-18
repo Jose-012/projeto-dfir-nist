@@ -353,6 +353,7 @@ fn profile_column(ui: &mut egui::Ui, title: &str, loadable: &Loadable<ProfileHis
             latest.created_at
         ));
         egui::ScrollArea::vertical()
+            .id_salt(title)
             .max_height(240.0)
             .show(ui, |ui| {
                 for entry in &latest.entries {
@@ -413,41 +414,52 @@ fn function_section(ui: &mut egui::Ui, loadable: &Loadable<NistFunctionView>) {
             }
             GapAnalysisState::UpToDate => {}
         }
-        egui::Grid::new("nist_function_view")
-            .striped(true)
+        let scroll_visibility = if ui.available_width() < 900.0 {
+            egui::scroll_area::ScrollBarVisibility::AlwaysVisible
+        } else {
+            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+        };
+        egui::ScrollArea::horizontal()
+            .id_salt("nist_function_view_horizontal")
+            .scroll_bar_visibility(scroll_visibility)
             .show(ui, |ui| {
-                for header in [
-                    "Function",
-                    "Implementada",
-                    "Parcial",
-                    "Não implementada",
-                    "Não avaliada",
-                    "N/A",
-                    "Alvo",
-                    "Gap alto",
-                    "Gap médio",
-                    "Gap baixo",
-                ] {
-                    ui.strong(header);
-                }
-                ui.end_row();
-                for function in &view.functions {
-                    ui.label(format!("{} — {}", function.function, function.label));
-                    for count in [
-                        function.current.implemented,
-                        function.current.partially_implemented,
-                        function.current.not_implemented,
-                        function.current.not_assessed,
-                        function.current.not_applicable,
-                        function.target_subcategories,
-                        function.gaps.high,
-                        function.gaps.medium,
-                        function.gaps.low,
-                    ] {
-                        ui.label(count.to_string());
-                    }
-                    ui.end_row();
-                }
+                ui.set_width(ui.clip_rect().width().max(900.0));
+                egui::Grid::new("nist_function_view")
+                    .striped(true)
+                    .show(ui, |ui| {
+                        for header in [
+                            "Function",
+                            "Implementada",
+                            "Parcial",
+                            "Não implementada",
+                            "Não avaliada",
+                            "N/A",
+                            "Alvo",
+                            "Gap alto",
+                            "Gap médio",
+                            "Gap baixo",
+                        ] {
+                            ui.strong(header);
+                        }
+                        ui.end_row();
+                        for function in &view.functions {
+                            ui.label(format!("{} — {}", function.function, function.label));
+                            for count in [
+                                function.current.implemented,
+                                function.current.partially_implemented,
+                                function.current.not_implemented,
+                                function.current.not_assessed,
+                                function.current.not_applicable,
+                                function.target_subcategories,
+                                function.gaps.high,
+                                function.gaps.medium,
+                                function.gaps.low,
+                            ] {
+                                ui.label(count.to_string());
+                            }
+                            ui.end_row();
+                        }
+                    });
             });
         ui.small(
             "São contagens, não pontuação: o NIST CSF 2.0 não define score oficial. O Tier descreve o contexto de governança do profile inteiro, não cada Function.",
@@ -463,8 +475,10 @@ mod ui_tests {
     use crate::gui::backend::{Backend, Command};
     use crate::gui::test_harness::drain;
     use crate::persistence::nist_functions::{GapAnalysisState, summarize_by_function};
-    use crate::persistence::nist_profiles::ProfileType;
-    use crate::service::nist::{NistFunctionView, ProfileHistoryView, ProfileSummary};
+    use crate::persistence::nist_profiles::{ProfileEntryRecord, ProfileType};
+    use crate::service::nist::{
+        NistFunctionView, ProfileHistoryView, ProfileSummary, ProfileVersionView,
+    };
     use egui_kittest::{Harness, kittest::Queryable};
 
     type State = (NistState, Backend);
@@ -507,6 +521,46 @@ mod ui_tests {
                 |ui, (state, backend): &mut State| state.ui(ui, "inc-1", backend),
                 (state, backend),
             )
+    }
+
+    fn history(profile_type: ProfileType) -> ProfileHistoryView {
+        ProfileHistoryView {
+            profile_type,
+            versions: vec![ProfileVersionView {
+                version_label: "v1".into(),
+                source: "teste".into(),
+                tier: None,
+                tier_justification: None,
+                created_at: "2026-11-18T00:00:00Z".into(),
+                entries: vec![ProfileEntryRecord {
+                    subcategory_id: "GV.OC-01".into(),
+                    subcategory_label: "Contexto organizacional".into(),
+                    implementation_status: "IMPLEMENTED".into(),
+                    confidence: None,
+                }],
+            }],
+        }
+    }
+
+    #[test]
+    fn current_and_target_profiles_do_not_reuse_the_same_scroll_area_id() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = loaded_state(GapAnalysisState::UpToDate);
+        state.current = Loadable::Ready(history(ProfileType::Current));
+        state.target = Loadable::Ready(history(ProfileType::Target));
+        let mut harness = harness(state, backend);
+        harness.run();
+
+        let paints_id_clash_warning = harness.output().shapes.iter().any(|clipped| match &clipped
+            .shape
+        {
+            egui::Shape::Text(text) => text.galley.text().contains("use of ScrollArea ID"),
+            _ => false,
+        });
+        assert!(
+            !paints_id_clash_warning,
+            "o egui não deve pintar avisos de ID duplicado sobre Current e Target"
+        );
     }
 
     #[test]

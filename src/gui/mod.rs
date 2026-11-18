@@ -654,13 +654,13 @@ impl eframe::App for DfirApp {
                 ui.label(egui::RichText::new("Local · offline · operador único").weak());
                 ui.separator();
                 if ui
-                    .selectable_label(self.screen == Screen::Evidence, "📁  Evidência")
+                    .selectable_label(self.screen == Screen::Evidence, "Evidência")
                     .clicked()
                 {
                     self.screen = Screen::Evidence;
                 }
                 if ui
-                    .selectable_label(self.screen == Screen::Incidents, "🗂  Incidentes")
+                    .selectable_label(self.screen == Screen::Incidents, "Incidentes")
                     .clicked()
                 {
                     self.screen = Screen::Incidents;

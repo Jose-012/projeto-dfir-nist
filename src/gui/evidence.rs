@@ -303,14 +303,14 @@ impl EvidenceState {
         );
         ui.horizontal(|ui| {
             ui.heading("Evidência");
-            if ui.button("↻ Atualizar").clicked() {
+            if ui.button("Atualizar").clicked() {
                 self.list = Loadable::Loading;
                 backend.send(Command::ListEvidence);
             }
             if ui
                 .add_enabled(
                     !self.importing && !self.picker.is_busy(),
-                    egui::Button::new("📥 Importar evidência…"),
+                    egui::Button::new("Importar evidência…"),
                 )
                 .clicked()
             {
@@ -325,7 +325,7 @@ impl EvidenceState {
                 ui.label("Importando (hash BLAKE3+SHA-256 em streaming)…");
             }
         });
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             let label_id = ui.label("Ou informe o caminho:").id;
             let entry = ui
                 .add(
@@ -394,16 +394,33 @@ impl EvidenceState {
     }
 
     fn evidence_table(&mut self, ui: &mut egui::Ui, items: &[EvidenceResponse], backend: &Backend) {
+        // Uma linha de 26 px não comportava timestamp quebrado nem quatro
+        // ações. A altura acompanha o conteúdo, com teto e scroll próprios;
+        // o eixo horizontal preserva o acesso às ações em janelas estreitas.
+        let table_height = (22.0 + items.len() as f32 * 48.0 + 16.0).min(360.0);
+        let scroll_visibility = if ui.available_width() < 1000.0 {
+            egui::scroll_area::ScrollBarVisibility::AlwaysVisible
+        } else {
+            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+        };
+        egui::ScrollArea::horizontal()
+            .id_salt("evidence_table_horizontal")
+            .scroll_bar_visibility(scroll_visibility)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.set_width(ui.clip_rect().width().max(1000.0));
         TableBuilder::new(ui)
             .striped(true)
             .resizable(true)
-            .column(Column::remainder().at_least(160.0))
-            .column(Column::auto().at_least(70.0))
-            .column(Column::auto().at_least(90.0))
-            .column(Column::auto().at_least(90.0))
-            .column(Column::auto().at_least(150.0))
-            .column(Column::auto().at_least(170.0))
-            .column(Column::auto().at_least(260.0))
+            .min_scrolled_height(table_height)
+            .max_scroll_height(table_height)
+                    .column(Column::initial(180.0).at_least(140.0).clip(true))
+                    .column(Column::auto().at_least(50.0).clip(true))
+                    .column(Column::auto().at_least(70.0).clip(true))
+                    .column(Column::auto().at_least(70.0).clip(true))
+                    .column(Column::auto().at_least(130.0).clip(true))
+                    .column(Column::auto().at_least(150.0).clip(true))
+                    .column(Column::remainder().at_least(300.0).clip(true))
             .header(22.0, |mut header| {
                 header.col(|ui| {
                     ui.strong("Arquivo");
@@ -430,12 +447,13 @@ impl EvidenceState {
             .body(|mut body| {
                 for item in items {
                     let selected = self.selected.as_deref() == Some(item.id.as_str());
-                    body.row(26.0, |mut row| {
+                    body.row(48.0, |mut row| {
                         row.set_selected(selected);
                         row.col(|ui| {
-                            if ui
-                                .selectable_label(selected, &item.original_filename)
-                                .clicked()
+                                    if ui
+                                        .selectable_label(selected, &item.original_filename)
+                                        .on_hover_text(&item.original_filename)
+                                        .clicked()
                             {
                                 self.selected = Some(item.id.clone());
                                 self.analytical
@@ -454,15 +472,18 @@ impl EvidenceState {
                             ui.label(&item.status);
                         });
                         row.col(|ui| {
-                            ui.label(&item.imported_at);
+                            ui.add(egui::Label::new(&item.imported_at).truncate())
+                                .on_hover_text(&item.imported_at);
                         });
                         row.col(|ui| {
-                            ui.label(treatment_label(item));
+                            let treatment = treatment_label(item);
+                            ui.add(egui::Label::new(treatment).truncate())
+                                .on_hover_text(treatment);
                         });
                         row.col(|ui| {
                             let analyzing = self.analyzing.contains(&item.id);
                             let destroying = self.destroying.contains(&item.id);
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 if item.format == "evtx"
                                     && ui
                                         .add_enabled(!analyzing, egui::Button::new("Analisar EVTX"))
@@ -530,6 +551,7 @@ impl EvidenceState {
                         });
                     });
                 }
+            });
             });
     }
 
@@ -1027,6 +1049,26 @@ mod provenance_ui_tests {
         harness.get_by_label("Tratamento");
         harness.get_by_label("analisada automaticamente");
         harness.get_by_label("somente preservada (sem análise)");
+    }
+
+    #[test]
+    fn evidence_controls_do_not_depend_on_missing_emoji_fonts() {
+        let (backend, _commands) = Backend::for_test();
+        let state = EvidenceState {
+            list: Loadable::Ready(vec![]),
+            ..EvidenceState::default()
+        };
+        // Diferente do builder compartilhado, este mantém o default do
+        // kittest: qualquer glifo ausente faz o teste falhar.
+        let mut harness = egui_kittest::HarnessBuilder::default()
+            .with_size(egui::vec2(1000.0, 700.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.run();
+        harness.get_by_label("Atualizar");
+        harness.get_by_label("Importar evidência…");
     }
 
     #[test]

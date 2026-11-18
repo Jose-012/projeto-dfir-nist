@@ -209,7 +209,7 @@ impl IncidentsState {
                 return;
             };
             ui.heading(&incident.name);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 for (tab, label) in [
                     (Tab::Nist, "NIST CSF"),
                     (Tab::Attack, "ATT&CK"),
@@ -421,6 +421,41 @@ mod tests {
             list: Loadable::Ready(vec![incident("inc-1", "Incidente demo")]),
             selected: Some(incident("inc-1", "Incidente demo")),
             ..IncidentsState::default()
+        }
+    }
+
+    #[test]
+    fn all_tabs_stay_inside_a_narrow_window() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(960.0, 700.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        for label in [
+            "NIST CSF",
+            "ATT&CK",
+            "Caminho crítico",
+            "Impacto",
+            "Achados",
+            "Plano",
+            "Lacunas",
+            "IOCs",
+            "Recomendações",
+            "Entregáveis",
+            "Exportar",
+            "Evidências",
+            "Auditoria",
+        ] {
+            let rect = harness.get_by_label(label).rect();
+            assert!(
+                rect.min.x >= 0.0 && rect.max.x <= 960.0,
+                "aba {label:?} fora da viewport: {rect:?}"
+            );
         }
     }
 
