@@ -21,7 +21,11 @@ use crate::{
         provenance,
     },
 };
-use std::path::PathBuf;
+use futures_util::FutureExt;
+use std::{panic::AssertUnwindSafe, path::PathBuf};
+
+const BACKEND_TASK_PANIC: &str =
+    "falha interna ao executar a tarefa; o estado foi liberado e o erro foi registrado";
 
 #[derive(Debug)]
 pub enum Command {
@@ -197,6 +201,181 @@ pub enum Command {
         incident_id: String,
         save_path: PathBuf,
     },
+}
+
+impl Command {
+    /// Evento de falha com o mesmo roteamento do resultado normal.
+    ///
+    /// Sem este evento, um panic dentro da task do Tokio deixaria a tela que
+    /// emitiu o comando esperando para sempre. A construção é exaustiva: um
+    /// comando novo só compila depois que seu caminho de falha for definido.
+    fn panic_event(&self) -> Event {
+        let message = || BACKEND_TASK_PANIC.to_string();
+        match self {
+            Self::ListEvidence => Event::EvidenceListed(Err(message())),
+            Self::ImportEvidence { .. } => Event::EvidenceImported(Err(message())),
+            Self::DestroyEvidence(evidence_id) => Event::EvidenceDestroyed {
+                evidence_id: evidence_id.clone(),
+                result: Err(message()),
+            },
+            Self::Analyze { evidence_id, .. } => Event::AnalyzeCompleted {
+                evidence_id: evidence_id.clone(),
+                result: Err(message()),
+            },
+            Self::TimelinePage {
+                evidence_id,
+                filter,
+                offset,
+                ..
+            } => Event::TimelinePageLoaded {
+                evidence_id: evidence_id.clone(),
+                filter: filter.clone(),
+                offset: *offset,
+                result: Err(message()),
+            },
+            Self::EvidenceAnalyticalResults(evidence_id) => {
+                Event::EvidenceAnalyticalResultsLoaded {
+                    evidence_id: evidence_id.clone(),
+                    result: Err(message()),
+                }
+            }
+            Self::LinkEvidenceToIncident { evidence_id, .. } => Event::EvidenceLinkedToIncident {
+                evidence_id: evidence_id.clone(),
+                result: Err(message()),
+            },
+            Self::LoadCustody(evidence_id) => Event::CustodyLoaded {
+                evidence_id: evidence_id.clone(),
+                result: Err(message()),
+            },
+            Self::LoadAudit { incident_id, .. } => Event::AuditLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::LoadIncidentEvidence(incident_id) => Event::IncidentEvidenceLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::RunDetection(evidence_id) => Event::DetectionRun {
+                evidence_id: evidence_id.clone(),
+                result: Err(message()),
+            },
+            Self::LoadCandidates(evidence_id) => Event::CandidatesLoaded {
+                evidence_id: evidence_id.clone(),
+                result: Err(message()),
+            },
+            Self::ConfirmCandidate { evidence_id, .. }
+            | Self::RejectCandidate { evidence_id, .. } => Event::CandidateDecided {
+                evidence_id: evidence_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateIncident(_) => Event::IncidentCreated(Err(message())),
+            Self::ListIncidents => Event::IncidentsListed(Err(message())),
+            Self::NistProfileHistory { incident_id, .. } => Event::NistProfileHistoryLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateNistProfile { incident_id, .. } => Event::NistProfileCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::RunGapAnalysis(incident_id) => Event::GapAnalysisRun {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CurrentGapAnalysis(incident_id) => Event::GapAnalysisLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateAttackMapping { incident_id, .. } => Event::AttackMappingCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::ListAttackMappings(incident_id) => Event::AttackMappingsLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateCriticalPathStage { incident_id, .. } => Event::CriticalPathStageCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::LinkCriticalPathStages { incident_id, .. } => Event::CriticalPathStagesLinked {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CriticalPath(incident_id) => Event::CriticalPathLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateImpactAssessment { incident_id, .. } => Event::ImpactAssessmentCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CurrentImpactAssessment(incident_id) => Event::ImpactAssessmentLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateIoc { incident_id, .. } => Event::IocCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::ListIocs(incident_id) => Event::IocsLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateRecommendation { incident_id, .. } => Event::RecommendationCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::ListRecommendations { incident_id, .. } => Event::RecommendationsLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateFinding { incident_id, .. } => Event::FindingCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateRootCause { incident_id, .. } => Event::RootCauseCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::LoadFindingsView(incident_id) => Event::FindingsViewLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::LoadNistFunctionView(incident_id) => Event::NistFunctionViewLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreatePlanItem { incident_id, .. } => Event::PlanItemCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::LoadPlanView(incident_id) => Event::PlanViewLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::CreateSourceGap { incident_id, .. } => Event::SourceGapCreated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::ListSourceGaps(incident_id) => Event::SourceGapsLoaded {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::PreviewDeliverables { incident_id, .. } => Event::DeliverablesPreviewed {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::GenerateDeliverables { incident_id, .. } => Event::DeliverablesGenerated {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+            Self::ExportFindings { incident_id, .. } => Event::FindingsExported {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -485,8 +664,10 @@ pub fn spawn(config: AppConfig, paths: StoragePaths) -> Result<Backend, AppError
                 while let Some(command) = command_rx.recv().await {
                     let services = services.clone();
                     let event_tx = event_tx.clone();
+                    let panic_event = command.panic_event();
                     tokio::spawn(async move {
-                        let event = handle_command(&services, command).await;
+                        let event =
+                            complete_command(handle_command(&services, command), panic_event).await;
                         // F1-23: se o canal de eventos fechou (UI encerrando),
                         // registrar em vez de engolir.
                         if event_tx.send(event).is_err() {
@@ -1068,6 +1249,24 @@ async fn handle_command(services: &AppServices, command: Command) -> Event {
     }
 }
 
+/// Converte panic de uma task em erro visível no fluxo que a originou.
+///
+/// `tokio::spawn` devolve o panic no `JoinHandle`; como a fila não aguarda esse
+/// handle, apenas envolvê-lo aqui impede tanto a perda do erro quanto spinners
+/// eternos. O hook global de panic continua registrando o diagnóstico original.
+async fn complete_command(
+    future: impl std::future::Future<Output = Event>,
+    panic_event: Event,
+) -> Event {
+    match AssertUnwindSafe(future).catch_unwind().await {
+        Ok(event) => event,
+        Err(_) => {
+            tracing::error!("backend command panicked; returning its routed failure event");
+            panic_event
+        }
+    }
+}
+
 async fn export_findings_to_file(
     services: &AppServices,
     incident_id: &str,
@@ -1076,7 +1275,131 @@ async fn export_findings_to_file(
     let bundle = findings::export_incident_findings(services, incident_id).await?;
     let json = serde_json::to_string_pretty(&bundle)
         .map_err(|error| AppError::Config(format!("failed to serialize export bundle: {error}")))?;
-    tokio::fs::write(save_path, json)
+    write_export_json(save_path, &json).await
+}
+
+/// Grava um destino novo, nunca trunca um arquivo que já existe.
+///
+/// `create_new` usa a garantia atômica do sistema de arquivos. Uma sequência
+/// `exists()` seguida de `write()` teria uma janela TOCTOU e poderia apagar
+/// dados entre a checagem e a abertura.
+async fn write_export_json(save_path: &std::path::Path, json: &str) -> Result<(), AppError> {
+    use tokio::io::AsyncWriteExt;
+
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(save_path)
         .await
-        .map_err(AppError::Storage)
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::AlreadyExists {
+                AppError::Config(
+                    "o arquivo de destino já existe; escolha outro nome para não sobrescrever dados"
+                        .into(),
+                )
+            } else {
+                AppError::Storage(error)
+            }
+        })?;
+    file.write_all(json.as_bytes())
+        .await
+        .map_err(AppError::Storage)?;
+    // No backend assíncrono do tokio::fs, `shutdown` também espera a fila de
+    // escrita terminar. Só depois disso a UI pode anunciar o arquivo como
+    // pronto e um consumidor pode abri-lo sem observar conteúdo parcial/vazio.
+    file.shutdown().await.map_err(AppError::Storage)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BACKEND_TASK_PANIC, Command, Event, complete_command, write_export_json};
+    use crate::error::AppError;
+
+    #[tokio::test]
+    async fn a_panicking_task_returns_the_originating_commands_error_event() {
+        let command = Command::Analyze {
+            evidence_id: "ev-1".into(),
+            kind: dfir_protocol::ANALYSIS_KIND_YARA_SCAN.into(),
+        };
+        let event = complete_command(
+            async { panic!("synthetic backend panic") },
+            command.panic_event(),
+        )
+        .await;
+
+        match event {
+            Event::AnalyzeCompleted {
+                evidence_id,
+                result,
+            } => {
+                assert_eq!(evidence_id, "ev-1");
+                assert_eq!(
+                    result.expect_err("panic becomes an error"),
+                    BACKEND_TASK_PANIC
+                );
+            }
+            other => panic!("evento roteado incorretamente: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_normal_task_result_is_not_replaced() {
+        let event = complete_command(
+            async { Event::EvidenceListed(Ok(vec![])) },
+            Command::ListEvidence.panic_event(),
+        )
+        .await;
+        assert!(matches!(event, Event::EvidenceListed(Ok(items)) if items.is_empty()));
+    }
+
+    #[test]
+    fn timeline_panic_event_preserves_routing_keys() {
+        let command = Command::TimelinePage {
+            evidence_id: "ev-1".into(),
+            job_id: Some("job-1".into()),
+            filter: "event:4624".into(),
+            offset: 400,
+            limit: 200,
+            want_total: false,
+        };
+        match command.panic_event() {
+            Event::TimelinePageLoaded {
+                evidence_id,
+                filter,
+                offset,
+                result,
+            } => {
+                assert_eq!(evidence_id, "ev-1");
+                assert_eq!(filter, "event:4624");
+                assert_eq!(offset, 400);
+                assert!(result.is_err());
+            }
+            other => panic!("evento roteado incorretamente: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn findings_export_never_overwrites_an_existing_file() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let destination = directory.path().join("achados.json");
+        std::fs::write(&destination, b"conteudo original").expect("existing file");
+
+        let error = write_export_json(&destination, "novo conteudo")
+            .await
+            .expect_err("existing destination must be refused");
+        assert!(matches!(error, AppError::Config(message) if message.contains("já existe")));
+        assert_eq!(
+            std::fs::read_to_string(&destination).expect("original remains"),
+            "conteudo original"
+        );
+
+        let new_destination = directory.path().join("novos-achados.json");
+        write_export_json(&new_destination, "novo conteudo")
+            .await
+            .expect("new destination succeeds");
+        assert_eq!(
+            std::fs::read_to_string(new_destination).expect("new file"),
+            "novo conteudo"
+        );
+    }
 }
