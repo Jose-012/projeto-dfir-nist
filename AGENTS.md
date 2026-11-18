@@ -121,6 +121,7 @@ cargo fmt --all -- --check
 cargo check --workspace --locked --all-targets
 cargo clippy --workspace --locked --all-targets --all-features -- -D warnings
 cargo nextest run --workspace --locked
+cargo test --workspace --locked --doc
 ```
 
 > Gap origem: INC-02 (2026-11-04). `--workspace` é necessário porque a raiz é um package e o workspace (`members = [".", "engine", "protocol"]`) não declara `default-members`; sem ele, os comandos só cobrem `dfir-app`. Ver `docs/RELEASE_GATE.md`.

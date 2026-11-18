@@ -115,6 +115,8 @@ just supply-chain
 just e2e tests/fixtures/senai-demo.evtx
 ```
 
+`just verify` executa nextest e doc-tests, sem rodar unitários/integração duas vezes. `just test` permanece disponível para o runner padrão completo.
+
 Testes adicionais de runtime:
 
 ```bash

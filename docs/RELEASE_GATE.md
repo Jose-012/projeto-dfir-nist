@@ -39,7 +39,10 @@ cargo fmt --all -- --check
 cargo check --workspace --locked --all-targets
 cargo clippy --workspace --locked --all-targets --all-features -- -D warnings
 cargo nextest run --workspace --locked
+cargo test --workspace --locked --doc
 ```
+
+> **Receita atual (2026-11-18):** `just verify` usa nextest para unitários/integração e `cargo test --doc` para doc-tests. `just test` continua disponível separadamente; evidências anteriores descrevem a receita executada naquela data.
 
 > **Nota (2026-11-04) — Gap origem: INC-02.** `cargo check`, `cargo clippy`, `cargo nextest` e `cargo deny` (seção Supply chain) agora levam `--workspace`. A raiz do repositório é um package (`dfir-app`) e o workspace declara `members = [".", "engine", "protocol"]` sem `default-members`; sem `--workspace`, esses comandos só cobrem `dfir-app` e omitem `dfir-engine`, `dfir-protocol` e `engine/tests/sandbox.rs`. O `justfile` já usa `--workspace` nos alvos `check`, `nextest`, `clippy` e `licenses`.
 

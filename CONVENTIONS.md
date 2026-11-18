@@ -85,11 +85,12 @@ just fmt
 just check
 just test
 just nextest
+just doctest
 just clippy
 just supply-chain
 ```
 
-Não declarar um gate como PASS sem execução real.
+Não declarar um gate como PASS sem execução real. `just verify` usa nextest mais doc-tests, sem repetir unitários/integração com `cargo test`; `just test` permanece disponível para o runner padrão completo.
 
 ## Documentação e rastreabilidade
 

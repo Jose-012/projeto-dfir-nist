@@ -32,6 +32,9 @@ run:
 test:
     cargo test --workspace --locked
 
+doctest:
+    cargo test --workspace --locked --doc
+
 nextest:
     cargo nextest run --workspace --locked
 
@@ -87,8 +90,8 @@ verify:
     just validate-fase0
     just fmt
     just check
-    just test
     just nextest
+    just doctest
     just clippy
 
 release-tools:

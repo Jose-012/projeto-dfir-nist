@@ -1,6 +1,11 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased — 2026-11-18 — verify sem duplicação de testes
+
+- `just verify` agora executa nextest e `just doctest`, sem repetir toda a suíte com `cargo test`. `just test` permanece como opção explícita do runner padrão.
+- Verificação da nova receita: nextest 432 passed/1 skipped, doc-tests executados, fmt/check/clippy verdes; duração total 51,66 s neste ambiente.
+
 ## Unreleased — 2026-11-18 — canonicalização JCS consolidada sem mudança de hash
 
 - `src/persistence/jcs.rs` passou a centralizar validação de inteiros e canonicalização usadas por auditoria, custódia e resultados analíticos. A justificativa histórica de duplicação por ausência de Cargo foi removida.
