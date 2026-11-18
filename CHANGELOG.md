@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - JSONL inválido preserva o índice anterior da timeline (`EVD-025`)
+
+- A reindexação apagava o índice e ignorava JSON inválido ou profundidade excessiva antes de commitar. A reprodução com dois eventos e uma segunda linha inválida retornava `Ok((2, 0))`.
+- Agora esses casos retornam erro com a linha e acionam rollback. A regressão verifica que os dois eventos e `timeline_index = (2, 0)` sobrevivem tanto a JSON inválido quanto a 257 arrays aninhados; linhas válidas sem `items` mantêm o comportamento anterior.
+- `EVD-025`: novo teste com dois casos, 29 testes existentes de timeline, `just verify` com 448 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-020`; nenhuma janela real nova foi aberta.
+
 ## Unreleased - 2026-11-18 - gap NIST inválido não é fechado nem substituído (`EVD-024`)
 
 - Com Current/Target já atendidos, um `NIST_GAP` com payload inválido era tratado como aberto e `run_gap_analysis` retornava um novo ID de fechamento. Agora a desserialização falha com `Protocol` antes de `BEGIN IMMEDIATE`.

@@ -1,0 +1,51 @@
+EVD-025 - reindexacao de timeline invalida preserva o indice anterior
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T07:43Z..07:54Z
+commit-tree: a2a619b9fb433a2adb141ce58a7f1e4b7a199e13 (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-18/timeline persistida. index_timeline_inner apagava timeline_events e
+timeline_index, ignorava JSON invalido ou profundidade excessiva com continue e
+podia commitar um indice parcial sem erro.
+
+Reproducao antes da correcao, sobre a arvore a8718b3 mais o teste novo:
+  cargo nextest run --locked reindexing_rejects_malformed_jsonl_and_preserves_existing_index
+    exit 100 esperado para a reproducao. A fixture cria e indexa dois eventos,
+    anexa not-json como segunda linha e reindexa. O resultado foi
+    reindexing accepted invalid JSONL: (2, 0), provando aceitacao silenciosa.
+  Duas tentativas anteriores nao executaram o comportamento: uma usou um helper
+  inexistente e outra um caminho diferente do helper. Estao em logs separados
+  *-compile-attempt.txt e *-path-attempt.txt e nao contam como reproducao.
+
+Correcao no commit a2a619b:
+  A leitura agora numera as linhas e retorna AppError::Config para profundidade
+  acima de MAX_JSON_DEPTH ou JSON invalido. O erro usa o caminho de rollback ja
+  existente; nenhum JSONL ou conteudo de evento entra no diagnostico.
+  Linhas JSON validas sem items mantem o comportamento de ignorar.
+
+Regressao depois da correcao:
+  cargo nextest run --locked reindexing_rejects_malformed_jsonl_and_preserves_existing_index
+    exit 0; 1 teste com dois casos. JSON invalido e 257 arrays aninhados falham
+    na linha 2. Em ambos, os dois eventos e timeline_index=(2, 0) permanecem.
+    A cobertura de profundidade foi executada depois da correcao; a reproducao
+    comportamental antes da correcao foi o caso de JSON invalido.
+  cargo nextest run --locked timeline
+    exit 0; 29 testes existentes de timeline passaram, alem do novo teste acima.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 448 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  timeline real, filtros, warnings, documentos deterministicos e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa resultados JSONL propositalmente corrompidos em banco e
+arquivos descartaveis; nao declara reparo automatico de dados legados nem execucao
+sobre incidente real. Supply chain nao foi repetido porque Cargo.lock nao mudou;
+EVD-020 permanece a execucao vigente. Nenhuma janela real nova foi aberta; o smoke
+anterior e EVD-020. Windows x86_64, Linux aarch64, incidente real e CI automatico
+continuam PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.
