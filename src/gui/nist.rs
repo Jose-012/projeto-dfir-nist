@@ -470,7 +470,7 @@ fn function_section(ui: &mut egui::Ui, loadable: &Loadable<NistFunctionView>) {
 /// Testes da seção com `egui_kittest` (ADR-0022).
 #[cfg(test)]
 mod ui_tests {
-    use super::NistState;
+    use super::{NistState, function_section};
     use crate::gui::Loadable;
     use crate::gui::backend::{Backend, Command};
     use crate::gui::test_harness::drain;
@@ -560,6 +560,41 @@ mod ui_tests {
         assert!(
             !paints_id_clash_warning,
             "o egui não deve pintar avisos de ID duplicado sobre Current e Target"
+        );
+    }
+
+    #[test]
+    fn function_grid_horizontal_scroll_reveals_the_last_column() {
+        let loadable = Loadable::Ready(view(GapAnalysisState::UpToDate));
+        let width = 600.0;
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(width, 700.0))
+            .build_ui(move |ui| function_section(ui, &loadable));
+        harness.step();
+
+        let initial = harness.get_by_label("Gap baixo").rect();
+        assert!(
+            initial.max.x > width,
+            "a última coluna deve começar fora da viewport para provar o scroll: {initial:?}"
+        );
+        harness.get_by_label("Function").hover();
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(-300.0, 0.0),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Unknown,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run();
+
+        let revealed = harness.get_by_label("Gap baixo").rect();
+        assert!(
+            revealed.min.x < initial.min.x,
+            "o conteúdo não se moveu horizontalmente: antes={initial:?}, depois={revealed:?}"
+        );
+        assert!(
+            revealed.min.x >= 0.0 && revealed.max.x <= width,
+            "a última coluna não ficou visível após o scroll: {revealed:?}"
         );
     }
 
