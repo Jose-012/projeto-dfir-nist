@@ -20,6 +20,9 @@ pub mod plan;
 pub mod recommendations;
 mod timeline;
 
+#[cfg(test)]
+mod id_regression_tests;
+
 use crate::{config::AppConfig, error::AppError, infrastructure::storage::StoragePaths};
 use backend::{Backend, Command, Event};
 use std::collections::BTreeSet;
@@ -206,14 +209,14 @@ pub const PLAN_PHASE_OPTIONS: [&str; 3] = ["IMMEDIATE", "SHORT_TERM", "STRATEGIC
 /// digitação que só seriam pegos depois, na validação do backend.
 pub fn enum_combo(
     ui: &mut egui::Ui,
-    _id: &str,
+    id: &str,
     label: &str,
     current: &mut String,
     options: &[&str],
 ) {
-    // `from_label` em vez de `from_id_salt`: o label vira o nome acessível do
-    // ComboBox, exigido pela checagem de acessibilidade do egui_kittest 0.37.
-    egui::ComboBox::from_label(label)
+    // `new` separa o salt persistente do label, que continua nomeando o
+    // ComboBox para acessibilidade.
+    egui::ComboBox::new(id, label)
         .selected_text(if current.is_empty() {
             "— selecione —".to_string()
         } else {
@@ -761,5 +764,100 @@ mod navigation_tests {
         harness.run();
         harness.get_by_label("Evidência");
         harness.get_by_label("Incidentes");
+    }
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::{Loadable, enum_combo};
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn loadable_accessors_and_lazy_initialization_cover_every_state() {
+        let mut idle = Loadable::<u32>::Idle;
+        assert!(!idle.is_loading());
+        assert_eq!(idle.ready(), None);
+
+        let mut initializations = 0;
+        let inserted = idle.get_or_insert_with(|| {
+            initializations += 1;
+            Loadable::Loading
+        });
+        assert!(inserted.is_loading());
+        assert_eq!(initializations, 1);
+
+        idle.get_or_insert_with(|| {
+            initializations += 1;
+            Loadable::Ready(42)
+        });
+        assert_eq!(initializations, 1, "somente Idle dispara a carga inicial");
+
+        let ready = Loadable::Ready(42);
+        assert!(!ready.is_loading());
+        assert_eq!(ready.ready(), Some(&42));
+        assert_eq!(Loadable::<u32>::Failed("falha".into()).ready(), None);
+    }
+
+    #[test]
+    fn loadable_show_renders_loading_failure_and_ready_content() {
+        let mut loading = crate::gui::test_harness::builder().build_ui(|ui| {
+            Loadable::<u32>::Loading.show(ui, |_, _| unreachable!());
+        });
+        // O spinner pede repaint contínuo; um passo basta para inspecioná-lo.
+        loading.step();
+        loading.get_by_label("Carregando…");
+
+        let mut failed = crate::gui::test_harness::builder().build_ui(|ui| {
+            Loadable::<u32>::Failed("banco indisponível".into()).show(ui, |_, _| unreachable!());
+        });
+        failed.run();
+        failed.get_by_label("Erro: banco indisponível");
+
+        let mut ready = crate::gui::test_harness::builder().build_ui(|ui| {
+            Loadable::Ready(42).show(ui, |ui, value| {
+                ui.label(format!("valor pronto: {value}"));
+            });
+        });
+        ready.run();
+        ready.get_by_label("valor pronto: 42");
+
+        let mut idle = crate::gui::test_harness::builder().build_ui(|ui| {
+            Loadable::<u32>::Idle.show(ui, |_, _| unreachable!());
+            ui.label("conteúdo externo");
+        });
+        idle.run();
+        idle.get_by_label("conteúdo externo");
+        assert!(idle.query_by_label("Carregando…").is_none());
+    }
+
+    #[test]
+    fn enum_combo_exposes_the_placeholder_and_applies_the_selected_option() {
+        let mut harness = crate::gui::test_harness::builder::<String>().build_ui_state(
+            |ui, current| {
+                enum_combo(ui, "confidence", "Confiança", current, &["LOW", "HIGH"]);
+            },
+            String::new(),
+        );
+        harness.run();
+        assert_eq!(
+            harness
+                .get_by_role(egui::accesskit::Role::ComboBox)
+                .value()
+                .as_deref(),
+            Some("— selecione —")
+        );
+        harness.get_by_label("Confiança").click();
+        harness.run();
+        harness.get_by_label("HIGH").click();
+        harness.run();
+
+        assert_eq!(harness.state(), "HIGH");
+        assert_eq!(
+            harness
+                .get_by_role(egui::accesskit::Role::ComboBox)
+                .value()
+                .as_deref(),
+            Some("HIGH")
+        );
     }
 }
