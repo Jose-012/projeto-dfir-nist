@@ -425,11 +425,13 @@ mod tests {
     }
 
     #[test]
-    fn all_tabs_stay_inside_a_narrow_window() {
+    fn all_tabs_stay_inside_the_minimum_content_width() {
         let (backend, _commands) = Backend::for_test();
         let mut state = state_with_incident();
+        // Janela mínima de 960 px menos os 180 px da navegação lateral.
+        let width = 780.0;
         let mut harness = crate::gui::test_harness::builder()
-            .with_size(egui::vec2(960.0, 700.0))
+            .with_size(egui::vec2(width, 700.0))
             .build_ui_state(
                 |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
                 (&mut state, &backend),
@@ -453,7 +455,7 @@ mod tests {
         ] {
             let rect = harness.get_by_label(label).rect();
             assert!(
-                rect.min.x >= 0.0 && rect.max.x <= 960.0,
+                rect.min.x >= 0.0 && rect.max.x <= width,
                 "aba {label:?} fora da viewport: {rect:?}"
             );
         }
