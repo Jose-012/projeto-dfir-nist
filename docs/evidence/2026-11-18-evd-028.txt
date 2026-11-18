@@ -1,0 +1,49 @@
+EVD-028 - dependencia de plano invalida nao permite revisao
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T08:33Z..08:42Z
+commit-tree: c9d4cab078cf31859e3e96a798f752014bf480c0 (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-29/PLAN_ITEM. depends_on_of convertia campo presente com tipo errado
+em lista vazia e descartava elementos nao-string durante a checagem de ciclos.
+
+Reproducao antes da correcao, sobre a arvore 8eb4347 mais o teste novo:
+  cargo nextest run --locked malformed_stored_plan_dependencies
+    exit 100 esperado para a reproducao. A e B foram criados pelo fluxo valido,
+    com B dependendo de A. Uma sucessora de B com depends_on string contendo A
+    tornou-se vigente; revisar A para depender dela foi aceito e retornou um novo
+    UUID, em vez de falhar antes da revisao. Nao houve update nem trigger removido.
+
+Correcao no commit c9d4cab:
+  Campo depends_on presente precisa ser array e cada elemento precisa ser string.
+  Os erros especificos nao incluem payload ou conteudo do plano. Campo ausente
+  permanece uma lista vazia legada. A falha acontece antes do insert da revisao.
+
+Regressao depois da correcao:
+  cargo nextest run --locked malformed_stored_plan_dependencies
+    exit 0; 1 teste com dois casos. String no lugar do array e array com numero
+    falham; A continua vigente sem sucessora e B malformado permanece inalterado.
+    A reproducao antes da correcao foi o primeiro caso; o elemento nao-string foi
+    cobertura adicional executada depois.
+  cargo nextest run --locked depends_on_of_accepts_legacy_missing_field
+    exit 0; campo ausente continua retornando a lista legada vazia.
+  cargo nextest run --locked revision_keeps_the_correlation_key_and_dependency_cycles_are_refused
+    exit 0; o controle valido A -> B -> A e o ciclo direto continuam recusados.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 453 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  plano de hardening, documentos deterministicos e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa dependencia propositalmente invalida em banco descartavel;
+nao declara reparo automatico de dados legados nem execucao sobre incidente real.
+Supply chain nao foi repetido porque Cargo.lock nao mudou; EVD-020 permanece a
+execucao vigente. Nenhuma janela real nova foi aberta; o smoke anterior e EVD-020.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

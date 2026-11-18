@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - dependência de plano inválida não permite revisão (`EVD-028`)
+
+- `depends_on_of` convertia campo com tipo errado em lista vazia e descartava elementos não-string. Uma sucessora de B com `depends_on` string contendo A permitiu revisar A para depender de B, contornando a checagem de ciclo.
+- Campo presente agora precisa ser array de strings e qualquer erro ocorre antes da revisão. Campo ausente continua sendo a lista legada vazia; os dois casos malformados não criam sucessora.
+- `EVD-028`: regressão com dois casos, controles de campo legado e ciclo válido, `just verify` com 453 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-020`; nenhuma janela real nova foi aberta.
+
 ## Unreleased - 2026-11-18 - agregado IOC inválido não gera nova versão (`EVD-027`)
 
 - `sightings` não-array virava vetor vazio e `sighting_count` inválido virava zero/`max(len)`. A reprodução com contador 7 e `sightings = {}` criou uma sucessora com contador 8 e apenas uma ocorrência retida.

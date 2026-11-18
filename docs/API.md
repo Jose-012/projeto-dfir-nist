@@ -75,6 +75,8 @@ Ao indexar ou reindexar `results.jsonl`, JSON inválido ou profundidade acima de
 | `async create_plan_item` | `incident_id: &str, input: &PlanItemInput` | `AppResult<String>` | — |
 | `async plan_view` | `incident_id: &str` | `AppResult<PlanView>` | — |
 
+Ao revisar um item, a checagem de ciclos exige que `depends_on` presente nos itens vigentes seja um array de strings. Campo ausente continua representando a lista legada vazia; tipo errado ou elemento não-string falha antes de criar a revisão (`EVD-028`).
+
 ### `src/service/gaps.rs` — Lacunas de cobertura
 
 | Função | Parâmetros relevantes | Retorno | Descrição |
