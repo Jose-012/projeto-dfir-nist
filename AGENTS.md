@@ -138,7 +138,8 @@ Se Cargo/Python não estiver disponível, não declarar a respectiva execução 
 7. executar gates disponíveis;
 8. invalidar evidências `PASS` que ficaram `STALE`;
 9. registrar fatos como `REPO-FACT`, `EXTERNAL-FACT`, `ASSUMPTION`, `INFERENCE` ou `PENDING-HUMAN` quando apropriado;
-10. relatar exatamente o que foi executado.
+10. relatar exatamente o que foi executado;
+11. separar commits pequenos por mudança coerente, sem dados de caso, artefatos operacionais ou arquivos fora da tarefa.
 
 ## 10. Estados
 
@@ -158,32 +159,19 @@ IDs normativos (`RF-*`, `D*`, `LLM-*`, `CA-*`, `TEST-*`, `GATE-*`, `ADR-*`, `EVD
 
 ## 11. Documentação obrigatória
 
-Toda alteração relevante atualiza, conforme aplicável:
+Atualize somente os documentos afetados pela mudança:
 
-- `README.md`;
-- `docs/FASE0_STATUS.md`;
-- `docs/rtm.md`;
-- `CHANGELOG.md`;
-- `docs/adrs/`;
-- `docs/RELEASE_GATE.md`;
-- `docs/DOCUMENT_AUTHORITY.md`;
-- `PROMPT_NOVA_CONVERSA.md`;
-- índice/XML e Apêndice F da especificação;
-- `docs/FASE1_STATUS.md` (log cronológico);
-- `docs/FASE1_BACKLOG.md`;
-- `docs/DEMAND_TRACE.md`;
-- `docs/DEMO.md`;
-- `docs/OPERATION.md`;
-- `docs/DETECTION_RULES.md`;
-- `docs/NATIVE_UI_ARCHITECTURE.md`;
-- `docs/API.md`;
-- `docs/DEFINITION_OF_READY.md`;
-- `docs/SUPPLY_CHAIN.md`;
-- `docs/TOOLCHAINS.md`;
-- `CONVENTIONS.md`;
-- `RELATORIO_ALTERACOES_*` (relatórios de rodada).
+- requisitos/arquitetura: `docs/PROJECT_SPEC_v6_5_1.md`, cópia raiz equivalente, `docs/DEMAND_TRACE.md` e `docs/adrs/`;
+- estado/rastreabilidade: `docs/rtm.md`, `docs/FASE1_BACKLOG.md` e tickets afetados;
+- gates/evidências: `docs/RELEASE_GATE.md`, `docs/EVIDENCE_REGISTER.md` e `docs/evidence/`;
+- uso/operação: `README.md`, `docs/OPERATION.md`, `docs/DEMO.md`, `docs/TOOLCHAINS.md`, `docs/SUPPLY_CHAIN.md`;
+- contratos específicos: `docs/NATIVE_UI_ARCHITECTURE.md`, `docs/DETECTION_RULES.md`, `docs/API.md`;
+- histórico: `docs/FASE1_STATUS.md` ou `CHANGELOG.md`, sem copiar matriz de estado nem repetir toda a narrativa;
+- regras de agente: `AGENTS.md`, `CONVENTIONS.md`, `PROMPT_NOVA_CONVERSA.md`, `docs/DOCUMENT_AUTHORITY.md`.
 
-> Gap origem: AUS-01 (lista do §11), INC-14 (§13 e §14 numerados; §1 cita ADR-0024 a ADR-0028), 2026-11-04.
+`docs/FASE0_STATUS.md`, `docs/DEFINITION_OF_READY.md` e `RELATORIO_ALTERACOES_*` são históricos; só mudam para correção factual ou atualização do histórico. O Git log registra as rodadas novas. Não crie um relatório permanente para cada alteração de rotina.
+
+> Gap origem: AUS-01/INC-14; simplificação de documentação em 2026-11-18.
 
 ## 12. Regra final
 

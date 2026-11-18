@@ -91,7 +91,7 @@ Não declarar um gate como PASS sem execução real.
 
 ## Documentação e rastreabilidade
 
-Toda alteração relevante atualiza, conforme aplicável (lista de `AGENTS.md` §11): `README.md`; `docs/FASE0_STATUS.md`; `docs/rtm.md`; `CHANGELOG.md`; `docs/adrs/`; `docs/RELEASE_GATE.md`; `docs/DOCUMENT_AUTHORITY.md`; `PROMPT_NOVA_CONVERSA.md`; índice/XML e Apêndice F da especificação; `docs/FASE1_STATUS.md` (log cronológico); `docs/FASE1_BACKLOG.md`; `docs/DEMAND_TRACE.md`; `docs/DEMO.md`; `docs/OPERATION.md`; `docs/DETECTION_RULES.md`; `docs/NATIVE_UI_ARCHITECTURE.md`; `docs/API.md`; `docs/DEFINITION_OF_READY.md`; `docs/SUPPLY_CHAIN.md`; `docs/TOOLCHAINS.md`; este arquivo; `RELATORIO_ALTERACOES_*`.
+Siga `AGENTS.md` §11: atualize apenas os documentos afetados, mantenha `docs/rtm.md` como única matriz de estado e use `docs/FASE1_STATUS.md` apenas como histórico. Não crie `RELATORIO_ALTERACOES_*` para rotina; o Git log registra as rodadas.
 
 Preserve IDs normativos e de evidência. Não reutilize IDs existentes.
 
@@ -100,7 +100,7 @@ Preserve IDs normativos e de evidência. Não reutilize IDs existentes.
 - Leia `AGENTS.md` e este arquivo antes de editar.
 - Adicione ao contexto somente os arquivos necessários à tarefa.
 - Trate documentos normativos como leitura, não como alvos de edição, salvo pedido explícito.
-- Não commite alterações automaticamente.
+- Faça commits pequenos e temáticos após os gates aplicáveis, preservando arquivos fora da tarefa e dados sensíveis.
 - Não amplie silenciosamente o escopo para arquivos ignorados pelo Git.
 - Não desabilite lint, Clippy, cargo-deny ou cargo-audit para fazer um gate passar.
 - Não remova controles de segurança apenas para simplificar uma implementação.

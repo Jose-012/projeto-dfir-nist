@@ -28,14 +28,14 @@ Documentos que apoiam a mudança somente quando são afetados (`AGENTS.md` §11)
 |---|---|---|
 | `docs/FASE1_STATUS.md` | log cronológico da Fase 1 | Estado: `docs/rtm.md` |
 | `CONVENTIONS.md` | convenções de desenvolvimento para agentes LLM | Regras LLM: `AGENTS.md` |
-| `docs/DEFINITION_OF_READY.md` | critérios de pronto da Fase 0 para a Fase 1 | Gates: `docs/RELEASE_GATE.md` |
+| `docs/DEFINITION_OF_READY.md` | ponteiro para o checklist histórico Fase 0 → Fase 1 | Gates: `docs/RELEASE_GATE.md` |
 | `docs/DEMO.md` | dataset e roteiro de demonstração | Requisitos de negócio: demanda e especificação |
 | `docs/OPERATION.md` | instalação de referência, backup e atualização manual (RF-030, RF-032) | Arquitetura: especificação e ADR-0026 |
 | `docs/DETECTION_RULES.md` | regras de detecção (gerado de `dfir-engine --list-rules`) | Arquitetura: ADR-0025 |
 | `docs/API.md` | lápide da API HTTP removida, com o mapa para o serviço | Arquitetura: ADR-0017 |
 | `docs/SUPPLY_CHAIN.md` | política e registro de supply chain | Gates: `docs/RELEASE_GATE.md` |
 | `README.md` | visão geral e uso | Estado: `docs/rtm.md` |
-| `RELATORIO_ALTERACOES_*` | relatório de cada rodada de alterações | narrativa; não substitui `EVD-*` |
+| `RELATORIO_ALTERACOES_*` | relatórios históricos; novos não são obrigatórios por rotina | narrativa; Git log registra as rodadas |
 | `.scratch/fase1-backlog/issues/` | tickets `F1-NN`, um arquivo por ticket | Escopo e poda: ADR-0018; estado: `docs/rtm.md` |
 | `tests/*/*.md` | documentação de testes da Fase 0 | Gates: `docs/RELEASE_GATE.md` |
 

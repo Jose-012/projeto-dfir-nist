@@ -1,6 +1,10 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased — 2026-11-18 — simplificação da governança documental
+
+- `docs/rtm.md` passou a ser a única matriz de tickets; `docs/FASE1_STATUS.md` ficou somente com histórico. README e prompt perderam narrativas datadas; DoR e plano de backlog concluídos foram arquivados; atualizações passam a cobrir apenas documentos afetados e novos relatórios de rodada não são obrigatórios.
+
 ## Unreleased — 2026-11-18 — upgrade do pin para Rust 1.100.0 e lacunas RF-003/RF-027 fechadas (`EVD-012`)
 
 - **Toolchain:** `rust-toolchain.toml` e `toolchains.toml` 1.99.1 → **1.100.0** (stable de 2026-11-12); `rust-version = "1.100"` nos três `Cargo.toml`. `cargo metadata --locked` ok; nenhum bump forçado pelo lock. `docs/TOOLCHAINS.md`, `docs/SUPPLY_CHAIN.md` e `docs/FASE1_BACKLOG.md` (pista B) atualizados.
