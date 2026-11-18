@@ -17,6 +17,17 @@ const MAX_RENDERED: usize = 100;
 /// Referências de evento exibidas por candidato (o resto fica no detalhe do banco).
 const REFS_SHOWN: usize = 8;
 
+/// Revela um controle quando a navegação por teclado o alcança.
+///
+/// A lista usa apenas a `ScrollArea` externa da tela de evidência. Uma segunda
+/// viewport consumia esse alvo antes da página externa e deixava o foco fora
+/// da área visível.
+fn reveal_on_focus(response: &egui::Response) {
+    if response.gained_focus() {
+        response.scroll_to_me(None);
+    }
+}
+
 /// O que o analista digitou para decidir um candidato.
 #[derive(Default)]
 struct DecisionForm {
@@ -124,10 +135,9 @@ impl DetectionState {
         ui.horizontal(|ui| {
             if is_evtx {
                 let running = self.running.contains(evidence_id);
-                if ui
-                    .add_enabled(!running, egui::Button::new("Rodar regras de detecção"))
-                    .clicked()
-                {
+                let run = ui.add_enabled(!running, egui::Button::new("Rodar regras de detecção"));
+                reveal_on_focus(&run);
+                if run.clicked() {
                     self.start(evidence_id, backend);
                 }
                 if running {
@@ -141,7 +151,7 @@ impl DetectionState {
                 .status_filter
                 .entry(evidence_id.to_string())
                 .or_default();
-            egui::ComboBox::from_label("Filtro de situação dos candidatos")
+            let filter_response = egui::ComboBox::from_label("Filtro de situação dos candidatos")
                 .selected_text(if filter.is_empty() {
                     "Todas as situações".to_string()
                 } else {
@@ -152,7 +162,9 @@ impl DetectionState {
                     for status in ["PENDING", "CONFIRMED", "REJECTED"] {
                         ui.selectable_value(filter, status.to_string(), status);
                     }
-                });
+                })
+                .response;
+            reveal_on_focus(&filter_response);
         });
         match self.message.get(evidence_id) {
             Some(Ok(text)) => {
@@ -210,14 +222,12 @@ impl DetectionState {
                 .weak(),
             );
         }
-        egui::ScrollArea::vertical()
-            .id_salt(("cand_scroll", evidence_id))
-            .max_height(420.0)
-            .show(ui, |ui| {
-                for item in shown.into_iter().take(MAX_RENDERED) {
-                    self.candidate_ui(ui, evidence_id, item, incidents, backend);
-                }
-            });
+        // Não crie uma segunda viewport aqui: a tela de evidência já tem uma
+        // `ScrollArea` vertical. Além da roda ambígua, viewports aninhadas
+        // impedem `scroll_to_me` de revelar o foco na página externa.
+        for item in shown.into_iter().take(MAX_RENDERED) {
+            self.candidate_ui(ui, evidence_id, item, incidents, backend);
+        }
     }
 
     fn candidate_ui(
@@ -295,7 +305,7 @@ impl DetectionState {
                 let form = self.forms.entry(item.id.clone()).or_default();
                 ui.horizontal(|ui| {
                     ui.label("Incidente:");
-                    egui::ComboBox::from_label("Incidente")
+                    let incident_response = egui::ComboBox::from_label("Incidente")
                         .selected_text(
                             incidents
                                 .iter()
@@ -311,20 +321,24 @@ impl DetectionState {
                                     &incident.name,
                                 );
                             }
-                        });
+                        })
+                        .response;
+                    reveal_on_focus(&incident_response);
                     let note_label = ui.label("Nota (opcional):");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut form.note)
-                            .hint_text("nota do analista (opcional)")
-                            .desired_width(220.0),
-                    )
-                    .labelled_by(note_label.id);
+                    let note = ui
+                        .add(
+                            egui::TextEdit::singleline(&mut form.note)
+                                .hint_text("nota do analista (opcional)")
+                                .desired_width(220.0),
+                        )
+                        .labelled_by(note_label.id);
+                    reveal_on_focus(&note);
                     let can_confirm = !form.incident_id.is_empty();
-                    if ui
+                    let confirm = ui
                         .add_enabled(can_confirm, egui::Button::new("Confirmar"))
-                        .on_hover_text("Cria o mapeamento ATT&CK, o achado e os IOCs no incidente")
-                        .clicked()
-                    {
+                        .on_hover_text("Cria o mapeamento ATT&CK, o achado e os IOCs no incidente");
+                    reveal_on_focus(&confirm);
+                    if confirm.clicked() {
                         let note = form.note.trim();
                         backend.send(Command::ConfirmCandidate {
                             evidence_id: evidence_id.to_string(),
@@ -344,17 +358,18 @@ impl DetectionState {
                 }
                 ui.horizontal(|ui| {
                     let reason_label = ui.label("Motivo da rejeição:");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut form.reason)
-                            .hint_text("motivo da rejeição (obrigatório)")
-                            .desired_width(300.0),
-                    )
-                    .labelled_by(reason_label.id);
+                    let reason = ui
+                        .add(
+                            egui::TextEdit::singleline(&mut form.reason)
+                                .hint_text("motivo da rejeição (obrigatório)")
+                                .desired_width(300.0),
+                        )
+                        .labelled_by(reason_label.id);
+                    reveal_on_focus(&reason);
                     let can_reject = !form.reason.trim().is_empty();
-                    if ui
-                        .add_enabled(can_reject, egui::Button::new("Rejeitar"))
-                        .clicked()
-                    {
+                    let reject = ui.add_enabled(can_reject, egui::Button::new("Rejeitar"));
+                    reveal_on_focus(&reject);
+                    if reject.clicked() {
                         backend.send(Command::RejectCandidate {
                             evidence_id: evidence_id.to_string(),
                             candidate_id: item.id.clone(),
@@ -638,5 +653,63 @@ mod ui_tests {
         let mut harness = harness(state, backend, vec![]);
         harness.run();
         harness.get_by_label_contains("falha do engine");
+    }
+
+    #[test]
+    fn keyboard_focus_reveals_the_last_candidate_in_the_single_outer_scroll() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = DetectionState::default();
+        let candidates: Vec<_> = (0..6)
+            .map(|index| view(&format!("candidate-{index}"), "PENDING"))
+            .collect();
+        let last_id = candidates.last().expect("six candidates").id.clone();
+        state.on_loaded("ev_1", Ok(candidates));
+        state.forms.insert(
+            last_id,
+            DecisionForm {
+                reason: "revisão sintética concluída".into(),
+                ..DecisionForm::default()
+            },
+        );
+        let viewport = egui::vec2(780.0, 600.0);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(viewport)
+            .build_ui_state(
+                |ui, (state, backend, incidents): &mut State| {
+                    // Mesma viewport única usada por EvidenceState::ui.
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        state.ui(ui, "ev_1", true, incidents, backend);
+                    });
+                },
+                (state, backend, vec![]),
+            );
+        harness.step();
+
+        let initial = harness
+            .get_all_by_role_and_label(egui::accesskit::Role::Button, "Rejeitar")
+            .last()
+            .expect("last candidate rejection button")
+            .rect();
+        assert!(
+            initial.min.y >= viewport.y,
+            "a fixture precisa começar fora da viewport: {initial:?}"
+        );
+
+        harness
+            .get_all_by_role_and_label(egui::accesskit::Role::Button, "Rejeitar")
+            .last()
+            .expect("last candidate rejection button")
+            .focus();
+        harness.run();
+
+        let revealed = harness
+            .get_all_by_role_and_label(egui::accesskit::Role::Button, "Rejeitar")
+            .last()
+            .expect("last candidate rejection button")
+            .rect();
+        assert!(
+            revealed.min.y >= 0.0 && revealed.max.y <= viewport.y,
+            "o foco não revelou o último controle na viewport externa: {revealed:?}"
+        );
     }
 }
