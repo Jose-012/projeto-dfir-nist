@@ -97,7 +97,7 @@ pub async fn link_critical_path_stages(
     to_stage_id: &str,
 ) -> AppResult<()> {
     incident_exists(&services.db, incident_id).await?;
-    attack_impact::link_critical_path_stages(&services.db, from_stage_id, to_stage_id)
+    attack_impact::link_critical_path_stages(&services.db, incident_id, from_stage_id, to_stage_id)
         .await
         .map_err(AppError::Database)
 }
@@ -537,6 +537,24 @@ mod tests {
         }
     }
 
+    async fn critical_path_stage(
+        services: &AppServices,
+        incident_id: &str,
+        sequence_index: i64,
+    ) -> String {
+        create_critical_path_stage(
+            services,
+            incident_id,
+            None,
+            sequence_index,
+            &format!("stage {sequence_index}"),
+            "documented event sequence",
+            "MEDIUM",
+        )
+        .await
+        .expect("critical path stage")
+    }
+
     #[tokio::test]
     async fn findings_causes_and_risk_matrix_round_trip_through_the_service() {
         let fx = fixture().await;
@@ -600,6 +618,69 @@ mod tests {
         assert_eq!(view.findings.len(), 2);
         assert_eq!(view.risk_matrix.len(), 2);
         assert!(view.attack_mappings.is_empty());
+    }
+
+    #[tokio::test]
+    async fn critical_path_links_stay_inside_requested_incident() {
+        let fx = fixture().await;
+        let incident_a = crate::service::create_incident(&fx.services, "incident A")
+            .await
+            .expect("incident A");
+        let incident_b = crate::service::create_incident(&fx.services, "incident B")
+            .await
+            .expect("incident B");
+        let a0 = critical_path_stage(&fx.services, &incident_a.id, 0).await;
+        let a1 = critical_path_stage(&fx.services, &incident_a.id, 1).await;
+        let b0 = critical_path_stage(&fx.services, &incident_b.id, 0).await;
+        let b1 = critical_path_stage(&fx.services, &incident_b.id, 1).await;
+
+        let cross_incident =
+            link_critical_path_stages(&fx.services, &incident_a.id, &a0, &b0).await;
+        let foreign_pair = link_critical_path_stages(&fx.services, &incident_a.id, &b0, &b1).await;
+        let graph = critical_path(&fx.services, &incident_a.id)
+            .await
+            .expect("incident A graph");
+        let foreign_targets = graph
+            .edges
+            .iter()
+            .filter(|edge| {
+                let from_is_local = graph.stages.iter().any(|stage| stage.id == edge.from);
+                let to_is_local = graph.stages.iter().any(|stage| stage.id == edge.to);
+                !from_is_local || !to_is_local
+            })
+            .count();
+        let foreign_relations = analytical_results::related_to(&fx.services.db, &b0)
+            .await
+            .expect("foreign relations")
+            .len();
+        assert!(
+            cross_incident.is_err() && foreign_pair.is_err(),
+            "cross_incident_accepted={} foreign_pair_accepted={} graph_edges={} foreign_targets={} foreign_relations={}",
+            cross_incident.is_ok(),
+            foreign_pair.is_ok(),
+            graph.edges.len(),
+            foreign_targets,
+            foreign_relations
+        );
+        assert!(graph.edges.is_empty());
+        assert_eq!(foreign_relations, 0);
+        for result in [&cross_incident, &foreign_pair] {
+            let message = result.as_ref().expect_err("invalid link").user_message();
+            assert!(
+                message.contains("different incident"),
+                "unexpected diagnostic: {message}"
+            );
+        }
+
+        link_critical_path_stages(&fx.services, &incident_a.id, &a0, &a1)
+            .await
+            .expect("same-incident link");
+        let graph = critical_path(&fx.services, &incident_a.id)
+            .await
+            .expect("valid incident A graph");
+        assert_eq!(graph.edges.len(), 1);
+        assert_eq!(graph.edges[0].from, a0);
+        assert_eq!(graph.edges[0].to, a1);
     }
 
     #[tokio::test]

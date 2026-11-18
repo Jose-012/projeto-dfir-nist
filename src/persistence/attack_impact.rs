@@ -295,11 +295,13 @@ pub async fn insert_critical_path_stage(
 }
 
 /// Liga dois estágios já existentes em sequência (`from` → `to`). Ambos
-/// precisam ser resultados `CRITICAL_PATH_LINK` — permite grafos com
-/// ramificação (mais de um `SEQUENCE_NEXT` saindo do mesmo estágio), não
-/// só uma cadeia linear, conforme "grafo temporal/causal" da seção 15.
+/// precisam ser resultados `CRITICAL_PATH_LINK` do `incident_id` informado —
+/// permite grafos com ramificação (mais de um `SEQUENCE_NEXT` saindo do mesmo
+/// estágio), não só uma cadeia linear, conforme "grafo temporal/causal" da
+/// seção 15.
 pub async fn link_critical_path_stages(
     pool: &SqlitePool,
+    incident_id: &str,
     from_stage_id: &str,
     to_stage_id: &str,
 ) -> Result<(), sqlx::Error> {
@@ -312,6 +314,11 @@ pub async fn link_critical_path_stages(
         if record.result_type != AnalyticalResultType::CriticalPathLink.as_str() {
             return Err(validation_error(format!(
                 "{stage_id} is not a CRITICAL_PATH_LINK result"
+            )));
+        }
+        if record.incident_id.as_deref() != Some(incident_id) {
+            return Err(validation_error(format!(
+                "critical path stage {stage_id} belongs to a different incident"
             )));
         }
     }
@@ -641,7 +648,7 @@ mod tests {
         .await
         .expect("stage 2 insert succeeds");
 
-        link_critical_path_stages(&pool, &stage_1, &stage_2)
+        link_critical_path_stages(&pool, "inc-5", &stage_1, &stage_2)
             .await
             .expect("link succeeds");
 
@@ -688,7 +695,7 @@ mod tests {
         .await
         .expect("mapping insert succeeds");
 
-        let result = link_critical_path_stages(&pool, &stage, &mapping).await;
+        let result = link_critical_path_stages(&pool, "inc-6", &stage, &mapping).await;
         assert!(result.is_err());
     }
 
