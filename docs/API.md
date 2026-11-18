@@ -38,6 +38,8 @@ Convenções: o primeiro parâmetro de quase todas as funções é `services: &A
 | `async confirm_candidate` | `candidate_id: &str, incident_id: &str, analyst_note: Option<&str>` | `AppResult<ConfirmOutcome>` | Confirma o candidato: cria o mapeamento ATT&CK, o achado e os IOCs ligados ao incidente escolhido, e marca o candidato como confirmado. |
 | `async reject_candidate` | `candidate_id: &str, reason: &str` | `AppResult<()>` | Rejeita o candidato. |
 
+`list_candidates` e `confirm_candidate` falham fechado quando `event_refs` ou IOCs persistidos contêm JSON inválido; não convertem o dado em lista vazia. A confirmação valida ambos antes de criar mapeamento, achado ou IOC (regressões em `EVD-020`).
+
 ### `src/service/findings.rs` — Achados, mapeamentos ATT&CK, caminho crítico, impacto, IOCs e recomendações
 
 | Função | Parâmetros relevantes | Retorno | Descrição |

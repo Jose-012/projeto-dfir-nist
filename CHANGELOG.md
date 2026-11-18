@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - JSON inválido de candidatos falha fechado (`EVD-020`)
+
+- Reprodução anterior à correção: `event_refs` ou IOCs persistidos com JSON inválido eram convertidos em listas vazias. A confirmação era aceita; no caso de IOCs, retornava `ioc_ids: []` após criar mapeamento e achado.
+- Desserialização agora propaga erro específico, a listagem não esconde o dado inválido e a confirmação valida `event_refs` e IOCs antes de qualquer escrita analítica. Duas regressões exigem zero mapeamento/achado/IOC e candidato ainda pendente.
+- `EVD-020`: `just verify` com 440 passed/1 skipped, e2e 110/110, supply chain e doc-gate verdes. Novo smoke real de 25 s no commit corrigido terminou em timeout 124 esperado, com adaptador Intel GL e sem avisos de fonte/glyph/ScrollArea ID no log isolado.
+
 ## Unreleased - 2026-11-18 - janela real isolada e gates finais (`EVD-019`)
 
 - `timeout 25 ./target/debug/dfir-app` abriu a janela real no Xorg `:0` com `DFIR_DATA_ROOT` isolado no scratch e terminou em 124 como esperado. O log registrou o adaptador Mesa Intel HD Graphics 2000, backend GL, e os diagnósticos EGL conhecidos ficaram contextualizados.

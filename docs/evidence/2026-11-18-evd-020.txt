@@ -1,0 +1,63 @@
+EVD-020 - candidatos de deteccao com JSON persistido invalido falham fechado
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T06:37Z..06:49Z
+commit-tree: 1d3940186fc739e2c60613cd7ae364a41db5c15a (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151; cargo-audit 0.22.2; cargo-deny 0.20.2; Xorg :0
+
+Escopo: F1-28/RF-050. CandidateRow convertia event_refs e IOCs JSON invalidos
+em listas vazias. A listagem escondia a corrupcao e a confirmacao podia criar
+mapeamento, achado e IOCs sem toda a proveniencia persistida.
+
+Reproducao antes da correcao, sobre a arvore 7b7d835 mais os dois testes novos:
+  cargo nextest run --locked malformed_stored_candidate_event_refs
+    exit 100 esperado para a reproducao. A confirmacao foi aceita e retornou
+    ConfirmOutcome com mapping, finding e um IOC, apesar de event_refs invalido.
+  cargo nextest run --locked malformed_stored_candidate_iocs
+    exit 100 esperado para a reproducao. A confirmacao foi aceita e retornou
+    ConfirmOutcome com mapping, finding e ioc_ids vazio, apesar de IOCs invalido.
+  Os testes inserem clones schema-valid com JSON invalido em SQLite descartavel;
+  nao alteram migrations nem contornam o trigger por UPDATE de uma linha existente.
+
+Correcao no commit 1d39401:
+  Desserializacao e serializacao nao usam mais defaults vazios. Os erros de JSON
+  persistido viram sqlx::Error::Protocol com diagnostico especifico e seguro.
+  CandidateView usa TryFrom e list_candidates propaga o erro.
+  confirm_candidate valida event_refs e IOCs antes de qualquer escrita analitica.
+
+Regressao depois da correcao:
+  cargo nextest run --locked malformed_stored_candidate
+    exit 0; 2 passed, 318 skipped. Cada teste exige erro especifico na
+    confirmacao e na listagem, zero ATTACK_MAPPING/FINDING/IOC e status PENDING.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 440 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required.
+
+just supply-chain
+  exit 0. cargo audit --no-yanked e cargo deny --workspace check verdes com as
+  excecoes ja documentadas: WVR-004/RUSTSEC-2026-0459, RUSTSEC-2025-0141 e
+  RUSTSEC-2026-0543. deny: advisories ok, bans ok, licenses ok, sources ok.
+
+Janela real sobre o commit da correcao, com armazenamento isolado:
+  DFIR_DATA_ROOT=/home/jose/.jcode/scratch/dfir-overnight-gui-20261118-0644
+  DISPLAY=:0 timeout 25 ./target/debug/dfir-app
+  A janela permaneceu aberta ate o timeout, exit 124 esperado.
+  O log registrou Mesa Intel(R) HD Graphics 2000 (SNB GT1), backend Gl,
+  IntegratedGpu, driver_info 3.3 (Core Profile) Mesa 25.0.7-2+deb13u1.
+  No font|No glyph|missing font|missing glyph|ScrollArea ID: 0 matches.
+  Nomes de fixtures no log isolado: 0 matches.
+  Uma tentativa anterior com `just gui` falhou porque a receita nao existe e
+  nao iniciou o app; ela nao conta como smoke. O comando direto acima e o valido.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa banco SQLite descartavel e JSON propositalmente invalido;
+nao declara reparo de dados legados nem execucao sobre incidente real. Dados
+legados invalidos agora produzem erro em vez de desaparecer silenciosamente.
+O smoke declara somente abertura da janela e inspecao do log, nao navegacao manual.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

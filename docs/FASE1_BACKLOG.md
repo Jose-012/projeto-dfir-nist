@@ -9,7 +9,7 @@ Este arquivo lista somente trabalho remanescente. Estado de requisitos/tickets: 
 |---|---|---|
 | A. Verificação externa | Windows x86_64 (F1-22), Linux aarch64 e incidente real com sanitização | `PENDING-HUMAN`; Windows/aarch64 têm WVR-001/WVR-002 até 2026-12-31 |
 | B. CI | Definir hospedagem remota e, se houver, pipeline no toolchain pinado (F1-14) | não implementado; WVR-003 até 2026-12-31; sem repositório remoto no momento |
-| E. Supply chain | Repetir `just supply-chain` a cada mudança de dependência e revisar exceções com prazo | manual verde em `EVD-019`; revisões registradas em `docs/SUPPLY_CHAIN.md` |
+| E. Supply chain | Repetir `just supply-chain` a cada mudança de dependência e revisar exceções com prazo | manual verde em `EVD-020`; revisões registradas em `docs/SUPPLY_CHAIN.md` |
 | F. Fechamento do RC | Resolver ou aceitar formalmente as pendências externas e a decisão de CI antes de declarar aceite final | bloqueado pelas pistas A e B; estado normativo em `docs/RELEASE_GATE.md` |
 
 Nenhuma pista autoriza afirmar verificação em ambiente não executado. Fixture DEMO e testes sintéticos não substituem incidente real.
