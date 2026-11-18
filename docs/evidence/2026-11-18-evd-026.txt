@@ -1,0 +1,51 @@
+EVD-026 - RESULT persistido exige array items
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T07:59Z..08:09Z
+commit-tree: 9cecefb46404255706030e3e10a5e47b78e8b86e (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-18 e leitura de resultados analiticos. ResultMessage define items:
+Vec<Value> obrigatorio, mas os dois leitores ignoravam campo ausente ou nao-array.
+
+Reproducao antes da correcao, sobre a arvore 279b7d9 mais os testes novos:
+  cargo nextest run --locked --no-fail-fast missing_items_array
+    exit 100 esperado para a reproducao; dois testes independentes executaram.
+    read_result_items retornou Ok([]) para RESULT sem items.
+    index_timeline retornou Ok((2, 0)) depois de anexar a mesma linha invalida a
+    um resultado valido de dois eventos, aceitando a perda em vez de rollback.
+
+Correcao no commit 9cecefb:
+  for_each_result_item e index_timeline_inner exigem items array e retornam
+  AppError::Config com o numero da linha para campo ausente ou tipo incorreto.
+  O leitor analitico tambem passou a incluir a linha nos erros de JSON/profundidade.
+  Nenhum JSONL ou conteudo de evento entra no diagnostico. items: [] continua valido.
+
+Regressao depois da correcao:
+  cargo nextest run --locked --no-fail-fast missing_items_array
+    exit 0; 2 passed. Cada teste cobre items ausente e objeto no lugar do array.
+    A reindexacao preserva dois eventos e timeline_index=(2, 0) em ambos; a
+    leitura analitica falha na linha 1 e aceita o controle valido items: [].
+    A reproducao comportamental antes da correcao foi o campo ausente; o caso de
+    tipo errado foi executado como cobertura adicional depois da correcao.
+  cargo nextest run --locked reindexing_rejects_malformed_jsonl_and_preserves_existing_index
+    exit 0; o controle anterior de JSON invalido/profundidade continua passando.
+  Uma primeira tentativa pos-correcao parou somente no rustfmt --check, antes dos
+  testes; esta em task-013-focused-format-attempt.txt e nao conta como resultado.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 450 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  timeline, resultados analiticos, deteccao, documentos e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: fixtures descartaveis contem RESULT propositalmente fora do contrato;
+nao declara reparo automatico de dados legados nem execucao sobre incidente real.
+Supply chain nao foi repetido porque Cargo.lock nao mudou; EVD-020 permanece a
+execucao vigente. Nenhuma janela real nova foi aberta; o smoke anterior e EVD-020.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

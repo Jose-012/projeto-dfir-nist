@@ -30,7 +30,7 @@ Convenções: o primeiro parâmetro de quase todas as funções é `services: &A
 
 `timeline_page` falha fechado quando os warnings persistidos contêm JSON inválido, `warning_count` negativo ou contagem divergente do array. `warnings = NULL` com contagem zero continua válido para jobs legados; nenhum detalhe inválido vira lista vazia (`EVD-021`).
 
-Ao indexar ou reindexar `results.jsonl`, JSON inválido ou profundidade acima de `MAX_JSON_DEPTH` produz erro com o número da linha e aciona rollback, preservando eventos e índice anteriores. Linhas JSON válidas sem `items` mantêm o comportamento de ignorar (`EVD-025`).
+Ao indexar ou reindexar `results.jsonl`, JSON inválido ou profundidade acima de `MAX_JSON_DEPTH` produz erro com o número da linha e aciona rollback, preservando eventos e índice anteriores (`EVD-025`). Toda linha de resultado também precisa conter `items` como array, conforme `ResultMessage`: campo ausente ou de outro tipo falha nos leitores de timeline e analíticos, enquanto `items: []` continua válido (`EVD-026`).
 
 `evidence_analytical_results` e as leituras vigentes por incidente também falham fechado quando `payload` ou `provenance` persistidos contêm JSON inválido. A conversão usa `TryFrom` e propaga um diagnóstico específico em vez de produzir `null` (`EVD-023`).
 

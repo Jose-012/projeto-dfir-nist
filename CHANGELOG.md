@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - `RESULT` persistido exige array `items` (`EVD-026`)
+
+- `ResultMessage` exige `items: Vec<Value>`, mas os leitores de timeline e resultados analíticos aceitavam campo ausente ou de outro tipo como zero itens. As reproduções retornavam `Ok([])` e `Ok((2, 0))` durante reindexação.
+- Agora ambos falham com a linha para campo ausente/tipo errado. A timeline preserva o índice anterior via rollback, os erros analíticos de JSON/profundidade também indicam a linha, e `items: []` continua válido.
+- `EVD-026`: dois testes novos com os controles, o teste anterior de rollback, `just verify` com 450 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-020`; nenhuma janela real nova foi aberta.
+
 ## Unreleased - 2026-11-18 - JSONL inválido preserva o índice anterior da timeline (`EVD-025`)
 
 - A reindexação apagava o índice e ignorava JSON inválido ou profundidade excessiva antes de commitar. A reprodução com dois eventos e uma segunda linha inválida retornava `Ok((2, 0))`.

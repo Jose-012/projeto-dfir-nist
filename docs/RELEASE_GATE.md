@@ -40,10 +40,12 @@ O release é fechado somente com evidência executada.
 > **Atualização 2026-11-18 (Gap Analysis falha antes de escrever sobre dado inválido).** No commit `367c9d5`, `EVD-024`: um `NIST_GAP` inválido retornava um novo ID de fechamento. Agora o payload falha antes de `BEGIN IMMEDIATE`, sem nova linha ou superseding. `just verify` terminou com 447 passed/1 skipped, e2e 110/110 com as dez lacunas válidas, e doc-gate PASS. Supply chain não foi repetido e permanece em `EVD-020`; nenhuma janela real nova ou reparo legado foi declarado.
 >
 > **Atualização 2026-11-18 (JSONL inválido preserva o índice anterior).** No commit `a2a619b`, `EVD-025`: uma segunda linha inválida era aceita durante a reindexação com `Ok((2, 0))`. Agora JSON inválido e profundidade excessiva falham com a linha e acionam rollback, preservando eventos e índice. O novo teste cobre os dois casos; 29 testes existentes de timeline, `just verify` com 448 passed/1 skipped, e2e 110/110 e doc-gate passaram. Supply chain não foi repetido e permanece em `EVD-020`; nenhuma janela real nova ou reparo legado foi declarado.
+>
+> **Atualização 2026-11-18 (RESULT persistido exige `items`).** No commit `9cecefb`, `EVD-026`: resultado sem array `items` retornava `Ok([])` na leitura analítica e `Ok((2, 0))` na reindexação. Agora campo ausente/tipo errado falha por linha nos dois leitores, rollback preserva o índice e `items: []` continua válido. Dois testes novos, `just verify` com 450 passed/1 skipped, e2e 110/110 e doc-gate passaram. Supply chain não foi repetido e permanece em `EVD-020`; nenhuma janela real nova ou reparo legado foi declarado.
 
 ## Gate documental
 
-Estado: `PASS` em 2026-11-18 (`EVD-025`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-18 (`EVD-026`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -54,7 +56,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-025`, nextest 448 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-026`, nextest 450 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -91,7 +93,8 @@ cargo audit
 - `PASS` **contenção do engine provada com o engine de verdade** (ADR-0024): `cargo test --locked --workspace` (inclui `engine/tests/sandbox.rs`, que exige `EACCES`/`EPERM` onde devido e tem controle com a política `off`) e `scripts/e2e_headless.py` (repete a prova sobre o EVTX real) — `EVD-005`, `EVD-006`. **Rodar sempre pelo workspace**: `cargo test -p dfir-engine` não unifica as features do tokio e esconde falhas do runtime sob seccomp. Em Linux sem Landlock os testes de enforcement avisam e saem: o release no Linux **não** pode ser fechado nesse ambiente;
 - `WAIVED` **Windows** (`WVR-001`, aprovado pelo operador em 2026-11-14, válido até 2026-12-31): o Job Object só foi compilado; o release **não declara suporte a Windows** nesta rodada. Condição de saída: `dfir-app engine-smoke` + `just e2e <evtx>` em Windows, conferindo o aviso esperado `SANDBOX_NOT_FULLY_APPLIED`;
 - `WAIVED` **aarch64** (`WVR-002`, mesma validade): provado só em x86_64;
-- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-025`);
+- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-026`);
+- `PASS` **RESULT persistido íntegro:** os leitores de timeline e analíticos exigem `items` array, com erro por linha e rollback na timeline; array vazio continua válido (`EVD-026`);
 - `PASS` **timeline sem commit parcial:** JSONL inválido ou profundidade excessiva falha com a linha e rollback preserva eventos/índice anteriores; o e2e confirma a timeline real válida (`EVD-025`);
 - `PASS` **Gap Analysis sem fechamento indevido:** payload inválido de um gap vigente falha antes da transação, sem nova linha ou superseding; o e2e confirma as dez lacunas válidas (`EVD-024`);
 - `PASS` **resultados analíticos sem perda silenciosa:** `payload` e `provenance` inválidos produzem erro específico nas leituras por evidência e incidente; o e2e confirma todos os resultados e documentos válidos (`EVD-023`);
