@@ -55,15 +55,13 @@ impl ExportState {
                 }
                 None => {}
             },
-            Some(Picked::Nothing) => {
-                if self.picker_for.take().as_deref() == Some(incident_id) {
-                    self.hint = Some(
-                        "Nenhum destino escolhido. Se o seletor não abriu, informe o caminho no campo abaixo."
-                            .into(),
-                    );
-                }
+            Some(Picked::Nothing) if self.picker_for.take().as_deref() == Some(incident_id) => {
+                self.hint = Some(
+                    "Nenhum destino escolhido. Se o seletor não abriu, informe o caminho no campo abaixo."
+                        .into(),
+                );
             }
-            None => {}
+            Some(Picked::Nothing) | None => {}
         }
         let clicked = ui
             .add_enabled(
@@ -199,6 +197,7 @@ mod tests {
         ));
         assert_eq!(harness.state().0.exporting_for.as_deref(), Some("inc-1"));
         assert!(harness.state().0.manual_path.is_empty());
+        harness.step();
         harness.get_by_label("Exportando…");
 
         harness

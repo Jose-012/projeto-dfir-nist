@@ -178,15 +178,13 @@ impl DeliverablesState {
                 }
                 None => {}
             },
-            Some(Picked::Nothing) => {
-                if self.picker_for.take().as_deref() == Some(incident_id) {
-                    self.picker_hint = Some(
-                        "Nenhuma pasta escolhida. Se o seletor não abriu, informe a pasta no campo abaixo."
-                            .into(),
-                    );
-                }
+            Some(Picked::Nothing) if self.picker_for.take().as_deref() == Some(incident_id) => {
+                self.picker_hint = Some(
+                    "Nenhuma pasta escolhida. Se o seletor não abriu, informe a pasta no campo abaixo."
+                        .into(),
+                );
             }
-            None => {}
+            Some(Picked::Nothing) | None => {}
         }
         ui.horizontal(|ui| {
             let preview_loading =
