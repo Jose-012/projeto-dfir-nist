@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - ajuste visual da GUI verificado (`EVD-014`)
+
+- No commit `26cc8b3`: removidos os emojis sem glifo das ações e da navegação, abas de incidentes passam a quebrar linha, profiles Current/Target usam IDs de scroll distintos e a tabela de evidências ganha scroll horizontal e linhas mais altas. Três testes de regressão cobrem glifos, abas estreitas e conflito de IDs.
+- Verificação no Linux x86_64 com Rust 1.100.0: fmt/check/clippy/doc-tests verdes, nextest 435 passed/1 skipped, supply chain verde, doc-gate PASS e e2e 110/110. Detalhes em `docs/evidence/2026-11-18-evd-014.txt`.
+- Nenhuma janela real foi aberta nesta rodada. Windows, Linux aarch64, incidente real e CI automático permanecem `PENDING-HUMAN`/`WAIVED`, sem promoção a `VERIFIED`.
+
 ## Unreleased — 2026-11-18 — verificação integrada final (`EVD-013`)
 
 - No commit `f8dd8c6`: doctor 0 erros/1 aviso (Python 3.13.5 versus referência 3.14.6); `just verify` com nextest 432 passed/1 skipped, doc-tests, fmt/check/clippy; `just supply-chain` verde com exceções documentadas; `just doc-gate` PASS; `just e2e tests/fixtures/senai-demo.evtx` 110/110. Artefato: `docs/evidence/2026-11-18-evd-013.txt`.

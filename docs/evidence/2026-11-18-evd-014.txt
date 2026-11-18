@@ -1,0 +1,44 @@
+EVD-014 - verificação integrada do ajuste visual da GUI
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T05:44Z..05:52Z
+commit-tree: 26cc8b38a10f5d4dadbc72f81ba418cf10458d7b
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151; cargo-audit 0.22.2; cargo-deny 0.20.2
+
+Escopo: commit 26cc8b3, posterior ao EVD-013, com remoção de glifos ausentes,
+quebra das abas de incidentes, IDs distintos de scroll nos profiles NIST e
+scroll horizontal/altura das linhas na tabela de evidências.
+
+cargo fmt --all -- --check
+  exit 0.
+
+cargo check --workspace --locked --all-targets
+  exit 0.
+
+cargo nextest run --workspace --locked
+  exit 0; 435 passed, 1 skipped.
+  Passaram os três novos testes: evidence_controls_do_not_depend_on_missing_emoji_fonts,
+  all_tabs_stay_inside_a_narrow_window e
+  current_and_target_profiles_do_not_reuse_the_same_scroll_area_id.
+
+cargo test --workspace --locked --doc
+  exit 0; doc-tests executados.
+
+cargo clippy --workspace --locked --all-targets --all-features -- -D warnings
+  exit 0.
+
+just supply-chain
+  exit 0. cargo audit --no-yanked e cargo deny --workspace check verdes com as
+  exceções já documentadas: WVR-004/RUSTSEC-2026-0459, RUSTSEC-2025-0141 e
+  RUSTSEC-2026-0543. deny: advisories ok, bans ok, licenses ok, sources ok.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required.
+
+Não houve alteração de código nesta verificação. O registro documental foi
+acrescentado depois dos comandos sobre o commit de código indicado acima.
+Não executado e não promovido: janela real nesta rodada, Windows x86_64,
+Linux aarch64, incidente real e CI automático. Esses itens permanecem
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.
