@@ -1,0 +1,51 @@
+EVD-029 - arrays de plano invalidos nao chegam aos entregaveis
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T08:49Z..08:58Z
+commit-tree: c0e94137d76dcb6502a10c6f2bccb1c05fc92648 (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-29/F1-07. plan_view aceitava finding_ids, nist_subcategories e
+depends_on com formas invalidas; o helper strings dos documentos os tratava como
+listas vazias e descartava elementos nao-string.
+
+Reproducao antes da correcao, sobre a arvore 562023c mais o teste novo:
+  cargo nextest run --locked malformed_plan_arrays_before_rendering
+    exit 100 esperado para a reproducao. Um item valido com achado recebeu uma
+    sucessora append-only com finding_ids string. collect e render_all concluiram
+    e o Entregavel 4 mostrou **Recomendacao geral** apesar do suporte declarado.
+    O log registra false general recommendation=true. Nao houve update de linhas.
+
+Correcao no commit c0e9413:
+  plan_view agora exige que cada um dos tres campos presentes seja array de
+  strings antes da ordenacao. Campo ausente permanece valido como lista legada
+  vazia. deliverables::collect propaga o erro antes de render_all; nenhuma
+  assinatura de renderer mudou e nenhum payload entra nos diagnosticos.
+
+Regressao depois da correcao:
+  cargo nextest run --locked malformed_plan_arrays_before_rendering
+    exit 0; 1 teste com tres casos: finding_ids string, nist_subcategories=[42]
+    e depends_on={}. Todos falham durante collect, antes da renderizacao.
+    A reproducao antes da correcao foi finding_ids; os outros dois casos foram
+    cobertura adicional executada depois.
+  cargo nextest run --locked plan_view_accepts_legacy_missing_array_fields
+    exit 0; os tres campos ausentes continuam permitindo plan_view.
+  cargo nextest run --locked plan_view_orders_items_and_reports_coverage_with_empty_domains
+    exit 0; ordenacao e cobertura validas continuam inalteradas.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 455 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  cinco documentos, hardening, determinismo e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa um item propositalmente invalido em banco descartavel;
+nao declara reparo automatico de dados legados nem execucao sobre incidente real.
+Supply chain nao foi repetido porque Cargo.lock nao mudou; EVD-020 permanece a
+execucao vigente. Nenhuma janela real nova foi aberta; o smoke anterior e EVD-020.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

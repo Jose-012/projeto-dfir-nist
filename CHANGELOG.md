@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - arrays de plano inválidos não chegam aos entregáveis (`EVD-029`)
+
+- `plan_view` aceitava `finding_ids`, `nist_subcategories` e `depends_on` malformados, e os documentos os convertiam em listas vazias. A reprodução gerou o Entregável 4 com a falsa frase **Recomendação geral** para um item com achado.
+- Os três campos presentes agora precisam ser arrays de strings antes da ordenação/coleta. Campo ausente continua legado vazio; os três casos inválidos falham antes de renderizar, sem mudar assinaturas dos renderizadores.
+- `EVD-029`: regressão real de collect/render, controles de legado e plano válido, `just verify` com 455 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-020`; nenhuma janela real nova foi aberta.
+
 ## Unreleased - 2026-11-18 - dependência de plano inválida não permite revisão (`EVD-028`)
 
 - `depends_on_of` convertia campo com tipo errado em lista vazia e descartava elementos não-string. Uma sucessora de B com `depends_on` string contendo A permitiu revisar A para depender de B, contornando a checagem de ciclo.

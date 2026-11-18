@@ -77,6 +77,8 @@ Ao indexar ou reindexar `results.jsonl`, JSON inválido ou profundidade acima de
 
 Ao revisar um item, a checagem de ciclos exige que `depends_on` presente nos itens vigentes seja um array de strings. Campo ausente continua representando a lista legada vazia; tipo errado ou elemento não-string falha antes de criar a revisão (`EVD-028`).
 
+`plan_view` aplica a mesma exigência a `finding_ids`, `nist_subcategories` e `depends_on` antes de ordenar os itens ou permitir `deliverables::collect`. Assim dados malformados não viram listas vazias nem uma falsa recomendação geral nos documentos; campos ausentes continuam válidos (`EVD-029`).
+
 ### `src/service/gaps.rs` — Lacunas de cobertura
 
 | Função | Parâmetros relevantes | Retorno | Descrição |
