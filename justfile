@@ -72,7 +72,7 @@ engine-smoke:
 # o binário `dfir-engine` no pacote `dfir-app` e falha (BUILD-01).
 e2e evtx:
     cargo build --locked -p dfir-app -p dfir-engine
-    python3 scripts/e2e_headless.py --evtx {{evtx}}
+    {{python}} scripts/e2e_headless.py --evtx {{evtx}}
 
 # Incidente de demonstração (F1-11): importa o .evtx, roda as análises reais e registra o cenário BEC sintético. Ver docs/DEMO.md.
 demo evtx:

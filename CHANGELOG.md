@@ -1,6 +1,11 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased — 2026-11-18 — plano de verificação externa e preparação do e2e multiplataforma
+
+- `docs/FASE1_BACKLOG.md` passou a listar comandos e evidências de saída para Windows x86_64, Linux aarch64 e incidente real, todos ainda `PENDING-HUMAN` sob os waivers existentes. CI permanece sem implementação porque não há repositório remoto; `WVR-003` continua vigente.
+- `just e2e` passou a usar `{{python}}`, escolhendo `python` no Windows e `python3` nas demais plataformas. Nenhuma execução Windows/aarch64/incidente real foi declarada.
+
 ## Unreleased — 2026-11-18 — skills locais mínimas para mudança e verificação
 
 - Criadas somente `.jcode/skills/dfir-change` e `.jcode/skills/dfir-verify`, com autoridade, edição cirúrgica, gates e evidência. Nenhuma skill genérica foi instalada. `skill_manage list` reconheceu 2 skills e ambas foram carregadas com sucesso.

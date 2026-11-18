@@ -14,6 +14,16 @@ Este arquivo lista somente trabalho remanescente. Estado de requisitos/tickets: 
 
 Nenhuma pista autoriza afirmar verificação em ambiente não executado. Fixture DEMO e testes sintéticos não substituem incidente real.
 
+## Critério de saída da pista A
+
+Quando o operador fornecer cada ambiente, registrar versões, comandos, resultados e novos `EVD-*` sem incluir nome ou conteúdo de evidências:
+
+- **Windows x86_64:** `just doctor`, `just verify`, `just e2e tests/fixtures/senai-demo.evtx` e `cargo run --locked --bin dfir-app -- engine-smoke`. Confirmar o aviso esperado `SANDBOX_NOT_FULLY_APPLIED`; não afirmar confinamento de arquivo/rede que ainda não existe nessa plataforma.
+- **Linux aarch64 nativo:** repetir os mesmos comandos e os testes de sandbox do workspace. Registrar arquitetura, kernel e estado efetivo do Landlock/seccomp; compilação cruzada não substitui execução.
+- **Incidente real:** usar cópia autorizada e sanitizada, preservar o original, registrar proveniência e executar o fluxo headless no volume protegido. Dados do caso, exports e logs brutos não entram no Git; a evidência registra somente métricas e resultados sanitizados.
+
+Essas execuções continuam `PENDING-HUMAN` até que os ambientes e o caso existam. Waivers vigentes não contam como verificação.
+
 ## Fora do escopo corrente
 
 Coleta ativa de rede, importação CSV/JSONL e formatos além de EVTX permanecem adiados por ADR-0025. Não reabrir esses itens sem decisão explícita do operador.
