@@ -254,40 +254,52 @@ impl IncidentsState {
                             ui.weak("Vincule na aba Evidências, nos detalhes da evidência.");
                             return;
                         }
-                        TableBuilder::new(ui)
-                            .striped(true)
-                            .column(Column::auto().at_least(140.0))
-                            .column(Column::auto().at_least(90.0))
-                            .column(Column::remainder().at_least(200.0))
-                            .header(20.0, |mut header| {
-                                header.col(|ui| {
-                                    ui.strong("ID");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Tratamento");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Nome lógico");
-                                });
-                            })
-                            .body(|mut body| {
-                                for item in items {
-                                    body.row(18.0, |mut row| {
-                                        row.col(|ui| {
-                                            ui.label(&item.id);
+                        let scroll_visibility = if ui.available_width() < 900.0 {
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible
+                        } else {
+                            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+                        };
+                        egui::ScrollArea::horizontal()
+                            .id_salt("incident_evidence_table_horizontal")
+                            .scroll_bar_visibility(scroll_visibility)
+                            .show(ui, |ui| {
+                                ui.set_width(ui.clip_rect().width().max(900.0));
+                                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                                TableBuilder::new(ui)
+                                    .striped(true)
+                                    .column(Column::auto().at_least(240.0))
+                                    .column(Column::auto().at_least(220.0))
+                                    .column(Column::auto().at_least(320.0))
+                                    .header(20.0, |mut header| {
+                                        header.col(|ui| {
+                                            ui.strong("ID");
                                         });
-                                        row.col(|ui| {
-                                            if item.is_analyzed_automatically() {
-                                                ui.label("analisada automaticamente");
-                                            } else {
-                                                ui.label("somente preservada");
-                                            }
+                                        header.col(|ui| {
+                                            ui.strong("Tratamento");
                                         });
-                                        row.col(|ui| {
-                                            ui.label(&item.original_filename);
+                                        header.col(|ui| {
+                                            ui.strong("Nome lógico");
                                         });
+                                    })
+                                    .body(|mut body| {
+                                        for item in items {
+                                            body.row(18.0, |mut row| {
+                                                row.col(|ui| {
+                                                    ui.label(&item.id);
+                                                });
+                                                row.col(|ui| {
+                                                    if item.is_analyzed_automatically() {
+                                                        ui.label("analisada automaticamente");
+                                                    } else {
+                                                        ui.label("somente preservada");
+                                                    }
+                                                });
+                                                row.col(|ui| {
+                                                    ui.label(&item.original_filename);
+                                                });
+                                            });
+                                        }
                                     });
-                                }
                             });
                     });
                 }
@@ -304,55 +316,68 @@ impl IncidentsState {
                             ui.label("Nenhum evento de auditoria para este incidente.");
                             return;
                         }
-                        TableBuilder::new(ui)
-                            .striped(true)
-                            .column(Column::auto().at_least(50.0))
-                            .column(Column::auto().at_least(130.0))
-                            .column(Column::auto().at_least(140.0))
-                            .column(Column::auto().at_least(90.0))
-                            .column(Column::remainder().at_least(220.0))
-                            .header(20.0, |mut header| {
-                                header.col(|ui| {
-                                    ui.strong("Seq");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Quando");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Ação");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Objeto");
-                                });
-                                header.col(|ui| {
-                                    ui.strong("Hash");
-                                });
-                            })
-                            .body(|mut body| {
-                                for event in events {
-                                    body.row(18.0, |mut row| {
-                                        row.col(|ui| {
-                                            ui.label(event.sequence.to_string());
+                        let scroll_visibility = if ui.available_width() < 960.0 {
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible
+                        } else {
+                            egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded
+                        };
+                        egui::ScrollArea::horizontal()
+                            .id_salt("incident_audit_table_horizontal")
+                            .scroll_bar_visibility(scroll_visibility)
+                            .show(ui, |ui| {
+                                ui.set_width(ui.clip_rect().width().max(960.0));
+                                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                                TableBuilder::new(ui)
+                                    .striped(true)
+                                    .column(Column::auto().at_least(64.0))
+                                    .column(Column::auto().at_least(180.0))
+                                    .column(Column::auto().at_least(220.0))
+                                    .column(Column::auto().at_least(200.0))
+                                    .column(Column::auto().at_least(140.0))
+                                    .header(20.0, |mut header| {
+                                        header.col(|ui| {
+                                            ui.strong("Seq");
                                         });
-                                        row.col(|ui| {
-                                            ui.label(&event.timestamp);
+                                        header.col(|ui| {
+                                            ui.strong("Quando");
                                         });
-                                        row.col(|ui| {
-                                            ui.label(&event.action);
+                                        header.col(|ui| {
+                                            ui.strong("Ação");
                                         });
-                                        row.col(|ui| {
-                                            ui.label(format!(
-                                                "{} {}",
-                                                event.object_type, event.object_id
-                                            ));
+                                        header.col(|ui| {
+                                            ui.strong("Objeto");
                                         });
-                                        row.col(|ui| {
-                                            ui.label(
-                                                &event.event_hash[..12.min(event.event_hash.len())],
-                                            );
+                                        header.col(|ui| {
+                                            ui.strong("Hash");
                                         });
+                                    })
+                                    .body(|mut body| {
+                                        for event in events {
+                                            body.row(18.0, |mut row| {
+                                                row.col(|ui| {
+                                                    ui.label(event.sequence.to_string());
+                                                });
+                                                row.col(|ui| {
+                                                    ui.label(&event.timestamp);
+                                                });
+                                                row.col(|ui| {
+                                                    ui.label(&event.action);
+                                                });
+                                                row.col(|ui| {
+                                                    ui.label(format!(
+                                                        "{} {}",
+                                                        event.object_type, event.object_id
+                                                    ));
+                                                });
+                                                row.col(|ui| {
+                                                    ui.label(
+                                                        &event.event_hash
+                                                            [..12.min(event.event_hash.len())],
+                                                    );
+                                                });
+                                            });
+                                        }
                                     });
-                                }
                             });
                         ui.small(format!("{} evento(s) neste incidente.", events.len()));
                     });
@@ -459,6 +484,92 @@ mod tests {
                 "aba {label:?} fora da viewport: {rect:?}"
             );
         }
+    }
+
+    #[test]
+    fn evidence_table_horizontal_scroll_reveals_the_last_column() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        state.tab = Tab::Evidence;
+        state.evidence = Loadable::Ready(vec![evidence("ev-1", "Security.evtx")]);
+        // 960 px da janela menos 180 px da navegação. O painel real da lista
+        // ocupa mais 260 px, deixando cerca de 520 px para o conteúdo.
+        let width = 780.0;
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(width, 600.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        let initial = harness.get_by_label("Nome lógico").rect();
+        assert!(
+            initial.max.x > width,
+            "a última coluna deve começar fora da viewport para provar o scroll: {initial:?}"
+        );
+        harness.get_by_label("ID").hover();
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(-600.0, 0.0),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Unknown,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run();
+
+        let revealed = harness.get_by_label("Nome lógico").rect();
+        assert!(
+            revealed.min.x < initial.min.x,
+            "o conteúdo não se moveu horizontalmente: antes={initial:?}, depois={revealed:?}"
+        );
+        assert!(
+            revealed.min.x >= 0.0 && revealed.max.x <= width,
+            "a última coluna não ficou visível após o scroll: {revealed:?}"
+        );
+    }
+
+    #[test]
+    fn audit_table_horizontal_scroll_reveals_the_last_column() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        state.tab = Tab::Audit;
+        state.audit = Loadable::Ready(vec![audit_event(1, "EVIDENCE_LINKED_TO_INCIDENT")]);
+        // Usa a mesma viewport mínima da regressão de evidências, incluindo
+        // a largura real do painel de lista dentro de IncidentsState::ui.
+        let width = 780.0;
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(width, 600.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        let initial = harness.get_by_label("Hash").rect();
+        assert!(
+            initial.max.x > width,
+            "a última coluna deve começar fora da viewport para provar o scroll: {initial:?}"
+        );
+        harness.get_by_label("Seq").hover();
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(-600.0, 0.0),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Unknown,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run();
+
+        let revealed = harness.get_by_label("Hash").rect();
+        assert!(
+            revealed.min.x < initial.min.x,
+            "o conteúdo não se moveu horizontalmente: antes={initial:?}, depois={revealed:?}"
+        );
+        assert!(
+            revealed.min.x >= 0.0 && revealed.max.x <= width,
+            "a última coluna não ficou visível após o scroll: {revealed:?}"
+        );
     }
 
     #[test]
