@@ -304,16 +304,22 @@ async fn depends_on_of(pool: &SqlitePool, id: &str) -> Result<(String, Vec<Strin
         .ok_or_else(|| validation_error(format!("plan item not found: {id}")))?;
     let payload: serde_json::Value = serde_json::from_str(&record.payload)
         .map_err(|err| validation_error(format!("plan item payload is not JSON: {err}")))?;
-    let dependencies = payload
-        .get("depends_on")
-        .and_then(|value| value.as_array())
-        .map(|items| {
+    let dependencies = match payload.get("depends_on") {
+        None => Vec::new(),
+        Some(value) => {
+            let items = value
+                .as_array()
+                .ok_or_else(|| validation_error("stored plan item depends_on is not an array"))?;
             items
                 .iter()
-                .filter_map(|item| item.as_str().map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default();
+                .map(|item| {
+                    item.as_str().map(str::to_string).ok_or_else(|| {
+                        validation_error("stored plan item depends_on contains a non-string id")
+                    })
+                })
+                .collect::<Result<Vec<_>, sqlx::Error>>()?
+        }
+    };
     Ok((record.correlation_key, dependencies))
 }
 
@@ -855,6 +861,112 @@ mod tests {
             .await
             .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn revision_rejects_malformed_stored_plan_dependencies() {
+        let pool = test_pool().await;
+
+        for (case, expected) in [
+            ("shape", "stored plan item depends_on is not an array"),
+            (
+                "non_string",
+                "stored plan item depends_on contains a non-string id",
+            ),
+        ] {
+            let incident_id = format!("inc-bad-dependency-{case}");
+            seed_incident(&pool, &incident_id).await;
+            let a = insert_plan_item(&pool, item(&incident_id, "A"))
+                .await
+                .expect("A");
+            let a_ids = [a.as_str()];
+            let b = insert_plan_item(
+                &pool,
+                NewPlanItem {
+                    depends_on: &a_ids,
+                    ..item(&incident_id, "B depends on A")
+                },
+            )
+            .await
+            .expect("B");
+            let b_record = analytical_results::get(&pool, &b)
+                .await
+                .expect("get B")
+                .expect("B exists");
+            let bad_id = format!("bad-dependency-{case}");
+            let bad_payload = if case == "shape" {
+                serde_json::json!({"depends_on": a})
+            } else {
+                serde_json::json!({"depends_on": [42]})
+            };
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES(?,'analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+                .bind(&bad_id)
+                .bind(&b_record.correlation_key)
+                .bind(&incident_id)
+                .bind(bad_payload.to_string())
+                .bind("{}")
+                .bind(&b)
+                .execute(&pool)
+                .await
+                .expect("malformed current dependency fixture");
+
+            let bad_ids = [bad_id.as_str()];
+            let error = insert_plan_item(
+                &pool,
+                NewPlanItem {
+                    supersedes: Some(&a),
+                    depends_on: &bad_ids,
+                    ..item(&incident_id, "A revised through malformed B")
+                },
+            )
+            .await
+            .expect_err("malformed dependency allowed a cycle-forming revision");
+            assert!(
+                error.to_string().contains(expected),
+                "unexpected error for {case}: {error:?}"
+            );
+
+            let a_record = analytical_results::get(&pool, &a)
+                .await
+                .expect("get A")
+                .expect("A exists");
+            let current_a =
+                analytical_results::current_for_correlation_key(&pool, &a_record.correlation_key)
+                    .await
+                    .expect("current A query")
+                    .expect("A remains current");
+            assert_eq!(current_a.id, a, "no A successor allowed for {case}");
+            let current_b =
+                analytical_results::current_for_correlation_key(&pool, &b_record.correlation_key)
+                    .await
+                    .expect("current B query")
+                    .expect("malformed B remains current");
+            assert_eq!(current_b.id, bad_id);
+            let a_versions: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM analytical_results WHERE correlation_key=?",
+            )
+            .bind(&a_record.correlation_key)
+            .fetch_one(&pool)
+            .await
+            .expect("A history count");
+            assert_eq!(a_versions, 1, "no A revision allowed for {case}");
+        }
+    }
+
+    #[tokio::test]
+    async fn depends_on_of_accepts_legacy_missing_field() {
+        let pool = test_pool().await;
+        seed_incident(&pool, "inc-legacy-dependency").await;
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,created_at) VALUES('legacy-dependency','analytical-result-v1','PLAN_ITEM','plan:legacy','inc-legacy-dependency','{}','{}','2026-10-03T00:00:00Z')")
+            .execute(&pool)
+            .await
+            .expect("legacy dependency fixture");
+
+        let (correlation_key, dependencies) = depends_on_of(&pool, "legacy-dependency")
+            .await
+            .expect("missing depends_on is a legacy empty list");
+        assert_eq!(correlation_key, "plan:legacy");
+        assert!(dependencies.is_empty());
     }
 
     #[tokio::test]
