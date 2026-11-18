@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - warnings de análise não desaparecem em JSON inválido (`EVD-021`)
+
+- Antes da correção, `timeline_page_core` retornava `COMPLETED`, `warning_count: 1` e `warnings: []` tanto para JSON inválido quanto para um array vazio divergente. `JobStatusResponse` agora rejeita JSON inválido, contagem negativa e contagem divergente com diagnóstico específico.
+- A serialização perdeu o fallback `[]` e passou para a transação que já faz rollback e marca o job como `FAILED`. Jobs legados com `warnings = NULL` e contagem zero continuam válidos.
+- `EVD-021`: três testes focados, `just verify` com 442 passed/1 skipped, e2e 110/110 com os dois avisos do EVTX truncado persistidos, e doc-gate PASS. Supply chain permanece em `EVD-020`; nenhuma janela real nova foi aberta.
+
 ## Unreleased - 2026-11-18 - JSON inválido de candidatos falha fechado (`EVD-020`)
 
 - Reprodução anterior à correção: `event_refs` ou IOCs persistidos com JSON inválido eram convertidos em listas vazias. A confirmação era aceita; no caso de IOCs, retornava `ioc_ids: []` após criar mapeamento e achado.

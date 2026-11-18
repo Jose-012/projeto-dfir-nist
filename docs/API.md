@@ -28,6 +28,8 @@ Convenções: o primeiro parâmetro de quase todas as funções é `services: &A
 | `async list_incidents` | `—` | `AppResult<Vec<IncidentResponse>>` | — |
 | `async diagnostics_report` | `db: &SqlitePool, paths: &StoragePaths, settings: serde_json::Value` | `AppResult<serde_json::Value>` | Relatório de diagnóstico para suporte (ADR-0022): versões, contagens do banco, falhas recentes por **código**, espaço livre e arquivos de log. |
 
+`timeline_page` falha fechado quando os warnings persistidos contêm JSON inválido, `warning_count` negativo ou contagem divergente do array. `warnings = NULL` com contagem zero continua válido para jobs legados; nenhum detalhe inválido vira lista vazia (`EVD-021`).
+
 ### `src/service/detection.rs` — Detecção por regras e candidatos (ADR-0025)
 
 | Função | Parâmetros relevantes | Retorno | Descrição |

@@ -1,0 +1,51 @@
+EVD-021 - warnings persistidos de analysis job falham fechado
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T06:55Z..07:05Z
+commit-tree: f915d11c59ac8dec08f55432f677de3537eefa84 (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: AUD-04/AUD-36, F1-17/F1-18. JobStatusResponse convertia JSON invalido
+de analysis_jobs.warnings em uma lista vazia e nao validava warning_count.
+
+Reproducao antes da correcao, sobre a arvore 33727a8 mais os dois testes novos:
+  cargo nextest run --locked timeline_page_rejects_malformed_stored_job_warnings
+    exit 100 esperado para a reproducao. timeline_page_core retornou sucesso com
+    status COMPLETED, warning_count=1 e warnings=[] apesar de warnings='not-json'.
+  cargo nextest run --locked timeline_page_rejects_inconsistent_stored_job_warning_count
+    exit 100 esperado para a reproducao. O primeiro caso retornou sucesso com
+    warning_count=1 e warnings=[], sem detectar a divergencia.
+
+Correcao no commit f915d11:
+  JobStatusResponse usa TryFrom<JobRow> com AppError::Config especifico para JSON
+  invalido, warning_count negativo e divergencia entre a contagem e o array.
+  None com contagem zero continua valido para jobs anteriores a migration 0009.
+  timeline_page_core propaga o erro em vez de apagar os detalhes do aviso.
+  A serializacao de warnings nao tem fallback []; ela ocorre dentro da transacao
+  existente que faz rollback, marca o job FAILED e propaga o erro de persistencia.
+
+Regressao depois da correcao:
+  cargo nextest run --locked job_warning
+    exit 0; 3 passed, 319 skipped. Cobre JSON invalido, count=1 com array vazio,
+    count=-1, e o caminho valido existente com EVTX_TRUNCATED/count=1.
+  Outras regressoes de timeline da suite usam None/count zero e continuam verdes.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 442 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required.
+  O EVTX truncado concluiu com EVTX_RECORDS_MISSING e EVTX_TRUNCATED; o job
+  persistiu os dois avisos, confirmando warning_count=2 e os detalhes no fluxo real.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a falha de serializacao de Vec<JobWarning> nao foi injetada; sua mudanca
+usa o caminho de erro transacional ja existente. As regressoes reproduzidas e
+executadas cobrem a leitura de dados persistidos invalidos e o fluxo real valido.
+Supply chain nao foi repetido porque Cargo.lock nao mudou; EVD-020 permanece a
+execucao vigente. Nenhuma janela real nova foi aberta; o smoke anterior e EVD-020.
+Dados legados invalidos agora geram erro, sem reparo automatico declarado.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

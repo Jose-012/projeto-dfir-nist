@@ -30,10 +30,12 @@ O release é fechado somente com evidência executada.
 > **Atualização 2026-11-18 (janela real isolada e gates finais da GUI).** No commit `dcae49a`, `EVD-019`: a janela real permaneceu aberta até o timeout de 25 s com `DFIR_DATA_ROOT` isolado. O log registrou o adaptador Intel GL e não contém avisos de fonte/glyph/ScrollArea ID nem nomes de fixture. Supply chain verde, e2e 110/110 e doc-gate PASS. Não se declara navegação manual ou verificação externa nova.
 >
 > **Atualização 2026-11-18 (integridade dos candidatos de detecção).** No commit `1d39401`, `EVD-020`: antes da correção, duas reproduções confirmavam candidatos com `event_refs` ou IOCs JSON inválidos; IOCs inválidos retornavam `ioc_ids: []`. Agora listagem e confirmação propagam erro específico e a confirmação valida ambos antes de qualquer escrita analítica. `just verify` terminou com 440 passed/1 skipped, e2e 110/110, supply chain e doc-gate verdes. Novo smoke real de 25 s terminou em 124 esperado com log isolado limpo. Não se declara reparo de dados legados, navegação manual ou verificação externa nova.
+>
+> **Atualização 2026-11-18 (integridade dos warnings de análise).** No commit `f915d11`, `EVD-021`: as reproduções retornavam `warning_count: 1` e `warnings: []` para JSON inválido e para contagem divergente. Agora a leitura rejeita JSON inválido, contagem negativa/divergente, e a escrita não tem fallback vazio. `just verify` terminou com 442 passed/1 skipped, e2e 110/110 com os dois avisos do EVTX truncado persistidos, e doc-gate PASS. Supply chain não foi repetido e permanece em `EVD-020`; nenhuma janela real nova ou reparo legado foi declarado.
 
 ## Gate documental
 
-Estado: `PASS` em 2026-11-18 (`EVD-020`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-18 (`EVD-021`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -44,7 +46,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-020`, nextest 440 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-021`, nextest 442 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -81,7 +83,8 @@ cargo audit
 - `PASS` **contenção do engine provada com o engine de verdade** (ADR-0024): `cargo test --locked --workspace` (inclui `engine/tests/sandbox.rs`, que exige `EACCES`/`EPERM` onde devido e tem controle com a política `off`) e `scripts/e2e_headless.py` (repete a prova sobre o EVTX real) — `EVD-005`, `EVD-006`. **Rodar sempre pelo workspace**: `cargo test -p dfir-engine` não unifica as features do tokio e esconde falhas do runtime sob seccomp. Em Linux sem Landlock os testes de enforcement avisam e saem: o release no Linux **não** pode ser fechado nesse ambiente;
 - `WAIVED` **Windows** (`WVR-001`, aprovado pelo operador em 2026-11-14, válido até 2026-12-31): o Job Object só foi compilado; o release **não declara suporte a Windows** nesta rodada. Condição de saída: `dfir-app engine-smoke` + `just e2e <evtx>` em Windows, conferindo o aviso esperado `SANDBOX_NOT_FULLY_APPLIED`;
 - `WAIVED` **aarch64** (`WVR-002`, mesma validade): provado só em x86_64;
-- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-020`);
+- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-021`);
+- `PASS` **warnings de análise:** o e2e persiste os dois avisos do EVTX truncado; `EVD-021` também prova que JSON inválido e `warning_count` negativo/divergente falham em vez de apagar os detalhes;
 - `PASS` **candidatos de detecção:** o e2e confirma que os candidatos nascem pendentes, que só a confirmação cria achado, que rejeitar exige motivo e que nova execução não duplica; `EVD-020` também prova que JSON persistido inválido falha antes das escritas analíticas;
 - `PASS` **cópia antes de migration (RF-032):** `cargo test` cobre a cópia, a verificação, a recusa por falta de espaço e a adulteração (`EVD-005`); a execução real sobre dados reais aconteceu no e2e (`EVD-006`); política de retenção de `backups/` documentada em `docs/OPERATION.md` §3.1.1;
 - SQLite local e staging com retenção definida.
