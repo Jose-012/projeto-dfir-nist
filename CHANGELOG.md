@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - verificação ambiental final (`EVD-032`)
+
+- Sem mudança de código sobre `7080dd5`: `just supply-chain` passou com as exceções já documentadas; `cargo deny --workspace check` terminou com advisories/bans/licenses/sources OK.
+- Uma janela real isolada permaneceu aberta por 25 s até o timeout 124 esperado, com backend Gl/Mesa Intel. O log não teve diagnósticos de fonte/glyph/scroll nem nomes de fixtures. Não houve navegação manual ou incidente real.
+- `just verify` e e2e não foram repetidos; permanecem em `EVD-031` com 457 passed/1 skipped e 110/110. Doc-gate PASS.
+
 ## Unreleased - 2026-11-18 - Finding inválido não desaparece da matriz de risco (`EVD-031`)
 
 - `findings_view` descartava silenciosamente achados com severidade/confiança persistida inválida. A reprodução com `SEVERE` gerou o Entregável 2 com um achado, zero células de risco e linha CRITICAL zerada.

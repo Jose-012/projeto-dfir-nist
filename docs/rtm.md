@@ -41,7 +41,7 @@ A implementação abaixo pertence à base já concluída e não redefine os `RF-
 | F1-12 | RF-014, RF-030, RF-032, RF-047 + RFs MVP restantes | Release candidate e reconciliação | PARCIAL (documentos reconciliados em 2026-10-27; RF-032 automático; F1-26 e F1-28 implementados; RF-049 adiado por decisão do operador; **pendentes:** CI no toolchain pinado (F1-14), ~~`cargo audit` (F1-15)~~ [executado em 2026-10-29, ver a linha F1-15; nota de 2026-11-04, Gap origem: INC-03], execução em Windows e em incidente real) |
 | F1-13 | RF-047 | Lock regenerado e compilação corrigida | IMPLEMENTED / PENDING-HUMAN |
 | F1-14 | (gates) | Baseline de verificação e CI | PARCIAL (2026-11-18: `just verify` com 457 passed/1 skipped em **1.100.0**, `EVD-031`; e2e 110/110 em `EVD-031`; CI automático não implementado e `WAIVED` por `WVR-003` até 2026-12-31) |
-| F1-15 | (supply chain) | Supply chain da árvore de UI | PARCIAL (2026-11-18: `cargo audit` e `cargo deny --workspace check` verdes em `EVD-020`; uma vulnerabilidade aceita por `WVR-004` e duas exceções informativas documentadas; manual, sem CI (`WVR-003`); `cargo vet` dispensado no MVP; exceções informativas da UI removidas do grafo com eframe 0.37.0 sem accesskit) |
+| F1-15 | (supply chain) | Supply chain da árvore de UI | PARCIAL (2026-11-18: `cargo audit` e `cargo deny --workspace check` verdes em `EVD-032`; uma vulnerabilidade aceita por `WVR-004` e duas exceções informativas documentadas; manual, sem CI (`WVR-003`); `cargo vet` dispensado no MVP; exceções informativas da UI removidas do grafo com eframe 0.37.0 sem accesskit) |
 | F1-16 | RF-005, RF-006 | Fixtures EVTX e testes de integração | VERIFIED (2026-11-15, `EVD-011`): fixture EVTX sanitizada versionada `tests/fixtures/senai-demo.evtx` (determinística) e e2e 110/110 sem arquivo externo |
 | F1-17 | RF-006 | Erros de parsing persistidos | IMPLEMENTED / PENDING-HUMAN (ADR-0021; `EVD-021`: warnings persistidos com JSON inválido ou contagem negativa/divergente falham em vez de virar lista vazia) |
 | F1-18 | RF-007, RF-046 | Timeline persistida e filtrável | IMPLEMENTED / PENDING-HUMAN (ADR-0020/0021/0025; filtros estruturados `campo:valor` implementados; `EVD-025`/`EVD-026`: JSONL inválido, profundidade excessiva ou `items` ausente/não-array falha com rollback; array vazio continua válido) |
@@ -61,7 +61,7 @@ A implementação abaixo pertence à base já concluída e não redefine os `RF-
 | F1-32 | RF-055 | Redação de dados pessoais | IMPLEMENTED / PENDING-HUMAN (ADR-0023; testado em rustc 1.97.1 em 2026-10-27) |
 | F1-33 | RF-046 | Estado da GUI/UX | VERIFIED (2026-11-15, `EVD-010`): AUD-32 corrigido — YARA não sobrescreve a timeline (só análise EVTX recarrega eventos); teste próprio em `src/gui/evidence.rs` |
 | F1-34 | Enabler (sem RF próprio; ADR-0019) | CLI headless fina e teste ponta a ponta | IMPLEMENTED / PENDING-HUMAN |
-| F1-35 | Enabler (sem RF próprio; ADR-0022) | Observabilidade e testes de GUI | IMPLEMENTED / PENDING-HUMAN |
+| F1-35 | Enabler (sem RF próprio; ADR-0022) | Observabilidade e testes de GUI | IMPLEMENTED / PENDING-HUMAN (`EVD-032`: janela real isolada aberta por 25 s com backend Gl/Mesa e log sem fonte/glyph/scroll ou fixtures; sem navegação manual) |
 
 Backlog detalhado: `docs/FASE1_BACKLOG.md`. Tickets locais: `.scratch/fase1-backlog/issues/`. Rastreabilidade demanda → RF → ticket: `docs/DEMAND_TRACE.md`.
 
