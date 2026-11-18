@@ -2,7 +2,9 @@
 //! subcategoria) e execução/visualização da Gap Analysis (F1-03).
 
 use super::backend::{Backend, Command};
-use super::{IMPLEMENTATION_STATUS_OPTIONS, Loadable, TIER_OPTIONS, enum_combo, non_empty};
+use super::{
+    IMPLEMENTATION_STATUS_OPTIONS, Loadable, TIER_OPTIONS, enum_combo, non_empty, str_field,
+};
 use crate::persistence::nist_functions::GapAnalysisState;
 use crate::persistence::nist_profiles::ProfileType;
 use crate::service::AnalyticalResultResponse;
@@ -40,6 +42,52 @@ impl Default for ProfileForm {
             entries: vec![EntryForm::default()],
         }
     }
+}
+
+fn gap_ui(ui: &mut egui::Ui, gap: &AnalyticalResultResponse) {
+    let payload = &gap.payload;
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+
+        let id = str_field(payload, "subcategory_id");
+        let label = str_field(payload, "subcategory_label");
+        if label.is_empty() {
+            ui.strong(id);
+        } else {
+            ui.strong(format!("{id} — {label}"));
+        }
+
+        if str_field(payload, "status") == "CLOSED" {
+            ui.label("Situação: CLOSED");
+            ui.label(format!(
+                "Motivo do fechamento: {}",
+                str_field(payload, "closed_reason")
+            ));
+            ui.label(format!(
+                "Status atual na resolução: {}",
+                str_field(payload, "resolved_current_status")
+            ));
+        } else {
+            ui.label(format!(
+                "Status atual: {}",
+                str_field(payload, "current_status")
+            ));
+            ui.label(format!(
+                "Status alvo: {}",
+                str_field(payload, "target_status")
+            ));
+            ui.label(format!("Prioridade: {}", str_field(payload, "priority")));
+            ui.label(format!(
+                "Nível de risco: {}",
+                str_field(payload, "risk_level")
+            ));
+        }
+        ui.label(format!(
+            "Confiança: {}",
+            gap.confidence.as_deref().unwrap_or("não informada")
+        ));
+    });
 }
 
 pub struct NistState {
@@ -218,9 +266,7 @@ impl NistState {
                 return;
             }
             for gap in items {
-                ui.group(|ui| {
-                    ui.label(gap.payload.to_string());
-                });
+                gap_ui(ui, gap);
             }
         });
 
@@ -470,12 +516,13 @@ fn function_section(ui: &mut egui::Ui, loadable: &Loadable<NistFunctionView>) {
 /// Testes da seção com `egui_kittest` (ADR-0022).
 #[cfg(test)]
 mod ui_tests {
-    use super::{NistState, function_section};
+    use super::{NistState, function_section, gap_ui};
     use crate::gui::Loadable;
     use crate::gui::backend::{Backend, Command};
     use crate::gui::test_harness::drain;
     use crate::persistence::nist_functions::{GapAnalysisState, summarize_by_function};
     use crate::persistence::nist_profiles::{ProfileEntryRecord, ProfileType};
+    use crate::service::AnalyticalResultResponse;
     use crate::service::nist::{
         NistFunctionView, ProfileHistoryView, ProfileSummary, ProfileVersionView,
     };
@@ -540,6 +587,97 @@ mod ui_tests {
                 }],
             }],
         }
+    }
+
+    fn gap(payload: serde_json::Value) -> AnalyticalResultResponse {
+        AnalyticalResultResponse {
+            id: "gap-1".into(),
+            result_type: "NIST_GAP".into(),
+            correlation_key: "nist-gap:inc-1:PR.AA-01".into(),
+            evidence_id: None,
+            incident_id: Some("inc-1".into()),
+            analysis_job_id: None,
+            rule_or_model_id: Some("nist-csf-2.0-gap".into()),
+            rule_or_model_version: Some("1".into()),
+            confidence: Some("HIGH".into()),
+            payload,
+            provenance: serde_json::Value::Null,
+            supersedes: None,
+            created_at: "2026-10-16T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn gap_analysis_shows_structured_fields_and_long_label_instead_of_raw_json() {
+        let (backend, _commands) = Backend::for_test();
+        let subcategory_label = "Identidades, credenciais e acessos de usuários, serviços e dispositivos são gerenciados durante todo o ciclo de vida, com revisões periódicas documentadas e privilégios compatíveis com a função de cada titular";
+        let payload = serde_json::json!({
+            "kind": "NIST_GAP",
+            "subcategory_id": "PR.AA-01",
+            "subcategory_label": subcategory_label,
+            "current_status": "PARTIALLY_IMPLEMENTED",
+            "target_status": "IMPLEMENTED",
+            "priority": "MEDIUM",
+            "risk_level": "MEDIUM"
+        });
+        let raw_payload = payload.to_string();
+        let mut state = loaded_state(GapAnalysisState::UpToDate);
+        state.gaps = Loadable::Ready(vec![gap(payload)]);
+        let mut harness = harness(state, backend);
+        harness.run();
+
+        for label in [
+            format!("PR.AA-01 — {subcategory_label}"),
+            "Status atual: PARTIALLY_IMPLEMENTED".into(),
+            "Status alvo: IMPLEMENTED".into(),
+            "Prioridade: MEDIUM".into(),
+            "Nível de risco: MEDIUM".into(),
+            "Confiança: HIGH".into(),
+        ] {
+            harness.get_by_label(label.as_str());
+        }
+        assert!(
+            harness.query_by_label(raw_payload.as_str()).is_none(),
+            "o payload JSON minificado não deve ser exibido"
+        );
+        assert!(
+            harness
+                .query_by_label_contains("\"current_status\":")
+                .is_none(),
+            "nenhuma chave JSON bruta deve virar interface"
+        );
+    }
+
+    #[test]
+    fn closed_gap_keeps_its_resolution_fields_structured() {
+        let payload = serde_json::json!({
+            "kind": "NIST_GAP",
+            "status": "CLOSED",
+            "closed_reason": "target_met",
+            "subcategory_id": "PR.AA-01",
+            "subcategory_label": "Identidades e credenciais gerenciadas",
+            "resolved_current_status": "IMPLEMENTED"
+        });
+        let raw_payload = payload.to_string();
+        let item = gap(payload);
+        let mut harness = crate::gui::test_harness::builder().build_ui(move |ui| gap_ui(ui, &item));
+        harness.run();
+
+        for label in [
+            "PR.AA-01 — Identidades e credenciais gerenciadas",
+            "Situação: CLOSED",
+            "Motivo do fechamento: target_met",
+            "Status atual na resolução: IMPLEMENTED",
+            "Confiança: HIGH",
+        ] {
+            harness.get_by_label(label);
+        }
+        assert!(harness.query_by_label(raw_payload.as_str()).is_none());
+        assert!(
+            harness
+                .query_by_label_contains("\"closed_reason\":")
+                .is_none()
+        );
     }
 
     #[test]

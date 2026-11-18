@@ -2,7 +2,8 @@
 //! `SEQUENCE_NEXT` entre eles (F1-04).
 
 use super::backend::{Backend, Command};
-use super::{CONFIDENCE_OPTIONS, Loadable, enum_combo, non_empty};
+use super::{CONFIDENCE_OPTIONS, Loadable, enum_combo, non_empty, str_field};
+use crate::service::AnalyticalResultResponse;
 use crate::service::findings::CriticalPathView;
 
 #[derive(Default)]
@@ -18,6 +19,38 @@ struct StageForm {
 struct LinkForm {
     from_stage_id: String,
     to_stage_id: String,
+}
+
+fn stage_ui(ui: &mut egui::Ui, stage: &AnalyticalResultResponse) {
+    let payload = &stage.payload;
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+
+        ui.horizontal_wrapped(|ui| {
+            ui.strong(format!("#{}", stage.id));
+            let sequence = payload
+                .get("sequence_index")
+                .and_then(serde_json::Value::as_i64)
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "não informada".into());
+            ui.label(format!("Sequência: {sequence}"));
+            ui.label(format!(
+                "Confiança: {}",
+                stage.confidence.as_deref().unwrap_or("não informada")
+            ));
+        });
+        ui.strong(str_field(payload, "stage_label"));
+        ui.label(format!("Base analítica: {}", str_field(payload, "basis")));
+        ui.label(format!(
+            "Evidência: {}",
+            stage.evidence_id.as_deref().unwrap_or("não vinculada")
+        ));
+        ui.label(format!(
+            "Situação da evidência: {}",
+            str_field(payload, "evidence_status")
+        ));
+    });
 }
 
 pub struct CriticalPathState {
@@ -104,12 +137,7 @@ impl CriticalPathState {
                 ui.label("Nenhum estágio ainda.");
             } else {
                 for stage in &graph.stages {
-                    ui.group(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.strong(format!("#{}", stage.id));
-                            ui.small(stage.payload.to_string());
-                        });
-                    });
+                    stage_ui(ui, stage);
                 }
                 ui.label(format!("{} ligações (SEQUENCE_NEXT):", graph.edges.len()));
                 for edge in &graph.edges {
@@ -188,5 +216,88 @@ impl CriticalPathState {
                 ui.spinner();
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod ui_tests {
+    use super::CriticalPathState;
+    use crate::gui::Loadable;
+    use crate::gui::backend::Backend;
+    use crate::service::AnalyticalResultResponse;
+    use crate::service::findings::CriticalPathView;
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    type State = (CriticalPathState, Backend);
+
+    fn stage(payload: serde_json::Value) -> AnalyticalResultResponse {
+        AnalyticalResultResponse {
+            id: "stage-1".into(),
+            result_type: "CRITICAL_PATH_LINK".into(),
+            correlation_key: "critical-path-stage:inc-1:7".into(),
+            evidence_id: Some("ev-42".into()),
+            incident_id: Some("inc-1".into()),
+            analysis_job_id: None,
+            rule_or_model_id: None,
+            rule_or_model_version: None,
+            confidence: Some("HIGH".into()),
+            payload,
+            provenance: serde_json::Value::Null,
+            supersedes: None,
+            created_at: "2026-10-16T00:00:00Z".into(),
+        }
+    }
+
+    fn harness_for(state: CriticalPathState, backend: Backend) -> Harness<'static, State> {
+        crate::gui::test_harness::builder()
+            .with_size(egui::vec2(760.0, 1300.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, "inc-1", backend),
+                (state, backend),
+            )
+    }
+
+    #[test]
+    fn loaded_stage_shows_structured_fields_and_long_basis_instead_of_raw_json() {
+        let (backend, _commands) = Backend::for_test();
+        let basis = "Os eventos de logon, a alteração das regras de caixa e a execução do PowerShell foram correlacionados pela mesma conta administrativa e pela janela do incidente, com a evidência original preservada e revisada pelo analista antes do vínculo ao caminho crítico.";
+        let payload = serde_json::json!({
+            "kind": "CRITICAL_PATH_STAGE",
+            "sequence_index": 7,
+            "stage_label": "Credencial capturada e login anômalo na caixa do financeiro",
+            "basis": basis,
+            "evidence_status": "DOCUMENTED"
+        });
+        let raw_payload = payload.to_string();
+        let state = CriticalPathState {
+            loaded_for: Some("inc-1".into()),
+            graph: Loadable::Ready(CriticalPathView {
+                stages: vec![stage(payload)],
+                edges: vec![],
+            }),
+            ..CriticalPathState::default()
+        };
+        let mut harness = harness_for(state, backend);
+        harness.run();
+
+        for label in [
+            "#stage-1".to_string(),
+            "Sequência: 7".into(),
+            "Confiança: HIGH".into(),
+            "Credencial capturada e login anômalo na caixa do financeiro".into(),
+            format!("Base analítica: {basis}"),
+            "Evidência: ev-42".into(),
+            "Situação da evidência: DOCUMENTED".into(),
+        ] {
+            harness.get_by_label(label.as_str());
+        }
+        assert!(
+            harness.query_by_label(raw_payload.as_str()).is_none(),
+            "o payload JSON minificado não deve ser exibido"
+        );
+        assert!(
+            harness.query_by_label_contains("\"basis\":").is_none(),
+            "nenhuma chave JSON bruta deve virar interface"
+        );
     }
 }

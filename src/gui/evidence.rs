@@ -3,11 +3,11 @@
 //! resultados (timeline de eventos EVTX, matches YARA). Porta funcional do
 //! antigo `frontend/src/app.ts` + `timeline.ts`, sem o transporte HTTP.
 
-use super::Loadable;
 use super::backend::{Backend, Command};
 use super::detection::DetectionState;
 use super::file_dialog::{FilePicker, Picked, Request};
 use super::timeline::{PAGE_SIZE, TimelineView};
+use super::{Loadable, str_field};
 use crate::persistence::audit::CustodyEntry;
 use crate::service::provenance::EvidenceProvenance;
 use crate::service::{
@@ -78,6 +78,130 @@ pub struct EvidenceState {
     pending_link: Option<(String, String)>,
     /// Mensagem curta do último vínculo (sucesso ou erro).
     link_notice: Option<String>,
+}
+
+fn yara_number_field(payload: &serde_json::Value, key: &str) -> String {
+    payload
+        .get(key)
+        .and_then(serde_json::Value::as_u64)
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "não informado".into())
+}
+
+fn yara_result_ui(ui: &mut egui::Ui, item: &AnalyticalResultResponse) {
+    let payload = &item.payload;
+    ui.group(|ui| {
+        ui.set_width(ui.available_width());
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+
+        ui.horizontal_wrapped(|ui| {
+            ui.strong(&item.result_type);
+            if let Some(rule) = &item.rule_or_model_id {
+                ui.label(format!("regra: {rule}"));
+            }
+            if let Some(confidence) = &item.confidence {
+                ui.label(format!("confiança: {confidence}"));
+            }
+        });
+
+        let severity = str_field(payload, "severity");
+        ui.label(format!(
+            "Severidade: {}",
+            if severity.is_empty() {
+                "não informada"
+            } else {
+                severity
+            }
+        ));
+        let description = str_field(payload, "description");
+        ui.label(format!(
+            "Descrição: {}",
+            if description.is_empty() {
+                "não informada"
+            } else {
+                description
+            }
+        ));
+        let reference = str_field(payload, "reference");
+        ui.label(format!(
+            "Referência: {}",
+            if reference.is_empty() {
+                "não informada"
+            } else {
+                reference
+            }
+        ));
+        ui.label(format!("Namespace: {}", str_field(payload, "namespace")));
+        ui.label(format!(
+            "Ruleset: {} · versão {}",
+            str_field(payload, "ruleset_id"),
+            str_field(payload, "ruleset_version")
+        ));
+        ui.label(format!(
+            "SHA-256 do ruleset: {}",
+            str_field(payload, "ruleset_sha256")
+        ));
+        ui.label(format!(
+            "Licença do ruleset: {}",
+            str_field(payload, "ruleset_license")
+        ));
+        ui.label(format!(
+            "Origem do ruleset: {}",
+            str_field(payload, "ruleset_source_origin")
+        ));
+        ui.label(format!(
+            "Compatibilidade do engine: {}",
+            str_field(payload, "engine_compatibility")
+        ));
+        ui.label(format!(
+            "Referência da evidência: {}",
+            str_field(payload, "evidence_id")
+        ));
+
+        if let Some(patterns) = payload
+            .get("matched_patterns")
+            .and_then(serde_json::Value::as_array)
+        {
+            ui.separator();
+            ui.strong(format!("Ocorrências detalhadas ({})", patterns.len()));
+            for pattern in patterns {
+                ui.label(format!(
+                    "Padrão {} · offset {} · comprimento {}",
+                    str_field(pattern, "pattern_id"),
+                    yara_number_field(pattern, "offset"),
+                    yara_number_field(pattern, "length")
+                ));
+            }
+        }
+        if let Some(counts) = payload
+            .get("pattern_match_counts")
+            .and_then(serde_json::Value::as_array)
+        {
+            ui.label("Contagens por padrão:");
+            for count in counts {
+                ui.label(format!(
+                    "{}: {} total(is), {} exibida(s)",
+                    str_field(count, "pattern_id"),
+                    yara_number_field(count, "total_matches"),
+                    yara_number_field(count, "reported_matches")
+                ));
+            }
+        }
+        match payload
+            .get("matches_truncated")
+            .and_then(serde_json::Value::as_bool)
+        {
+            Some(true) => {
+                ui.label("Ocorrências truncadas: sim (totais podem ser limites inferiores)");
+            }
+            Some(false) => {
+                ui.label("Ocorrências truncadas: não");
+            }
+            None => {
+                ui.label("Ocorrências truncadas: não informado");
+            }
+        }
+    });
 }
 
 impl EvidenceState {
@@ -581,18 +705,7 @@ impl EvidenceState {
                     return;
                 }
                 for item in items {
-                    ui.group(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.strong(&item.result_type);
-                            if let Some(rule) = &item.rule_or_model_id {
-                                ui.label(format!("regra: {rule}"));
-                            }
-                            if let Some(confidence) = &item.confidence {
-                                ui.label(format!("confiança: {confidence}"));
-                            }
-                        });
-                        ui.small(item.payload.to_string());
-                    });
+                    yara_result_ui(ui, item);
                 }
             });
         });
@@ -869,6 +982,106 @@ mod timeline_reload_tests {
             dfir_protocol::ANALYSIS_KIND_YARA_SCAN
         ));
         assert!(!should_reload_timeline(""));
+    }
+}
+
+#[cfg(test)]
+mod analytical_ui_tests {
+    use super::*;
+    use crate::gui::backend::Backend;
+    use egui_kittest::kittest::Queryable;
+
+    type State = (EvidenceState, Backend);
+
+    #[test]
+    fn yara_results_show_metadata_matches_and_long_text_instead_of_raw_json() {
+        let (backend, _commands) = Backend::for_test();
+        let description = "Detecta a sequência de teste EICAR preservada em um artefato, permitindo validar o funcionamento do scanner e a rastreabilidade das ocorrências sem incorporar os bytes casados ao resultado analítico exibido ao operador.";
+        let reference = "https://www.example.invalid/dfir/regras/eicar/documentacao-completa-para-revisao-do-analista";
+        let payload = serde_json::json!({
+            "kind": "YARA_MATCH",
+            "rule_id": "eicar_test_string",
+            "namespace": "dfir_embedded",
+            "ruleset_id": "dfir-embedded-yara",
+            "ruleset_version": "2026.11.1",
+            "ruleset_sha256": "ab".repeat(32),
+            "ruleset_license": "Apache-2.0",
+            "ruleset_source_origin": "embedded://dfir-engine/rules/embedded.yar",
+            "engine_compatibility": "yara-x 1.20.0",
+            "evidence_id": "evidence/ev-42",
+            "confidence": "HIGH",
+            "severity": "MEDIUM",
+            "description": description,
+            "reference": reference,
+            "matched_patterns": [
+                {"pattern_id": "$eicar", "offset": 128, "length": 68},
+                {"pattern_id": "$eicar", "offset": 4096, "length": 68}
+            ],
+            "pattern_match_counts": [
+                {"pattern_id": "$eicar", "total_matches": 12, "reported_matches": 2}
+            ],
+            "matches_truncated": true
+        });
+        let raw_payload = payload.to_string();
+        let item = AnalyticalResultResponse {
+            id: "yara-1".into(),
+            result_type: "YARA_MATCH".into(),
+            correlation_key: "yara:eicar_test_string:ev-42".into(),
+            evidence_id: Some("ev-42".into()),
+            incident_id: None,
+            analysis_job_id: Some("job-7".into()),
+            rule_or_model_id: Some("eicar_test_string".into()),
+            rule_or_model_version: Some("2026.11.1".into()),
+            confidence: Some("HIGH".into()),
+            payload,
+            provenance: serde_json::Value::Null,
+            supersedes: None,
+            created_at: "2026-10-16T00:00:00Z".into(),
+        };
+        let mut state = EvidenceState::default();
+        state.on_analytical_results("ev-42", Ok(vec![item]));
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1000.0, 1800.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.details(ui, "ev-42", false, &[], backend),
+                (state, backend),
+            );
+        harness.step();
+        harness.get_by_label("Resultados analíticos (YARA)").click();
+        harness.run();
+
+        for label in [
+            "YARA_MATCH".to_string(),
+            "regra: eicar_test_string".into(),
+            "confiança: HIGH".into(),
+            "Severidade: MEDIUM".into(),
+            format!("Descrição: {description}"),
+            format!("Referência: {reference}"),
+            "Namespace: dfir_embedded".into(),
+            "Ruleset: dfir-embedded-yara · versão 2026.11.1".into(),
+            format!("SHA-256 do ruleset: {}", "ab".repeat(32)),
+            "Licença do ruleset: Apache-2.0".into(),
+            "Origem do ruleset: embedded://dfir-engine/rules/embedded.yar".into(),
+            "Compatibilidade do engine: yara-x 1.20.0".into(),
+            "Referência da evidência: evidence/ev-42".into(),
+            "Ocorrências detalhadas (2)".into(),
+            "Padrão $eicar · offset 128 · comprimento 68".into(),
+            "Padrão $eicar · offset 4096 · comprimento 68".into(),
+            "$eicar: 12 total(is), 2 exibida(s)".into(),
+            "Ocorrências truncadas: sim (totais podem ser limites inferiores)".into(),
+        ] {
+            harness.get_by_label(label.as_str());
+        }
+        assert!(
+            harness.query_by_label(raw_payload.as_str()).is_none(),
+            "o payload JSON minificado não deve ser exibido"
+        );
+        assert!(
+            harness
+                .query_by_label_contains("\"matched_patterns\":")
+                .is_none(),
+            "nenhuma chave JSON bruta deve virar interface"
+        );
     }
 }
 
