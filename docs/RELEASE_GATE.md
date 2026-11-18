@@ -26,10 +26,12 @@ O release é fechado somente com evidência executada.
 > **Atualização 2026-11-18 (ações da tabela de evidências).** No commit `791ea58`, `EVD-017`: o novo teste verifica 48 px e não sobreposição a 780 px; a 600 px, dois eventos `MouseWheel` revelam `Destruir` e o clique atualiza `pending_destroy`. A mutação sem scroll horizontal falhou e a restauração passou. `just verify` terminou com 437 passed/1 skipped e doc-gate PASS. Supply chain/e2e seguem em `EVD-014`.
 >
 > **Atualização 2026-11-18 (scroll da grade NIST).** No commit `8d80b87`, `EVD-018`: `Gap baixo` começa fora da viewport de 600 px e fica visível após `MouseWheel`; a mutação vertical não move o conteúdo e falha. `just verify` terminou com 438 passed/1 skipped e doc-gate PASS. Supply chain/e2e seguem em `EVD-014`; nenhuma janela real foi aberta nesta etapa.
+>
+> **Atualização 2026-11-18 (janela real isolada e gates finais da GUI).** No commit `dcae49a`, `EVD-019`: a janela real permaneceu aberta até o timeout de 25 s com `DFIR_DATA_ROOT` isolado. O log registrou o adaptador Intel GL e não contém avisos de fonte/glyph/ScrollArea ID nem nomes de fixture. Supply chain verde, e2e 110/110 e doc-gate PASS. Não se declara navegação manual ou verificação externa nova.
 
 ## Gate documental
 
-Estado: `PASS` em 2026-11-18 (`EVD-014`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-18 (`EVD-019`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -60,7 +62,7 @@ cargo test --workspace --locked --doc
 
 ## Supply chain
 
-Estado: `PASS` em 2026-11-18 (`EVD-014`; anteriores `EVD-003`/`EVD-007`/`EVD-012`/`EVD-013`), com **uma** exceção de vulnerabilidade justificada (`RUSTSEC-2026-0459`, `WVR-004`) e duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono). SQLite e chrono têm revisão até 2026-12-31. Exceção é risco aceito ou aviso analisado, não prova de inexploração.
+Estado: `PASS` em 2026-11-18 (`EVD-019`; anteriores `EVD-003`/`EVD-007`/`EVD-012`/`EVD-013`/`EVD-014`), com **uma** exceção de vulnerabilidade justificada (`RUSTSEC-2026-0459`, `WVR-004`) e duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono). SQLite e chrono têm revisão até 2026-12-31. Exceção é risco aceito ou aviso analisado, não prova de inexploração.
 
 ```bash
 cargo deny --workspace check

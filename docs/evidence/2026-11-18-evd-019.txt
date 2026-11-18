@@ -1,0 +1,38 @@
+EVD-019 - janela real isolada, supply chain e e2e da GUI ajustada
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T06:29Z..06:32Z
+commit-tree: dcae49acbad73894b28aaddf7cabbf571270bf38
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151; cargo-audit 0.22.2; cargo-deny 0.20.2; Xorg :0
+
+Janela real com armazenamento isolado:
+  DFIR_DATA_ROOT=/home/jose/.jcode/scratch/dfir-overnight-gui-20261118-0629
+  DISPLAY=:0 timeout 25 ./target/debug/dfir-app
+  A janela abriu e permaneceu aberta até o timeout, exit 124 esperado.
+  O default data root e dados de caso não foram usados.
+
+  O log isolado registrou native UI GPU adapter:
+  Mesa Intel(R) HD Graphics 2000 (SNB GT1), backend Gl, IntegratedGpu,
+  driver_info 3.3 (Core Profile) Mesa 25.0.7-2+deb13u1, candidates=2.
+  Os diagnósticos EGL 0x3009/0x3005 já conhecidos apareceram antes dessa linha.
+
+  Consultas ao log isolado:
+  No font|No glyph|ScrollArea ID|📁|🗂|📥: 0 matches.
+  senai-demo|Security.evtx|security.evtx: 0 matches.
+  dfir-app starting|native UI GPU adapter: 2 matches.
+
+just supply-chain
+  exit 0. cargo audit --no-yanked e cargo deny --workspace check verdes com as
+  exceções já documentadas: WVR-004/RUSTSEC-2026-0459, RUSTSEC-2025-0141 e
+  RUSTSEC-2026-0543. deny: advisories ok, bans ok, licenses ok, sources ok.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+A suíte Rust completa não foi repetida nesta tarefa; EVD-018 registra 438
+passed/1 skipped na mesma árvore de código. Esta evidência não declara navegação
+manual por todas as telas, somente abertura da janela e inspeção do log isolado.
+Windows x86_64, Linux aarch64, incidente real e CI automático continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

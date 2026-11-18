@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - janela real isolada e gates finais (`EVD-019`)
+
+- `timeout 25 ./target/debug/dfir-app` abriu a janela real no Xorg `:0` com `DFIR_DATA_ROOT` isolado no scratch e terminou em 124 como esperado. O log registrou o adaptador Mesa Intel HD Graphics 2000, backend GL, e os diagnósticos EGL conhecidos ficaram contextualizados.
+- O log isolado não contém `No font`, `No glyph`, avisos de `ScrollArea ID`, os emojis removidos ou nomes de fixtures. Nenhum dado de caso ou default data root foi usado; a evidência não declara navegação manual por todas as telas.
+- `EVD-019`: supply chain verde, e2e 110/110 e doc-gate PASS. A suíte Rust completa permanece em `EVD-018` com 438 passed/1 skipped; Windows, aarch64, incidente real e CI não foram promovidos.
+
 ## Unreleased - 2026-11-18 - scroll da grade NIST coberto por teste (`EVD-018`)
 
 - Novo teste sem snapshots renderiza `function_section` a 600 px, exige `Gap baixo` inicialmente fora da viewport e usa um evento real `MouseWheel` para revelar a última coluna.
