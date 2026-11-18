@@ -50,10 +50,12 @@ O release é fechado somente com evidência executada.
 > **Atualização 2026-11-18 (arrays de plano inválidos não chegam aos entregáveis).** No commit `c0e9413`, `EVD-029`: `finding_ids` string gerava o Entregável 4 com falsa recomendação geral. Agora `plan_view` valida os três arrays antes da coleta/renderização, preservando campos ausentes legados. `just verify` terminou com 455 passed/1 skipped, e2e 110/110 com os cinco documentos, e doc-gate PASS. Supply chain não foi repetido e permanece em `EVD-020`; nenhuma janela real nova ou reparo legado foi declarado.
 >
 > **Atualização 2026-11-18 (caminho crítico limitado ao incidente).** No commit `d7470e9`, `EVD-030`: A0→B0 e B0→B1 eram aceitos no contexto de A, e o grafo de A expunha uma aresta para estágio estrangeiro. A persistência agora exige que ambos os lados pertençam ao incidente solicitado; ligação válida continua verde. `just verify` terminou com 456 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-020`; não houve nova janela real nem reparo de relações antigas.
+>
+> **Atualização 2026-11-18 (Finding inválido não desaparece da matriz).** No commit `62797f4`, `EVD-031`: SEVERE gerava Entregável 2 com um achado, zero células e CRITICAL zerado. Agora severity inválida/`NONE` e confidence ausente falham com ID/campo antes da renderização; dois controles válidos continuam verdes. `just verify` terminou com 457 passed/1 skipped, e2e 110/110 e doc-gate PASS. CERTAIN foi rejeitado pelo CHECK no setup. Supply chain permanece em `EVD-020`; sem nova janela real ou reparo legado.
 
 ## Gate documental
 
-Estado: `PASS` em 2026-11-18 (`EVD-030`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-18 (`EVD-031`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -64,7 +66,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-030`, nextest 456 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-031`, nextest 457 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -101,7 +103,8 @@ cargo audit
 - `PASS` **contenção do engine provada com o engine de verdade** (ADR-0024): `cargo test --locked --workspace` (inclui `engine/tests/sandbox.rs`, que exige `EACCES`/`EPERM` onde devido e tem controle com a política `off`) e `scripts/e2e_headless.py` (repete a prova sobre o EVTX real) — `EVD-005`, `EVD-006`. **Rodar sempre pelo workspace**: `cargo test -p dfir-engine` não unifica as features do tokio e esconde falhas do runtime sob seccomp. Em Linux sem Landlock os testes de enforcement avisam e saem: o release no Linux **não** pode ser fechado nesse ambiente;
 - `WAIVED` **Windows** (`WVR-001`, aprovado pelo operador em 2026-11-14, válido até 2026-12-31): o Job Object só foi compilado; o release **não declara suporte a Windows** nesta rodada. Condição de saída: `dfir-app engine-smoke` + `just e2e <evtx>` em Windows, conferindo o aviso esperado `SANDBOX_NOT_FULLY_APPLIED`;
 - `WAIVED` **aarch64** (`WVR-002`, mesma validade): provado só em x86_64;
-- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-030`);
+- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-031`);
+- `PASS` **matriz de risco sem perda silenciosa:** severity inválida/`NONE` ou confidence inválida/ausente falha com ID/campo antes dos entregáveis (`EVD-031`);
 - `PASS` **caminho crítico limitado ao incidente:** os dois lados de `SEQUENCE_NEXT` devem pertencer ao incidente solicitado; relações antigas não são reparadas automaticamente (`EVD-030`);
 - `PASS` **entregáveis sem arrays de plano perdidos:** `finding_ids`, `nist_subcategories` e `depends_on` inválidos falham em collect antes de renderizar; campos ausentes continuam legados (`EVD-029`);
 - `PASS` **ciclos de plano sem bypass por dado inválido:** `depends_on` presente deve ser array de strings; erro impede a revisão e campo ausente continua legado vazio (`EVD-028`);

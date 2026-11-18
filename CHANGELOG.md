@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - Finding inválido não desaparece da matriz de risco (`EVD-031`)
+
+- `findings_view` descartava silenciosamente achados com severidade/confiança persistida inválida. A reprodução com `SEVERE` gerou o Entregável 2 com um achado, zero células de risco e linha CRITICAL zerada.
+- A agregação agora exige severidade reconhecida e diferente de `NONE`, e confiança presente/reconhecida. O erro identifica Finding e campo; `collect` falha antes da renderização.
+- `EVD-031`: três casos sem renderização, dois controles válidos, `just verify` com 457 passed/1 skipped, e2e 110/110 e doc-gate PASS. A fixture `CERTAIN` foi rejeitada pelo CHECK do SQLite no setup e não conta como evidência comportamental.
+
 ## Unreleased - 2026-11-18 - caminho crítico não aceita relações entre incidentes (`EVD-030`)
 
 - `link_critical_path_stages` validava apenas o tipo dos estágios. A reprodução criou A0→B0 no contexto de A e B0→B1 no mesmo contexto; o grafo de A expôs uma aresta para um estágio estrangeiro.

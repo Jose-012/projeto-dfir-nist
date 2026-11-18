@@ -1,0 +1,59 @@
+EVD-031 - finding invalido nao desaparece da matriz de risco
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T09:31Z..09:48Z
+commit-tree: 62797f4fa152ca08b01c652e41eb553e212e451a (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-25/F1-07. findings_view usava filter_map para descartar um Finding
+vigente cuja severity ou confidence persistida nao pudesse ser interpretada. O
+achado continuava listado, mas a matriz de risco nao o contava e os documentos
+podiam mostrar zeros.
+
+Reproducao antes da correcao, sobre a arvore 807aee8 mais o teste novo:
+  cargo nextest run --locked collect_rejects_malformed_finding_risk_fields
+    exit 100 esperado para a reproducao. Um Finding valido recebeu uma sucessora
+    append-only com severity="SEVERE". collect e render_all concluiram com um
+    achado vigente, zero celulas de risco e a linha CRITICAL zerada no
+    Entregavel 2. O log registra findings=1 risk_cells=0 zero_critical_row=true.
+    Nao houve update de linhas.
+
+Correcao no commit 62797f4:
+  risk_matrix_of agora retorna AppResult e exige severity reconhecida e diferente
+  de NONE, alem de confidence presente e reconhecida. O erro identifica o id do
+  Finding e o campo invalido, sem conteudo do payload. findings_view propaga o
+  erro; deliverables::collect falha antes da renderizacao. Nenhuma assinatura de
+  renderer mudou.
+
+Regressao depois da correcao:
+  cargo nextest run --locked collect_rejects_malformed_finding_risk_fields
+    exit 0; um teste com tres casos: SEVERE, NONE e confidence ausente. Todos
+    falham durante collect com campo e id no diagnostico, antes da renderizacao.
+    A reproducao antes da correcao foi SEVERE; os outros dois casos foram
+    cobertura adicional executada depois.
+  cargo nextest run --locked --no-fail-fast risk_matrix
+    exit 0; 2 testes: agregacao pura e o round-trip de servico com achados e
+    matriz validos permanecem verdes.
+
+Tentativa de setup nao contada como evidencia comportamental:
+  uma versao inicial tentou semear confidence="CERTAIN". O SQLite rejeitou o
+  INSERT no CHECK existente (code 275), antes do caminho do servico. Esse caso
+  impossivel foi removido e a tentativa ficou em task-019-focused-setup.txt;
+  os logs finais ficaram separados.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 457 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  cinco documentos, hardening, determinismo e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa um Finding propositalmente invalido em banco descartavel;
+nao declara reparo automatico de dados legados nem execucao sobre incidente real.
+Supply chain nao foi repetido porque Cargo.lock nao mudou; EVD-020 permanece a
+execucao vigente. Nenhuma janela real nova foi aberta; o smoke anterior e EVD-020.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.
