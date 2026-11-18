@@ -592,7 +592,11 @@ async fn previously_open_gaps(
             continue;
         };
         let payload: serde_json::Value =
-            serde_json::from_str(&current.payload).unwrap_or(serde_json::Value::Null);
+            serde_json::from_str(&current.payload).map_err(|error| {
+                validation_error(format!(
+                    "stored NIST gap payload is malformed JSON: {error}"
+                ))
+            })?;
         let is_closed = payload
             .get("status")
             .and_then(serde_json::Value::as_str)
@@ -1200,6 +1204,63 @@ mod tests {
     // profile improves to meet the target), `run_gap_analysis` must close
     // the old gap (supersede it with a `status: "CLOSED"` record) instead of
     // leaving it as the correlation_key's current record forever.
+    #[tokio::test]
+    async fn run_gap_analysis_rejects_malformed_stored_gap_before_writing() {
+        let pool = test_pool().await;
+        seed_incident(&pool, "inc-bad-gap").await;
+        let entries = [NewProfileEntry {
+            subcategory_id: "ID.AM-01",
+            subcategory_label: "Inventário de ativos",
+            implementation_status: ImplementationStatus::Implemented,
+            justification: None,
+            evidence_reference: None,
+            confidence: Some(Confidence::High),
+        }];
+        for profile_type in [ProfileType::Current, ProfileType::Target] {
+            insert_profile(
+                &pool,
+                NewProfile {
+                    incident_id: "inc-bad-gap",
+                    profile_type,
+                    version_label: "v1",
+                    source: "test",
+                    tier: None,
+                    tier_justification: None,
+                    entries: &entries,
+                    actor_id: None,
+                },
+            )
+            .await
+            .expect("profile insert succeeds");
+        }
+        let correlation_key = gap_correlation_key("inc-bad-gap", "ID.AM-01");
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,rule_or_model_id,rule_or_model_version,confidence,payload,provenance,created_at) VALUES('bad-gap','analytical-result-v1','NIST_GAP',?,'inc-bad-gap','nist-csf-2.0-gap','1','MEDIUM','not-json','{}','2026-10-02T00:00:00Z')")
+            .bind(&correlation_key)
+            .execute(&pool)
+            .await
+            .expect("malformed gap fixture");
+
+        let error = run_gap_analysis(&pool, "inc-bad-gap", None)
+            .await
+            .expect_err("gap inválido não pode ser fechado nem substituído");
+        assert!(
+            matches!(&error, sqlx::Error::Protocol(reason) if reason.contains("stored NIST gap payload is malformed JSON")),
+            "{error:?}"
+        );
+        let rows: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM analytical_results WHERE incident_id='inc-bad-gap'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("gap count");
+        assert_eq!(rows, 1, "nenhuma escrita pode ocorrer antes do erro");
+        let current = analytical_results::current_for_correlation_key(&pool, &correlation_key)
+            .await
+            .expect("current query")
+            .expect("malformed current gap remains");
+        assert_eq!(current.id, "bad-gap", "nenhum registro o supersede");
+    }
+
     #[tokio::test]
     async fn run_gap_analysis_closes_a_gap_once_the_current_profile_meets_the_target() {
         let pool = test_pool().await;
