@@ -981,7 +981,10 @@ fn provenance_summary(ui: &mut egui::Ui, item: &EvidenceResponse) {
 
 #[cfg(test)]
 mod timeline_reload_tests {
-    use super::should_reload_timeline;
+    use super::{EvidenceState, should_reload_timeline};
+    use crate::gui::backend::{Backend, Command};
+    use crate::gui::test_harness::drain;
+    use crate::service::AnalyzeResponse;
 
     #[test]
     fn only_evtx_jobs_reload_the_timeline() {
@@ -992,6 +995,55 @@ mod timeline_reload_tests {
             dfir_protocol::ANALYSIS_KIND_YARA_SCAN
         ));
         assert!(!should_reload_timeline(""));
+    }
+
+    fn analysis(job_id: &str, kind: &str) -> AnalyzeResponse {
+        AnalyzeResponse {
+            request_id: format!("request-{job_id}"),
+            job_id: job_id.into(),
+            evidence_id: "ev-1".into(),
+            status: "SUCCEEDED".into(),
+            analysis_kind: kind.into(),
+            output_reference: None,
+            message_count: 1,
+            item_count: 1,
+            warnings: vec![],
+        }
+    }
+
+    #[test]
+    fn completed_jobs_release_the_action_and_request_only_their_own_results() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = EvidenceState::default();
+        state.analyzing.insert("ev-1".into());
+        state.on_analyze_completed(
+            "ev-1",
+            Ok(analysis(
+                "job-evtx",
+                dfir_protocol::ANALYSIS_KIND_EVTX_TIMELINE,
+            )),
+            &backend,
+        );
+        assert!(!state.analyzing.contains("ev-1"));
+        let sent = drain(&mut commands);
+        assert_eq!(sent.len(), 2, "{sent:?}");
+        assert!(matches!(
+            &sent[0],
+            Command::TimelinePage { evidence_id, job_id, offset: 0, want_total: true, .. }
+                if evidence_id == "ev-1" && job_id.as_deref() == Some("job-evtx")
+        ));
+        assert!(matches!(&sent[1], Command::EvidenceAnalyticalResults(id) if id == "ev-1"));
+
+        state.analyzing.insert("ev-1".into());
+        state.on_analyze_completed(
+            "ev-1",
+            Ok(analysis("job-yara", dfir_protocol::ANALYSIS_KIND_YARA_SCAN)),
+            &backend,
+        );
+        assert!(!state.analyzing.contains("ev-1"));
+        let sent = drain(&mut commands);
+        assert_eq!(sent.len(), 1, "YARA não recarrega a timeline: {sent:?}");
+        assert!(matches!(&sent[0], Command::EvidenceAnalyticalResults(id) if id == "ev-1"));
     }
 }
 
@@ -1206,6 +1258,133 @@ mod provenance_ui_tests {
         state.request_import(directory.path().to_path_buf(), &backend);
         assert!(state.import_hint.as_deref().unwrap_or("").contains("pasta"));
         assert!(drain(&mut commands).is_empty(), "nada foi importado");
+    }
+
+    #[test]
+    fn the_typed_path_button_imports_a_trimmed_file_path_and_clears_the_field() {
+        let (backend, mut commands) = Backend::for_test();
+        let directory = tempfile::tempdir().expect("temp dir");
+        let file = directory.path().join("Security.evtx");
+        std::fs::write(&file, b"not real evtx").expect("fixture");
+        let state = EvidenceState {
+            list: Loadable::Ready(vec![]),
+            manual_path: format!("  {}  ", file.display()),
+            ..EvidenceState::default()
+        };
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1200.0, 800.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.step();
+        harness.get_by_label("Importar caminho").click();
+        harness.step();
+
+        let sent = drain(&mut commands);
+        assert_eq!(sent.len(), 1, "{sent:?}");
+        assert!(matches!(
+            &sent[0],
+            Command::ImportEvidence { path, .. } if path == &file
+        ));
+        assert!(harness.state().0.importing);
+        assert!(harness.state().0.manual_path.is_empty());
+        harness.step();
+        harness.get_by_label_contains("Importando (hash BLAKE3+SHA-256");
+    }
+
+    #[test]
+    fn import_completion_updates_the_list_and_failures_keep_existing_rows() {
+        let existing = evidence("ev-1", "Security.evtx", "evtx");
+        let imported = evidence("ev-2", "System.evtx", "evtx");
+        let mut state = EvidenceState {
+            list: Loadable::Ready(vec![existing.clone()]),
+            importing: true,
+            ..EvidenceState::default()
+        };
+        state.on_imported(Ok(imported));
+        assert!(!state.importing);
+        assert_eq!(state.items()[0].id, "ev-2");
+        assert_eq!(state.items()[1].id, "ev-1");
+        assert!(state.import_error.is_none());
+
+        state.importing = true;
+        state.on_imported(Err("arquivo excede o limite".into()));
+        assert!(!state.importing);
+        assert_eq!(
+            state.items().len(),
+            2,
+            "falha não apaga evidências já listadas"
+        );
+        assert_eq!(
+            state.import_error.as_deref(),
+            Some("arquivo excede o limite")
+        );
+    }
+
+    #[test]
+    fn destroying_requires_confirmation_and_cancellation_sends_nothing() {
+        let (backend, mut commands) = Backend::for_test();
+        let state = EvidenceState {
+            list: Loadable::Ready(vec![evidence("ev-1", "Security.evtx", "evtx")]),
+            selected: Some("ev-1".into()),
+            ..EvidenceState::default()
+        };
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1600.0, 900.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.run();
+        harness.get_by_label("Destruir").click();
+        harness.run();
+        harness.get_by_label("Confirmar?");
+        harness.get_by_label("Cancelar").click();
+        harness.run();
+        assert!(harness.state().0.pending_destroy.is_none());
+        assert!(drain(&mut commands).is_empty(), "cancelar não destrói");
+
+        harness.get_by_label("Destruir").click();
+        harness.run();
+        harness.get_by_label("Sim").click();
+        harness.step();
+        assert!(matches!(
+            drain(&mut commands).as_slice(),
+            [Command::DestroyEvidence(id)] if id == "ev-1"
+        ));
+        assert!(harness.state().0.destroying.contains("ev-1"));
+
+        harness.state_mut().0.on_destroyed("ev-1", Ok(()));
+        harness.run();
+        assert!(harness.state().0.items().is_empty());
+        assert!(harness.state().0.selected.is_none());
+        harness.get_by_label("Nenhuma evidência importada ainda.");
+    }
+
+    #[test]
+    fn a_failed_destruction_preserves_the_evidence_and_shows_the_reason() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = EvidenceState {
+            list: Loadable::Ready(vec![evidence("ev-1", "Security.evtx", "evtx")]),
+            selected: Some("ev-1".into()),
+            destroying: HashSet::from(["ev-1".into()]),
+            ..EvidenceState::default()
+        };
+        state.on_destroyed("ev-1", Err("custódia não pôde ser registrada".into()));
+        assert!(!state.destroying.contains("ev-1"));
+        assert_eq!(state.items().len(), 1);
+        assert_eq!(state.selected.as_deref(), Some("ev-1"));
+
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1600.0, 900.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.run();
+        harness.get_by_label("Erro: custódia não pôde ser registrada");
+        harness.get_by_label("Security.evtx");
     }
 
     #[test]
