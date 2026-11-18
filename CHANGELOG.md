@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - gap NIST inválido não é fechado nem substituído (`EVD-024`)
+
+- Com Current/Target já atendidos, um `NIST_GAP` com payload inválido era tratado como aberto e `run_gap_analysis` retornava um novo ID de fechamento. Agora a desserialização falha com `Protocol` antes de `BEGIN IMMEDIATE`.
+- A regressão exige exatamente uma linha analítica e o mesmo registro inválido vigente, sem sucessora. Os fechamentos válidos por `target_met` e `no_longer_targeted` continuam passando.
+- `EVD-024`: cinco testes de Gap Analysis, `just verify` com 447 passed/1 skipped, e2e 110/110 com as dez lacunas válidas, e doc-gate PASS. Supply chain permanece em `EVD-020`; nenhuma janela real nova foi aberta.
+
 ## Unreleased - 2026-11-18 - payload/provenance analíticos inválidos não viram null (`EVD-023`)
 
 - As reproduções retornavam `payload: Null` por evidência e `provenance: Null` por incidente. `AnalyticalResultResponse` agora usa `TryFrom` com erros específicos, e as duas coleções propagam a falha para todos os consumidores.

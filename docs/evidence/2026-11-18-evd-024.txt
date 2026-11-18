@@ -1,0 +1,46 @@
+EVD-024 - gap NIST invalido nao e fechado nem substituido
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T07:32Z..07:40Z
+commit-tree: 367c9d5b3925d49527a7ac077087d5ba5a23af2f (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-30/NIST Gap Analysis. previously_open_gaps convertia payload invalido
+em Null, tratava o registro como aberto e permitia uma escrita de fechamento.
+
+Reproducao antes da correcao, sobre a arvore fec9089 mais o teste novo:
+  cargo nextest run --locked run_gap_analysis_rejects_malformed_stored_gap_before_writing
+    exit 100 esperado para a reproducao. Com Current e Target ja atendidos e um
+    NIST_GAP vigente com payload='not-json', run_gap_analysis retornou sucesso e
+    um novo ID, em vez de falhar antes de escrever o fechamento.
+  A fixture insere a linha invalida diretamente, sem UPDATE ou remocao de triggers.
+
+Correcao no commit 367c9d5:
+  previously_open_gaps desserializa com map_err e sqlx::Error::Protocol especifico
+  stored NIST gap payload is malformed JSON, sem incluir o payload bruto.
+  A leitura ja ocorre antes de BEGIN IMMEDIATE; agora o erro impede a transacao.
+
+Regressao depois da correcao:
+  cargo nextest run --locked gap_analysis
+    exit 0; 5 passed, 322 skipped. O novo teste exige o Protocol, exatamente uma
+    linha analitica e o mesmo bad-gap vigente, sem sucessora.
+  Os controles validos de abertura, fechamento por target_met, fechamento por
+  no_longer_targeted e exigencia dos dois profiles continuam passando.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 447 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required.
+  O cenario valido manteve dez lacunas NIST vigentes e os documentos esperados.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: a regressao usa um gap propositalmente invalido em banco descartavel;
+nao declara reparo de dados legados nem execucao sobre incidente real. O registro
+invalido permanece vigente apos o erro, sem fechamento ou superseding automatico.
+Supply chain nao foi repetido porque Cargo.lock nao mudou; EVD-020 permanece a
+execucao vigente. Nenhuma janela real nova foi aberta; o smoke anterior e EVD-020.
+Windows x86_64, Linux aarch64, incidente real e CI automatico continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.
