@@ -15,9 +15,11 @@ O release é fechado somente com evidência executada.
 >
 > **Atualização 2026-11-18.** Pin subiu para **rustc/cargo 1.100.0** (stable de 2026-11-12) e todos os gates locais rodaram nesse toolchain (`EVD-012`): fmt ok, check `--workspace --locked --all-targets` ok, clippy `-D warnings` limpo, nextest **426/426** (1 ignorado) incluindo os testes novos de RF-003 e RF-027, e2e **110/110** com engine real e sandbox `required`, supply chain verde (deny+audit com 2 exceções justificadas: WVR-004/RUSTSEC-2026-0459 e RUSTSEC-2026-0543 chrono informativo), doc-gate PASS. Pistas A (Windows/aarch64/incidente real), B (CI) e E (revisão recorrente) continuam abertas com waivers até 2026-12-31; pista F segue sem RF MVP pendente sem waiver.
 
+> **Atualização 2026-11-18 (fechamento da rodada de engenharia).** No commit `f8dd8c6`, `EVD-013`: doctor 0 erros/1 aviso de Python; `just verify` com nextest 432 passed/1 skipped, doc-tests, fmt/check/clippy; supply chain verde com as exceções documentadas; doc-gate PASS; e2e 110/110. Windows, aarch64, incidente real e CI continuam não executados/não implementados, sob os waivers e pendências já registrados.
+
 ## Gate documental
 
-Estado: `PASS` em 2026-11-18 (`EVD-012`; anteriores `EVD-004`/`EVD-008`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-18 (`EVD-013`; anteriores `EVD-004`/`EVD-008`/`EVD-012`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -28,7 +30,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-012`, nextest 426/426; anteriores `EVD-001`/`EVD-005`/`EVD-010`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-18 (`EVD-013`, nextest 432 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -48,7 +50,7 @@ cargo test --workspace --locked --doc
 
 ## Supply chain
 
-Estado: `PASS` em 2026-11-18 (`EVD-012`; anteriores `EVD-003`/`EVD-007`), com **uma** exceção de vulnerabilidade justificada (`RUSTSEC-2026-0459`, `WVR-004`) e duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono). SQLite e chrono têm revisão até 2026-12-31. Exceção é risco aceito ou aviso analisado, não prova de inexploração.
+Estado: `PASS` em 2026-11-18 (`EVD-013`; anteriores `EVD-003`/`EVD-007`/`EVD-012`), com **uma** exceção de vulnerabilidade justificada (`RUSTSEC-2026-0459`, `WVR-004`) e duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono). SQLite e chrono têm revisão até 2026-12-31. Exceção é risco aceito ou aviso analisado, não prova de inexploração.
 
 ```bash
 cargo deny --workspace check
@@ -65,7 +67,7 @@ cargo audit
 - `PASS` **contenção do engine provada com o engine de verdade** (ADR-0024): `cargo test --locked --workspace` (inclui `engine/tests/sandbox.rs`, que exige `EACCES`/`EPERM` onde devido e tem controle com a política `off`) e `scripts/e2e_headless.py` (repete a prova sobre o EVTX real) — `EVD-005`, `EVD-006`. **Rodar sempre pelo workspace**: `cargo test -p dfir-engine` não unifica as features do tokio e esconde falhas do runtime sob seccomp. Em Linux sem Landlock os testes de enforcement avisam e saem: o release no Linux **não** pode ser fechado nesse ambiente;
 - `WAIVED` **Windows** (`WVR-001`, aprovado pelo operador em 2026-11-14, válido até 2026-12-31): o Job Object só foi compilado; o release **não declara suporte a Windows** nesta rodada. Condição de saída: `dfir-app engine-smoke` + `just e2e <evtx>` em Windows, conferindo o aviso esperado `SANDBOX_NOT_FULLY_APPLIED`;
 - `WAIVED` **aarch64** (`WVR-002`, mesma validade): provado só em x86_64;
-- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-005`);
+- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-013`);
 - `PASS` **candidatos de detecção:** o e2e confirma que os candidatos nascem pendentes, que só a confirmação cria achado, que rejeitar exige motivo e que nova execução não duplica — `EVD-006`;
 - `PASS` **cópia antes de migration (RF-032):** `cargo test` cobre a cópia, a verificação, a recusa por falta de espaço e a adulteração (`EVD-005`); a execução real sobre dados reais aconteceu no e2e (`EVD-006`); política de retenção de `backups/` documentada em `docs/OPERATION.md` §3.1.1;
 - SQLite local e staging com retenção definida.

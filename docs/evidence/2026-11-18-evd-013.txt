@@ -1,0 +1,27 @@
+EVD-013 — fechamento da rodada de engenharia
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T04:53Z..04:55Z
+commit-tree: f8dd8c6a0a2b75e54d129055c9d3107f6927d06b
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151; cargo-audit 0.22.2; cargo-deny 0.20.2
+
+just doctor
+  0 errors, 1 warning: Python real 3.13.5 versus referência 3.14.6. Pager delta opcional ausente. Nenhuma ferramenta instalada ou alterada.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+just verify
+  fmt, check --workspace --locked --all-targets, nextest, doc-tests e clippy -D warnings: exit 0.
+  Nextest: 432 passed, 1 skipped. Doc-tests executados. Nenhuma duplicação com cargo test no verify.
+
+just supply-chain
+  exit 0. cargo audit e cargo deny --workspace check verdes com as exceções já documentadas:
+  WVR-004/RUSTSEC-2026-0459, RUSTSEC-2025-0141 e RUSTSEC-2026-0543.
+  deny: advisories ok, bans ok, licenses ok, sources ok.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required.
+  Timeline, YARA, candidatos, cinco entregáveis, máscara, determinismo, audit chain/custódia e descarte verificados.
+
+Não executado e não promovido: Windows x86_64, Linux aarch64, incidente real e CI automático.
+Esses itens permanecem PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.

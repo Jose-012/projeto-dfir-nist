@@ -1,6 +1,11 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased — 2026-11-18 — verificação integrada final (`EVD-013`)
+
+- No commit `f8dd8c6`: doctor 0 erros/1 aviso (Python 3.13.5 versus referência 3.14.6); `just verify` com nextest 432 passed/1 skipped, doc-tests, fmt/check/clippy; `just supply-chain` verde com exceções documentadas; `just doc-gate` PASS; `just e2e tests/fixtures/senai-demo.evtx` 110/110. Artefato: `docs/evidence/2026-11-18-evd-013.txt`.
+- Windows, Linux aarch64, incidente real e CI automático não foram executados/implementados. Permanecem `PENDING-HUMAN`/`WAIVED`, sem promoção a `VERIFIED`.
+
 ## Unreleased — 2026-11-18 — plano de verificação externa e preparação do e2e multiplataforma
 
 - `docs/FASE1_BACKLOG.md` passou a listar comandos e evidências de saída para Windows x86_64, Linux aarch64 e incidente real, todos ainda `PENDING-HUMAN` sob os waivers existentes. CI permanece sem implementação porque não há repositório remoto; `WVR-003` continua vigente.

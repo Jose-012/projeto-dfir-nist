@@ -5,7 +5,7 @@
 
 > Resumo do estado atual; o histórico cronológico segue abaixo, sem alteração.
 
-- `cargo audit` e `cargo deny --workspace check` foram executados em Linux x86_64 com Rust/Cargo 1.100.0 e estão verdes em `EVD-012`: advisories, bans, licenses e sources ok.
+- `cargo audit` e `cargo deny --workspace check` foram executados em Linux x86_64 com Rust/Cargo 1.100.0 e estão verdes em `EVD-013` (anterior `EVD-012`): advisories, bans, licenses e sources ok.
 - Há **uma exceção de vulnerabilidade** (`RUSTSEC-2026-0459`, `libsqlite3-sys 0.37.0`, formalizada como `WVR-004`) e **duas exceções informativas** no `deny.toml`: `RUSTSEC-2025-0141` (`bincode`, via `yara-x`) e `RUSTSEC-2026-0543` (`chrono 0.4.45`, sem CVE). SQLite e chrono têm revisão até 2026-12-31; bincode é reavaliado a cada upgrade do `yara-x`.
 - `encoding`/`RUSTSEC-2021-0153` e a cadeia zbus/AT-SPI estão fora do grafo. As exceções correspondentes foram removidas.
 - `cargo vet`: dispensado no MVP (ADR-0018 D-2; confirmado pelo operador em 2026-11-04).
