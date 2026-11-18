@@ -1,6 +1,10 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased — 2026-11-18 — skills locais mínimas para mudança e verificação
+
+- Criadas somente `.jcode/skills/dfir-change` e `.jcode/skills/dfir-verify`, com autoridade, edição cirúrgica, gates e evidência. Nenhuma skill genérica foi instalada. `skill_manage list` reconheceu 2 skills e ambas foram carregadas com sucesso.
+
 ## Unreleased — 2026-11-18 — supressões amplas de dead code removidas
 
 - Removidos os allows de módulo em `analytical_results.rs` e `nist_profiles.rs` e o allow da view NIST. Helpers usados só por testes ficaram em `cfg(test)`; campos nunca lidos saíram das views sem alterar banco, migrations ou consultas de ordenação. O histórico `supersedes` usado por asserção permanece disponível nos testes.

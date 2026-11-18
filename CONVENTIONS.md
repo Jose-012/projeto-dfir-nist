@@ -102,6 +102,7 @@ Preserve IDs normativos e de evidência. Não reutilize IDs existentes.
 
 - Leia `AGENTS.md` e este arquivo antes de editar.
 - Adicione ao contexto somente os arquivos necessários à tarefa.
+- As únicas skills locais são `.jcode/skills/dfir-change` e `.jcode/skills/dfir-verify`; não adicione skills genéricas sem necessidade demonstrada.
 - Trate documentos normativos como leitura, não como alvos de edição, salvo pedido explícito.
 - Faça commits pequenos e temáticos após os gates aplicáveis, preservando arquivos fora da tarefa e dados sensíveis.
 - Não amplie silenciosamente o escopo para arquivos ignorados pelo Git.
