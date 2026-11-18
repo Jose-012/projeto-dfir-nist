@@ -2214,12 +2214,21 @@ pub struct AnalyticalResultResponse {
     pub created_at: String,
 }
 
-impl From<analytical_results::AnalyticalResultRecord> for AnalyticalResultResponse {
-    fn from(record: analytical_results::AnalyticalResultRecord) -> Self {
-        let payload = serde_json::from_str(&record.payload).unwrap_or(serde_json::Value::Null);
-        let provenance =
-            serde_json::from_str(&record.provenance).unwrap_or(serde_json::Value::Null);
-        Self {
+impl TryFrom<analytical_results::AnalyticalResultRecord> for AnalyticalResultResponse {
+    type Error = AppError;
+
+    fn try_from(record: analytical_results::AnalyticalResultRecord) -> Result<Self, Self::Error> {
+        let payload = serde_json::from_str(&record.payload).map_err(|error| {
+            AppError::Config(format!(
+                "stored analytical result payload is malformed JSON: {error}"
+            ))
+        })?;
+        let provenance = serde_json::from_str(&record.provenance).map_err(|error| {
+            AppError::Config(format!(
+                "stored analytical result provenance is malformed JSON: {error}"
+            ))
+        })?;
+        Ok(Self {
             id: record.id,
             result_type: record.result_type,
             correlation_key: record.correlation_key,
@@ -2233,7 +2242,7 @@ impl From<analytical_results::AnalyticalResultRecord> for AnalyticalResultRespon
             provenance,
             supersedes: record.supersedes,
             created_at: record.created_at,
-        }
+        })
     }
 }
 
@@ -2252,14 +2261,14 @@ pub(crate) async fn current_results_for_incident(
         .iter()
         .filter_map(|record| record.supersedes.as_deref())
         .collect();
-    Ok(records
+    records
         .iter()
         .filter(|record| {
             record.result_type == result_type && !superseded_ids.contains(record.id.as_str())
         })
         .cloned()
-        .map(Into::into)
-        .collect())
+        .map(AnalyticalResultResponse::try_from)
+        .collect()
 }
 
 pub async fn evidence_analytical_results(
@@ -2275,7 +2284,10 @@ pub async fn evidence_analytical_results(
     .ok_or_else(|| AppError::NotFound("evidence not found".into()))?;
 
     let records = analytical_results::list_current_by_evidence(&services.db, evidence_id).await?;
-    Ok(records.into_iter().map(Into::into).collect())
+    records
+        .into_iter()
+        .map(AnalyticalResultResponse::try_from)
+        .collect()
 }
 
 // ---------------------------------------------------------------------
@@ -2706,6 +2718,56 @@ mod tests {
         assert!(
             matches!(&error, AppError::Config(message) if message.contains("unsupported analysis_kind")),
             "expected the analysis-kind validation error, got: {error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn evidence_results_reject_malformed_stored_analytical_payload() {
+        let fx = crate::service::test_support::fixture().await;
+        let dir = tempfile::tempdir().expect("temporary directory");
+        let file = dir.path().join("amostra.evtx");
+        std::fs::write(&file, b"conteudo de teste").expect("sample file");
+        let evidence = import_evidence_with_provenance(
+            &fx.services,
+            &file,
+            1024 * 1024,
+            &provenance::EvidenceProvenance::default(),
+        )
+        .await
+        .expect("import");
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,evidence_id,payload,provenance,created_at) VALUES('bad-payload','analytical-result-v1','YARA_MATCH','bad-payload',?,'not-json','{}','2026-10-02T00:00:00Z')")
+            .bind(&evidence.id)
+            .execute(&fx.services.db)
+            .await
+            .expect("malformed analytical result fixture");
+
+        let error = evidence_analytical_results(&fx.services, &evidence.id)
+            .await
+            .expect_err("payload inválido não pode virar null");
+        assert!(
+            matches!(&error, AppError::Config(message) if message.contains("stored analytical result payload is malformed JSON")),
+            "{error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn incident_results_reject_malformed_stored_analytical_provenance() {
+        let fx = crate::service::test_support::fixture().await;
+        let incident = create_incident(&fx.services, "Incidente com provenance inválida")
+            .await
+            .expect("incident");
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,created_at) VALUES('bad-provenance','analytical-result-v1','FINDING','bad-provenance',?,'{}','not-json','2026-10-02T00:00:00Z')")
+            .bind(&incident.id)
+            .execute(&fx.services.db)
+            .await
+            .expect("malformed analytical result fixture");
+
+        let error = current_results_for_incident(&fx.services.db, &incident.id, "FINDING")
+            .await
+            .expect_err("provenance inválida não pode virar null");
+        assert!(
+            matches!(&error, AppError::Config(message) if message.contains("stored analytical result provenance is malformed JSON")),
+            "{error:?}"
         );
     }
 
