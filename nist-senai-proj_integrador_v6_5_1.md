@@ -1056,7 +1056,7 @@ Nunca cachear exclusivamente pelo SHA-256 do arquivo.
 <!-- @section id="10" slug="parsing-evtx" -->
 
 ## 10.1. Integridade
-**DECISÃO:** o parser EVTX do MVP é delegado à crate `evtx 0.12.2`, com `default-features=false`. O projeto não reimplementa BinXML/EVTX. O engine permanece responsável por limites, contrato JSONL, normalização, extração de IOCs e correlação. Isso reduz código próprio na área mais sensível do parser sem transformar a crate em autoridade de domínio.
+**DECISÃO:** o parser EVTX do MVP é delegado à crate `evtx 0.15.1`, com `default-features=false`. O projeto não reimplementa BinXML/EVTX. O engine permanece responsável por limites, contrato JSONL, normalização, extração de IOCs e correlação. Isso reduz código próprio na área mais sensível do parser sem transformar a crate em autoridade de domínio.
 
 
 Um parser nunca deve fazer:
@@ -3912,16 +3912,16 @@ Estas não são pendências do “documento original”, que já foi fornecido. 
 ```xml
 <decisoes-arquiteturais>
   <arquitetura>Monolito modular + motor de análise Rust em processo separado</arquitetura>
-  <web>Rust + Axum + Tokio + HTTP/JSON</web>
-  <frontend>TypeScript compilado para browser; sem runtime Node/Bun em produção</frontend>
-  <frontend-interactivity>HTML server-rendered para fluxos simples; TypeScript para estado/visualização local; HTTP/JSON para dados e SSE somente quando necessário</frontend-interactivity>
+  <web>nenhum; servidor HTTP removido pela ADR-0017</web>
+  <frontend>interface nativa Rust com eframe/egui/egui_extras no binário dfir-app; sem TypeScript/Node</frontend>
+  <frontend-interactivity>egui chama src/service diretamente no mesmo processo; sem navegador, HTTP ou SSE</frontend-interactivity>
   <persistencia>SQLite + WAL no contexto de worker único</persistencia>
   <engine>Rust</engine>
-  <evtx-parser>`evtx 0.12.2` com `default-features=false`; sem parser BinXML próprio</evtx-parser>
+  <evtx-parser>`evtx 0.15.1` com `default-features=false`; sem parser BinXML próprio</evtx-parser>
   <shared-protocol>crate `dfir-protocol`; tipos concretos Serialize/Deserialize; sem `dyn Serialize`</shared-protocol>
   <parsing>EVTX incremental</parsing>
   <detection>YARA-X</detection>
-  <data-processing>Polars via API Rust</data-processing>
+  <data-processing>eventos normalizados por dfir-protocol e persistidos no SQLite; sem Polars no MVP</data-processing>
   <engine-protocol>JSONL sobre stdin/stdout via subprocesso em produção e testes</engine-protocol>
   <ipc>stdin/stdout do subprocesso; sem socket ou API de rede no engine do MVP</ipc>
   <ruleset-mvp>Ruleset próprio e curado; feeds públicos apenas como fonte opcional de curadoria</ruleset-mvp>
@@ -3930,9 +3930,9 @@ Estas não são pendências do “documento original”, que já foi fornecido. 
   <signing>Ed25519 destacada quando assinatura estiver habilitada; chave separada por finalidade</signing>
   <runtime-container>removido — binário nativo é o único modo de execução (ver Seção 28)</runtime-container>
   <linux-service>nenhum; execução direta pelo operador</linux-service>
-  <reporting>Typst + exportação Markdown/JSON</reporting>
+  <reporting>Markdown determinístico + manifest.json; sem Typst no MVP</reporting>
   <remote-collection>Velociraptor, Fase 4</remote-collection>
-  <hardening>Geração de Ansible, sem aplicação automática em produção</hardening>
+  <hardening>itens de plano sem Ansible; geração de Ansible adiada para a Fase 4</hardening>
   <nist>Current Profile + Target Profile + Gap Analysis + Tiers contextualizados</nist>
   <forensics>Original preservada + chain of custody verificável</forensics>
   <offline>Suportado no MVP</offline>

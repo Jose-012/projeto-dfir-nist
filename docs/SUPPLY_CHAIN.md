@@ -1,14 +1,15 @@
 <!-- doc-type: reference | status: current -->
 # Supply-chain gates
 
-## Estado vigente (2026-11-14)
+## Estado vigente (2026-11-18)
 
-> Gap origem: VAZ-04 (2026-11-04). Resumo do estado atual; o histórico cronológico segue abaixo, sem alteração.
+> Resumo do estado atual; o histórico cronológico segue abaixo, sem alteração.
 
-- `cargo audit` **executado em 2026-11-14 (após o upgrade eframe/egui 0.37.0)**: 0 vulnerabilidades (1 aviso informativo permitido: `bincode`/`RUSTSEC-2025-0141`). A cadeia `zbus`/`zvariant`/`zbus_names`/`zvariant_derive`/`atspi`/`ashpd`/`sctk-adwaita`/`ttf-parser` **saiu do grafo de build** com o `eframe 0.37.0` sem a feature `accesskit` (ver §"Atualização 2026-11-14 (tarde)"). `encoding`/`RUSTSEC-2021-0153` saiu do grafo com o `evtx 0.15.1`.
-- `cargo deny --workspace check` **executado em 2026-11-14 (após o upgrade)**: `advisories`, `bans`, `licenses` e `sources` ok, com **duas** exceções justificadas (`RUSTSEC-2026-0459`, `libsqlite3-sys 0.37.0`; e `RUSTSEC-2025-0141`, `bincode` via `yara-x`; ver abaixo). As exceções de `zvariant`/`zbus_names`/`zvariant_derive` (`RUSTSEC-2026-0370/0371/0372`) e de `ttf-parser` (`RUSTSEC-2026-0192`) foram **removidas** porque esses crates não estão mais no grafo de build.
+- `cargo audit` e `cargo deny --workspace check` foram executados em Linux x86_64 com Rust/Cargo 1.100.0 e estão verdes em `EVD-012`: advisories, bans, licenses e sources ok.
+- Há **uma exceção de vulnerabilidade** (`RUSTSEC-2026-0459`, `libsqlite3-sys 0.37.0`, formalizada como `WVR-004`) e **duas exceções informativas** no `deny.toml`: `RUSTSEC-2025-0141` (`bincode`, via `yara-x`) e `RUSTSEC-2026-0543` (`chrono 0.4.45`, sem CVE). SQLite e chrono têm revisão até 2026-12-31; bincode é reavaliado a cada upgrade do `yara-x`.
+- `encoding`/`RUSTSEC-2021-0153` e a cadeia zbus/AT-SPI estão fora do grafo. As exceções correspondentes foram removidas.
 - `cargo vet`: dispensado no MVP (ADR-0018 D-2; confirmado pelo operador em 2026-11-04).
-- As execuções de 2026-11-14 estão registradas como `EVD-001` a `EVD-004` (manhã), `EVD-005` a `EVD-007` (após o upgrade eframe/egui 0.37.0) e `EVD-008`/`EVD-009` (doc-gate e janela real da GUI) em `docs/EVIDENCE_REGISTER.md`. As linhas históricas de 2026-10-29 continuam `[PENDING-HUMAN]`.
+- As execuções anteriores permanecem registradas como `EVD-001` a `EVD-009`; pistas C/D usam `EVD-010`/`EVD-011`. Não se reescrevem evidências históricas.
 
 | Crate | Versão no lock | Estado em 2026-11-14 | EVD |
 |---|---|---|---|
@@ -21,6 +22,7 @@
 | `evtx` | 0.15.1 | **`RUSTSEC-2026-0431` resolvido** (`0.12.3` → `0.15.1`; alocação sem limite em `.wevtcache`). O crate passou a usar `encoding_rs` desde 0.13, então `RUSTSEC-2021-0153` (`encoding`) **saiu do grafo** e a exceção foi removida do `deny.toml`. e2e 110/110 com `security.evtx`: 2 261 eventos, 6 candidatos, sem avisos do parser — mesmo resultado da versão anterior | `EVD-002` |
 | `libsqlite3-sys` | 0.37.0 | **`RUSTSEC-2026-0459` aceito como exceção temporária** (SQLite < 3.54.0, CVE-2026-119375), **formalizada como `WVR-004`** (aprovada pelo operador em 2026-11-14T22:00:30Z, válida até 2026-12-31). `sqlx 0.9.0` (última versão) exige `<0.38.0`; nenhuma versão publicada admite o `>=0.39.0` corrigido. Alcance: só o banco local no volume protegido, em WAL, sob o operador único (ADR-0007); ver a análise no `deny.toml` e em `.cargo/audit.toml`. **Reavaliar até 2026-12-31.** | `EVD-007` + `WVR-004` |
 | `bincode` | 2.0.1 | exceção informativa `RUSTSEC-2025-0141` (dependência obrigatória do `yara-x`) mantida | `EVD-007` |
+| `chrono` | 0.4.45 | exceção informativa `RUSTSEC-2026-0543` ("unmaintained", sem CVE); uso restrito a timestamps locais e parsing RFC 3339 de dados internos; revisão até 2026-12-31 | `EVD-012` |
 | `ttf-parser` | — | **fora do grafo de build** desde o `eframe 0.37.0` sem `accesskit` (a exceção `RUSTSEC-2026-0192` foi removida do `deny.toml`) | `EVD-007` |
 | `zvariant, zbus_names, zvariant_derive` | — | **fora do grafo de build** desde o `eframe 0.37.0` sem `accesskit` (exceções `RUSTSEC-2026-0370`/`0371`/`0372` removidas do `deny.toml`). A pendência de política do operador ("aceitar as três ou esperar o eframe que larga o zbus") foi resolvida pelo upgrade: o `eframe 0.37.0` permite desligar a feature `accesskit` do `egui-winit`, e o projeto a desligou | `EVD-007` |
 
@@ -31,7 +33,7 @@ O projeto trata mudanças de dependências e de toolchain como mudanças que afe
 - `cargo deny --workspace check` para advisories, licenças, bans e fontes (**sempre com `--workspace`**, ver abaixo);
 - ~~`cargo vet` for dependency audit policy;~~ dispensado no MVP (ADR-0018 D-2; confirmado pelo operador em 2026-11-04; Gap origem: INC-04);
 - `cargo nextest run --workspace` para a suíte de testes, quando disponível (Gap origem: INC-02);
-- testes `proptest` embutidos para invariantes críticos de segurança.
+- **divergência aberta:** `proptest` está declarado, mas não há uso atual no workspace. A especificação exige propriedades críticas; a correção deve implementar propriedades úteis ou remover a dependência e atualizar a norma, sem ocultar o aviso do Cargo.
 
 
 
@@ -39,7 +41,7 @@ O projeto trata mudanças de dependências e de toolchain como mudanças que afe
 
 - cargo-audit 0.22.2
 - cargo-deny 0.20.2
-- cargo-nextest 0.9.140
+- cargo-nextest 0.9.151
 - ~~cargo-vet: versão efetiva deve ser registrada no ambiente/release após `cargo vet init` e revisão dos audits importados.~~ Sem efeito: `cargo vet` está dispensado no MVP (ADR-0018 D-2; Gap origem: INC-04).
 
 `cargo-nextest` não possui retries no perfil padrão do repositório; flakiness deve ser investigada, não mascarada.
@@ -54,7 +56,7 @@ O projeto trata mudanças de dependências e de toolchain como mudanças que afe
 O release deve distinguir claramente dependências de runtime, build e tooling:
 
 - **Rust 1.100.0** (até 2026-11 era a 1.99.1; decisão do operador de usar a stable mais recente): toolchain do produto e dos testes Rust.
-- **CPython 3.14.6**: tooling de engenharia/QA; não entra na imagem de produção por padrão.
+- **CPython:** 3.14.6 é a referência declarada em `toolchains.toml`; a execução registrada em `EVD-012` usou 3.13.5. Essa diferença deve ser resolvida pelo alinhamento do pin ou pela instalação da referência, e a versão efetiva deve constar em cada evidência. Não entra na imagem de produção por padrão.
 - **Shell**: automação de desenvolvimento/QA; não é runtime da plataforma.
 
 A versão efetivamente usada no gate deve ser capturada por `rustc --version --verbose`, `cargo --version --verbose` e `python3 --version`, conforme disponibilidade. Uma linha de toolchain no manifesto não constitui prova de execução.

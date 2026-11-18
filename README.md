@@ -75,7 +75,7 @@ A demanda tem dois blocos: investigar o incidente (preservar, analisar, linha do
 Protótipo (ADR-0023): o operador definiu o escopo como EVTX, sem outros formatos de entrada nesta fase.
 
 - **Existe e funciona em código** (testado em **rustc 1.100.0, o pin atual**, em Linux x86_64, em **2026-11-18** (`EVD-012`): `just verify` — `fmt --check`, `check --workspace --locked`, `nextest` **426/426**, `clippy -D warnings` — e o e2e **110/110** com engine real e a fixture versionada `tests/fixtures/senai-demo.evtx`; em 2026-11-14 no pin anterior 1.99.1 o e2e também foi 110/110 com o `security.evtx` de referência, 2 261 eventos, `EVD-002`/`EVD-006`; a GUI foi exercitada por `egui_kittest` e numa janela real X11, `EVD-009`): preservação com hash e custódia; proveniência declarada na importação; EVTX com timeline completa, **campos estruturais e filtro `campo:valor`** (parser `evtx 0.15.1`); YARA-X; **detecção por regras sobre o EVTX com candidatos que o analista confirma ou rejeita** (19 regras, `docs/DETECTION_RULES.md`); NIST Current/Target/Gap e visão por Function; ATT&CK, caminho crítico, impacto, IOCs e recomendações; achados e causa-raiz; itens de plano nos oito domínios; lacunas de fonte; os cinco documentos Markdown com `manifest.json`, com máscara de dados pessoais por padrão; incidente de demonstração (`dfir-app demo`); **cópia verificada do banco antes de migration** (RF-032, ADR-0026).
-- **Supply chain (2026-11-18, `EVD-012`).** `cargo audit` e `cargo deny --workspace check` passam com **duas** exceções documentadas: `RUSTSEC-2026-0459` (`libsqlite3-sys 0.37.0`, sem `sqlx` publicado que admita a versão corrigida; `WVR-004`) e `RUSTSEC-2026-0543` (`chrono 0.4.45` "unmaintained", informativo, sem CVE; uso só de timestamps locais e parsing RFC 3339 interno), ambas com análise de alcance e revisão até 2026-12-31 (`docs/SUPPLY_CHAIN.md`).
+- **Supply chain (2026-11-18, `EVD-012`).** `cargo audit` e `cargo deny --workspace check` passam com uma vulnerabilidade aceita por `WVR-004` (`RUSTSEC-2026-0459`, `libsqlite3-sys 0.37.0`) e duas exceções informativas documentadas: `RUSTSEC-2025-0141` (`bincode`, via `yara-x`) e `RUSTSEC-2026-0543` (`chrono 0.4.45`, sem CVE). Todas têm análise de alcance; SQLite e chrono têm revisão até 2026-12-31 (`docs/SUPPLY_CHAIN.md`).
 - **Engine contido (ADR-0024).** Processo separado, ambiente reduzido, **um único arquivo de entrada**, timeout, `kill_on_drop`. **No Linux** o engine aplica a si mesmo, antes de ler a evidência, `no_new_privs`, **Landlock** (só lê o arquivo do job) e **seccomp** (sem rede, sem `execve`, sem `ptrace`...): provado com o engine real, que recebe `EACCES`/`EPERM` onde deve. **No Windows** há Job Object (memória, sem processo filho, sem interface), **ainda nunca executado lá**, e **não** há confinamento de arquivo e rede: todo job registra o aviso `SANDBOX_NOT_FULLY_APPLIED`. Isto contém falha do parser; não é proteção contra tudo, e para evidência de origem desconhecida a recomendação segue sendo uma máquina dedicada e offline.
 - **Adiado por decisão do operador (ADR-0025):** importação CSV/JSONL (F1-27) e, portanto, fontes de rede, SIEM, dispositivos de segurança e e-mail/identidade na nuvem. A ferramenta analisa **EVTX**; qualquer outro arquivo é preservado, não analisado.
 - **Limites que valem repetir:** a detecção só enxerga o que o log registrou (auditoria de processo, de compartilhamento e da plataforma de filtragem precisam estar ligadas) e **a ausência de candidato não prova ausência de ataque**; **sem log de rede não há como confirmar exfiltração**, só a tentativa de usar a ferramenta. As regras foram vistas em EVTX real sem ataque e em eventos sintéticos, **nunca em um incidente real**.
@@ -156,7 +156,7 @@ cargo run -- audit-verify
 cargo run -- engine-smoke
 ```
 
-Sem subcomando, `dfir-app` abre a interface nativa. `audit-verify` verifica tanto a audit chain quanto a chain of custody de todas as evidências armazenadas. A lista completa dos 16 subcomandos está em "Linha de comando (headless)", acima.
+Sem subcomando, `dfir-app` abre a interface nativa. `audit-verify` verifica tanto a audit chain quanto a chain of custody de todas as evidências armazenadas. A lista completa dos 20 subcomandos está em "Linha de comando (headless)", acima.
 
 ## Segurança
 
@@ -165,9 +165,9 @@ A segurança principal do produto está na fronteira de processamento da evidên
 ```text
 arquivo de evidência
       ↓
-engine (processo separado por job, limites de tempo/saída/memória)
+engine (processo separado por job; tempo/memória limitados; saída sem truncamento, com tetos opcionais)
       ↓
-resultado limitado (JSONL)
+resultado JSONL validado e persistido sem truncamento
       ↓
 aplicação local
 ```
