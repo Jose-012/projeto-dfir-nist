@@ -1,7 +1,7 @@
 <!-- doc-type: status | status: current -->
 # RTM - ferramenta forense local
 
-> **Autoridade de estado de ticket: este documento.** `docs/FASE1_STATUS.md` deve espelhar integralmente a matriz de tickets abaixo, com as colunas `Ticket`, `RFs` e `Estado`, e guardar o resumo cronológico por rodada; não é uma fonte de estado independente. (Decisão do operador de 2026-11-04; Gap origem: INC-03.)
+> **Autoridade única de estado de ticket: este documento.** `docs/FASE1_STATUS.md` guarda somente o resumo cronológico por rodada e não deve duplicar a matriz. (Decisão original de 2026-11-04; simplificação de 2026-11-18, Gap origem: INC-03/INC-13.)
 
 ## Baseline Fase 0 — capacidades já aceitas
 

@@ -1,48 +1,8 @@
-<!-- doc-type: status | status: current -->
+<!-- doc-type: log | status: current -->
 # Status da Fase 1
 
-> **Autoridade de estado de ticket: `docs/rtm.md`.** Este arquivo espelha a matriz e guarda um resumo por rodada; o log cronológico completo (até 2026-10-29) está em [`docs/archive/FASE1_STATUS_historico_2026-10.md`](archive/FASE1_STATUS_historico_2026-10.md).
-> Gap origem: INC-03 (2026-11-04).
-
-## Tickets
-
-| Ticket | RFs | Estado |
-|---|---|---|
-| F1-01 | Enabler (sem RF próprio) | IMPLEMENTED / PENDING-HUMAN |
-| F1-02 | RF-008 | IMPLEMENTED / PENDING-HUMAN |
-| F1-03 | RF-009, RF-010 | IMPLEMENTED / PENDING-HUMAN (E0505 corrigido em 2026-10-02) |
-| F1-04 | RF-011, RF-018, RF-020 | IMPLEMENTED / PENDING-HUMAN |
-| F1-05 | RF-019, RF-022 | IMPLEMENTED / PENDING-HUMAN |
-| F1-06 | RF-052 (RF-012 → Fase 4) | IMPLEMENTED / PENDING-HUMAN (absorvido por F1-29, domínio `OS_HARDENING`; a saída no Entregável 4 é gerada por F1-07) |
-| F1-07 | RF-013, RF-040, RF-046 | IMPLEMENTED / PENDING-HUMAN (ADR-0023; testado em rustc 1.97.1 em 2026-10-27) |
-| F1-08 | RF-025 | DEFERRED — Fase 4 |
-| F1-09 | RF-026 | DEFERRED — Fase 4 |
-| F1-10 | RF-032, RF-042, RF-043 (RF-041 substituído) | IMPLEMENTED / PENDING-HUMAN (ADR-0026: cópia verificada do banco antes de migration, automática e testada; AUD-03a e recovery na partida já existiam) |
-| F1-11 | RF-016, RF-017, RF-046 (RF-045 → Fase 4) | IMPLEMENTED / PENDING-HUMAN (reduzido: ADR-0023, Etapa 7; só EVTX, sem CSV/JSONL; testado em rustc 1.97.1 em 2026-10-27) |
-| F1-12 | RF-014, RF-030, RF-032, RF-047 + RFs MVP restantes | PARCIAL (documentos reconciliados em 2026-10-27; RF-032 automático; F1-26 e F1-28 implementados; RF-049 adiado por decisão do operador; **pendentes:** CI no toolchain pinado (F1-14), ~~`cargo audit` (F1-15)~~ [executado em 2026-10-29, ver a linha F1-15; nota de 2026-11-04, Gap origem: INC-03], execução em Windows e em incidente real) |
-| F1-13 | RF-047 | IMPLEMENTED / PENDING-HUMAN |
-| F1-14 | (gates) | PARCIAL (2026-11-18: `just verify` — `fmt`, `check --workspace`, `test`, `nextest` e `clippy -D warnings` — e `e2e_headless` executados manualmente em **1.100.0**, `EVD-012`; CI automático não implementado e `WAIVED` por `WVR-003` até 2026-12-31) |
-| F1-15 | (supply chain) | PARCIAL (2026-11-18: `cargo audit` e `cargo deny --workspace check` verdes em `EVD-012`; uma vulnerabilidade aceita por `WVR-004` e duas exceções informativas documentadas; manual, sem CI (`WVR-003`); `cargo vet` dispensado no MVP; exceções informativas da UI removidas do grafo com eframe 0.37.0 sem accesskit) |
-| F1-16 | RF-005, RF-006 | VERIFIED (2026-11-15, `EVD-011`): fixture EVTX sanitizada versionada `tests/fixtures/senai-demo.evtx` (determinística) e e2e 110/110 sem arquivo externo |
-| F1-17 | RF-006 | IMPLEMENTED / PENDING-HUMAN (ADR-0021) |
-| F1-18 | RF-007, RF-046 | IMPLEMENTED / PENDING-HUMAN (ADR-0020/0021/0025; filtros estruturados `campo:valor` implementados) |
-| F1-19 | RF-039 | VERIFIED (2026-11-15, `EVD-010`): vínculo evidência↔incidente idempotente com auditoria `EVIDENCE_LINKED_TO_INCIDENT`, vigente sem janela, YARA idempotente; GUI + CLI (`link-evidence`, `incident-evidence`) com testes próprios |
-| F1-20 | RF-008 | VERIFIED (2026-11-15, `EVD-010`): `wide ascii` provado em UTF-16LE, `scan_timeout_for` por tamanho com teto, `MAX_MATCHES_PER_PATTERN` sem descarte silencioso, sem truncamento de varredura; testes em `engine/src/yara_scan.rs` |
-| F1-21 | RF-004 | VERIFIED (2026-11-15, `EVD-010`): ordem registro→arquivo→jobs com retomada em reexecução; testes cobrindo falha de banco (nada apagado), falha de I/O (registro mantido) e purga completa incl. candidatos de detecção, custódia preservada |
-| F1-22 | RF-033, RF-037 | IMPLEMENTED / PENDING-HUMAN (ADR-0024: ambiente reduzido, arquivo único, `kill_on_drop`, Landlock + seccomp + `no_new_privs` no Linux, **provados com o engine real**; Job Object no Windows **só compilado, nunca executado**; confinamento de arquivo/rede no Windows não feito) |
-| F1-23 | RF-006 | VERIFIED (2026-11-15, `EVD-010`): nenhum `let _ =` em código de produção fora de testes; `rollback_loudly`, `discard_temp_file/dir`, `mark_job_failed_loudly` com `tracing::warn!` e testes próprios; sends de canal logados |
-| F1-24 | RF-004, RF-029 | VERIFIED (2026-11-15, `EVD-010`): painel de custódia no detalhe da evidência e abas Evidências/Auditoria em Incidentes na GUI; CLI `custody` e `audit`; testes `egui_kittest` 62/62 na suíte `gui::` |
-| F1-25 | RF-051 | IMPLEMENTED / PENDING-HUMAN (ADR-0023; testado em rustc 1.97.1 em 2026-10-27) |
-| F1-26 | RF-048 | IMPLEMENTED / PENDING-HUMAN (ADR-0025; esquema 4, migration 0012, campos estruturais e filtro; testado em rustc 1.97.1 em 2026-10-27) |
-| F1-27 | RF-049 | DEFERRED — decisão do operador (ADR-0025): escopo do protótipo é EVTX |
-| F1-28 | RF-050 | IMPLEMENTED / PENDING-HUMAN (ADR-0025; 19 regras, candidatos com confirmação/rejeição motivada, entregável 1 §4.3; verificado no `security.evtx` real e em eventos sintéticos, **não em incidente real**) |
-| F1-29 | RF-052 | IMPLEMENTED / PENDING-HUMAN (ADR-0023; testado em rustc 1.97.1 em 2026-10-27) |
-| F1-30 | RF-053 | IMPLEMENTED / PENDING-HUMAN (ADR-0023; testado em rustc 1.97.1 em 2026-10-27) |
-| F1-31 | RF-054 | IMPLEMENTED / PENDING-HUMAN (ADR-0023; testado em rustc 1.97.1 em 2026-10-27) |
-| F1-32 | RF-055 | IMPLEMENTED / PENDING-HUMAN (ADR-0023; testado em rustc 1.97.1 em 2026-10-27) |
-| F1-33 | RF-046 | VERIFIED (2026-11-15, `EVD-010`): AUD-32 corrigido — YARA não sobrescreve a timeline (só análise EVTX recarrega eventos); teste próprio em `src/gui/evidence.rs` |
-| F1-34 | Enabler (sem RF próprio; ADR-0019) | IMPLEMENTED / PENDING-HUMAN |
-| F1-35 | Enabler (sem RF próprio; ADR-0022) | IMPLEMENTED / PENDING-HUMAN |
+> **Autoridade de estado de ticket e requisito: `docs/rtm.md`.** Este arquivo guarda somente o resumo cronológico por rodada. Não duplique a matriz do RTM aqui. O log completo até 2026-10-29 está em [`docs/archive/FASE1_STATUS_historico_2026-10.md`](archive/FASE1_STATUS_historico_2026-10.md).
+> Gap origem: INC-03/INC-13; matriz duplicada removida em 2026-11-18.
 
 ## Histórico recente
 

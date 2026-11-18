@@ -589,13 +589,11 @@ backlog_lines = _read("docs/FASE1_BACKLOG.md").split("\n")
 for number, line in enumerate(backlog_lines):  # INC-11
     if "seguem `PLANNED`" in line and "INC-11" not in " ".join(backlog_lines[number : number + 5]):
         errors.append(f"docs/FASE1_BACKLOG.md:{number + 1} keeps a superseded PLANNED statement without the INC-11 note")
-fase1_status = _read("docs/FASE1_STATUS.md")  # INC-13
-mirror = {m.group(1): m.group(2) for line in fase1_status.split("\n") if (m := re.match(r"^\|\s*(F1-\d{2})\s*\|.*\|\s*([^|]*?)\s*\|\s*$", line))}
-for ticket_id, (_, state) in rtm_rows.items():
-    if ticket_id not in mirror:
-        errors.append(f"docs/FASE1_STATUS.md matrix has no row for {ticket_id} (INC-13)")
-    elif _status_token(mirror[ticket_id]) != _status_token(state):
-        errors.append(f"docs/FASE1_STATUS.md matrix state for {ticket_id} differs from docs/rtm.md (INC-13)")
+# INC-13: o RTM é a única matriz de estado. FASE1_STATUS é só histórico;
+# reintroduzir linhas F1-* ali recria a divergência que este check antigo causava.
+fase1_status = _read("docs/FASE1_STATUS.md")
+if re.search(r"^\|\s*F1-\d{2}\s*\|", fase1_status, re.M):
+    errors.append("docs/FASE1_STATUS.md must not duplicate the RTM ticket matrix (INC-13)")
 for line_number, line in enumerate(agents_text_all.split("\n"), 1):  # INC-14
     if line.startswith("## ") and not re.match(r"^## \d+\. ", line):
         errors.append(f"AGENTS.md:{line_number} has an unnumbered section heading (INC-14)")

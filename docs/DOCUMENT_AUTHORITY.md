@@ -11,7 +11,7 @@ Este arquivo define a autoridade por domínio e as fronteiras entre documentaç�
 | Arquitetura | `docs/PROJECT_SPEC_v6_5_1.md` | ADRs, índice XML |
 | UI nativa | `Cargo.toml` (`eframe`/`egui`/`egui_extras`/`rfd`) + evidência de toolchain efetiva | `src/gui`, `docs/NATIVE_UI_ARCHITECTURE.md` |
 | Python tooling | documentação do ambiente + evidência de `python3 --version` | scripts/tests |
-| Estado | `docs/rtm.md` (autoridade primária de estado de ticket) | `docs/FASE1_STATUS.md` (espelho da matriz da RTM e resumo por rodada; o log completo até 2026-10-29 está em `docs/archive/FASE1_STATUS_historico_2026-10.md`), `docs/FASE0_STATUS.md` (matriz de capacidades da Fase 0, histórico), prompt, changelog |
+| Estado | `docs/rtm.md` (única matriz de estado de ticket e requisito) | `docs/FASE1_STATUS.md` (somente resumo cronológico; log completo até 2026-10-29 em `docs/archive/FASE1_STATUS_historico_2026-10.md`), `docs/FASE0_STATUS.md` (matriz de capacidades da Fase 0, histórico), prompt, changelog |
 | Rastreabilidade | `docs/rtm.md` | testes, código, ADRs |
 | Gates | `docs/RELEASE_GATE.md` + `docs/EVIDENCE_REGISTER.md` | `justfile`, CI quando existir |
 | Regras LLM | `AGENTS.md` + seção 45 + Apêndice F; escolha de harness de agente: ADR-0027 | `CONVENTIONS.md`, `PROMPT_NOVA_CONVERSA.md` |
@@ -22,7 +22,7 @@ Este arquivo define a autoridade por domínio e as fronteiras entre documentaç�
 
 ### Documentos de apoio
 
-Documentos que não são autoridade de um domínio, mas que a mudança relevante mantém em dia (`AGENTS.md` §11). Gap origem: AUS-01 e INC-03 (2026-11-04).
+Documentos que apoiam a mudança somente quando são afetados (`AGENTS.md` §11). Não se cria narrativa duplicada de estado. Gap origem: AUS-01 e INC-03 (2026-11-04); simplificação em 2026-11-18.
 
 | Documento | Papel | Autoridade que o governa |
 |---|---|---|
