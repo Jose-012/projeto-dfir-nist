@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - ações de evidência e scroll cobertos por teste (`EVD-017`)
+
+- Novo teste sem snapshots verifica as quatro ações na faixa vertical de 48 px e sem sobreposição a 780 px. Após resize a 600 px, `Destruir` começa fora da viewport, dois eventos reais `MouseWheel` o revelam e o clique confirma `pending_destroy`.
+- Prova de sensibilidade: a mutação temporária de `ScrollArea::horizontal` para vertical deixou `Destruir` em x=706,0..769,1 e falhou; a restauração passou. Ajustes de fixture durante a reprodução foram separados de defeitos de produção e estão documentados na evidência.
+- `EVD-017`: `just verify` com 437 passed/1 skipped e doc-gate PASS. Nenhum código de produção mudou; supply chain/e2e permanecem em `EVD-014`, sem janela real ou verificação externa nova.
+
 ## Unreleased - 2026-11-18 - abas testadas na largura mínima real (`EVD-016`)
 
 - `all_tabs_stay_inside_the_minimum_content_width` agora renderiza o conteúdo a 780 px, correspondentes à janela mínima de 960 px menos os 180 px da navegação. O teste anterior usava 960 px para o conteúdo e não cobria esse limite real.

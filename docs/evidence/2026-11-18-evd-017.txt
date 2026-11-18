@@ -1,0 +1,41 @@
+EVD-017 - ações da tabela de evidências e scroll horizontal
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T06:07Z..06:21Z
+commit-tree: 791ea5867a5bace1099d9e10bcd715cc49872c76
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: o ajuste visual de 26cc8b3 não tinha teste direto para a faixa vertical
+de 48 px, sobreposição das quatro ações e acesso por scroll horizontal.
+
+O teste final, sem snapshots:
+  A 780 px, mede as quatro ações na faixa vertical de 48 px e verifica que seus
+  retângulos não se intersectam. Todas já começam visíveis nessa largura.
+  Redimensiona para 600 px e exige que Destruir comece fora da viewport, em
+  x=706,0..769,1. Dois eventos reais MouseWheel de -100 px no eixo X revelam a
+  ação; o teste então clica e confirma pending_destroy=Some("ev-1").
+
+Ajustes do próprio teste durante a reprodução:
+  O retângulo do nome cobre apenas o texto de 20 px, não a linha inteira; a
+  referência foi corrigida para o topo mais 48 px. AccessKit não foi usado no
+  teste final porque o botão pertence ao scroll vertical interno e o cabeçalho
+  não interativo não consumiu a ação. Um único MouseWheel moveu 100 px; o
+  segundo completou a exposição da ação. Essas falhas de fixture não foram
+  tratadas como defeitos de produção.
+
+Prova de sensibilidade por mutação temporária:
+  ScrollArea::horizontal foi substituído por vertical. Destruir permaneceu em
+  x=706,0..769,1 após os eventos e o teste falhou. A implementação horizontal
+  foi restaurada imediatamente e o teste voltou a passar. A mutação não foi
+  commitada.
+
+just verify
+  exit 0; fmt, check --workspace --locked --all-targets, nextest, doc-tests e
+  clippy -D warnings verdes. Nextest: 437 passed, 1 skipped.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Não houve mudança de produção nesta rodada, somente o novo teste. Supply chain
+e e2e não foram repetidos e permanecem em EVD-014. Nenhuma janela real foi
+aberta. Windows x86_64, Linux aarch64, incidente real e CI automático continuam
+PENDING-HUMAN/WAIVED conforme WVR-001, WVR-002 e WVR-003.
