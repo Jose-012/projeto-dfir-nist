@@ -1677,14 +1677,23 @@ async fn index_timeline_inner(db: &SqlitePool, job_id: &str, path: &Path) -> App
             .execute(&mut *connection)
             .await?;
         let mut ord: i64 = 0;
+        let mut line_number = 0_u64;
         let (mut indexed, mut skipped) = (0_u64, 0_u64);
         while let Some(line) = lines.next_line().await.map_err(AppError::Storage)? {
-            if dfir_protocol::json_depth_exceeds_limit(line.as_bytes(), dfir_protocol::MAX_JSON_DEPTH) {
-                continue;
+            line_number += 1;
+            if dfir_protocol::json_depth_exceeds_limit(
+                line.as_bytes(),
+                dfir_protocol::MAX_JSON_DEPTH,
+            ) {
+                return Err(AppError::Config(format!(
+                    "stored timeline result exceeds JSON nesting depth limit at line {line_number}"
+                )));
             }
-            let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else {
-                continue;
-            };
+            let value = serde_json::from_str::<serde_json::Value>(&line).map_err(|error| {
+                AppError::Config(format!(
+                    "stored timeline result is malformed JSON at line {line_number}: {error}"
+                ))
+            })?;
             let Some(array) = value.get("items").and_then(serde_json::Value::as_array) else {
                 continue;
             };
@@ -3072,6 +3081,73 @@ mod tests {
 
         assert_eq!(page.job.warning_count, 1);
         assert_eq!(page.job.warnings[0].code, "EVTX_TRUNCATED");
+    }
+
+    #[tokio::test]
+    async fn reindexing_rejects_malformed_jsonl_and_preserves_existing_index() {
+        use tokio::io::AsyncWriteExt;
+
+        let fx = fixture().await;
+        let nesting = "[".repeat(dfir_protocol::MAX_JSON_DEPTH + 1)
+            + &"]".repeat(dfir_protocol::MAX_JSON_DEPTH + 1);
+        let too_deep = format!("{{\"items\":{nesting}}}");
+
+        for (case, bad_line) in [("malformed", "not-json".to_string()), ("depth", too_deep)] {
+            let evidence_id = format!("ev_reindex_{case}");
+            let job_id = seed_timeline_job(&fx, &evidence_id, 2).await;
+            let reference = format!("staging/analysis/{job_id}/output/results.jsonl");
+            let path = fx.paths.logical_path(&reference).expect("results path");
+            assert_eq!(
+                index_timeline(&fx.pool, &job_id, &path)
+                    .await
+                    .expect("initial valid index"),
+                (2, 0)
+            );
+
+            let mut file = tokio::fs::OpenOptions::new()
+                .append(true)
+                .open(&path)
+                .await
+                .expect("append invalid line");
+            file.write_all(bad_line.as_bytes())
+                .await
+                .expect("append invalid line");
+            file.write_all(b"\n").await.expect("terminate invalid line");
+            file.flush().await.expect("flush invalid line");
+
+            let error = index_timeline(&fx.pool, &job_id, &path)
+                .await
+                .expect_err("reindexing accepted invalid JSONL");
+            let expected = if case == "malformed" {
+                "stored timeline result is malformed JSON at line 2"
+            } else {
+                "stored timeline result exceeds JSON nesting depth limit at line 2"
+            };
+            assert!(
+                matches!(&error, AppError::Config(message) if message.contains(expected)),
+                "unexpected error for {case}: {error:?}"
+            );
+
+            let event_count: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM timeline_events WHERE job_id=?")
+                    .bind(&job_id)
+                    .fetch_one(&fx.pool)
+                    .await
+                    .expect("preserved event count");
+            assert_eq!(event_count, 2, "events must survive {case} rollback");
+            let (indexed, skipped): (i64, i64) = sqlx::query_as(
+                "SELECT event_count, skipped_count FROM timeline_index WHERE job_id=?",
+            )
+            .bind(&job_id)
+            .fetch_one(&fx.pool)
+            .await
+            .expect("preserved timeline index");
+            assert_eq!(
+                (indexed, skipped),
+                (2, 0),
+                "index must survive {case} rollback"
+            );
+        }
     }
 
     #[tokio::test]
