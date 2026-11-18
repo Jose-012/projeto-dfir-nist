@@ -1,0 +1,58 @@
+EVD-035 - supersessao preserva tipo e origem analitica
+status: PASS somente para os gates locais executados
+executed-at: 2026-11-18T11:13Z..11:35Z
+commit-tree: e4bd37ab0e60169e1e58b428fe9412b0ae986bbd (codigo; documentacao desta evidencia no commit seguinte)
+environment: Linux x86_64, Debian 13; rustc/cargo 1.100.0; Python 3.13.5; cargo-nextest 0.9.151
+
+Escopo: F1-01. A supersessao validava correlation_key e pai vigente, mas podia
+mudar result_type, evidence_id e incident_id. Isso movia o unico resultado
+vigente para outra origem ou mudava sua interpretacao analitica.
+
+Reproducao antes da correcao, sobre a arvore 53d82f1 mais os testes novos:
+  cargo nextest run --locked --no-fail-fast supersedes_preserves
+    exit 100 esperado para a reproducao; 0 passed/3 failed.
+    YARA de ev-a para ev-b foi aceito: original_current=0 destination_current=1.
+    ATT&CK de inc-a para inc-b foi aceito: selected_incident=Some("inc-b").
+    YARA para IOC na mesma evidencia foi aceito: selected_type=IOC.
+    Tudo ocorreu via insert publico do modulo, sem UPDATE/DELETE ou SQL manual.
+
+Correcao no commit e4bd37a:
+  a transacao BEGIN IMMEDIATE consulta correlation_key, result_type,
+  evidence_id e incident_id do pai. Tipo e incidente devem permanecer iguais;
+  evidencia tambem, exceto IOC, cujo agregado existente reune sightings de
+  varias evidencias no mesmo incidente. Divergencias falham antes do INSERT e
+  da auditoria, sem reescrever historico antigo.
+
+Controle que limitou o desenho:
+  a primeira execucao de just verify falhou o teste existente
+  recording_the_same_ioc_twice_aggregates_sightings_without_losing_provenance
+  porque a guarda universal de evidencia impedia a segunda origem do agregado.
+  O log foi preservado em task-023-just-verify-initial.txt. A guarda de
+  evidencia foi restringida aos tipos nao-IOC; tipo e incidente continuam
+  universais. Esse resultado inicial nao e apresentado como PASS.
+
+Regressoes depois da correcao final:
+  cargo nextest run --locked --no-fail-fast supersedes_preserves
+    exit 0; 3/3 testes. Cada revisao divergente falha com o campo especifico,
+    a primeira linha continua vigente e historico/auditoria permanecem em um.
+  cargo nextest run --locked --no-fail-fast recording_the_same_ioc_twice
+    exit 0; agregacao entre ev-1/ev-2 preserva sightings e provenance.
+  cargo nextest run --locked --no-fail-fast different_incidents_do_not_share_ioc_aggregation
+    exit 0; incidentes distintos continuam separados.
+
+just verify
+  execucao final exit 0; fmt, check --workspace --locked --all-targets,
+  nextest, doc-tests e clippy -D warnings verdes. Nextest: 462 passed, 1 skipped.
+
+just e2e tests/fixtures/senai-demo.evtx
+  exit 0; 110/110 etapas passaram com engine real e sandbox required, incluindo
+  resultados versionados, cinco documentos, hardening, determinismo e custodia.
+
+just doc-gate
+  Fase 0: 0 errors, 0 warnings. documentation gate: PASS.
+
+Limites: as regressoes usam SQLite descartavel e nao reparam historico antigo
+com tipo ou origem divergente. Supply chain e janela real nao foram repetidos;
+EVD-032 permanece a execucao ambiental mais recente. Windows x86_64, Linux
+aarch64, incidente real e CI automatico continuam PENDING-HUMAN/WAIVED conforme
+WVR-001, WVR-002 e WVR-003.

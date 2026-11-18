@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-18 - supersessão preserva tipo e origem analítica (`EVD-035`)
+
+- Revisões com a mesma `correlation_key` podiam mudar YARA de evidência, ATT&CK de incidente e YARA para IOC. As reproduções deixaram a origem anterior sem vigente ou mudaram o tipo selecionado.
+- A transação agora exige mesmo `result_type` e `incident_id`, e mesma `evidence_id` para tipos não-IOC. IOC mantém a agregação existente entre evidências no mesmo incidente; um primeiro gate universal falhou esse controle e foi corrigido antes da validação final.
+- `EVD-035`: três regressões e dois controles IOC, `just verify` final com 462 passed/1 skipped, e2e 110/110 e doc-gate PASS. Histórico antigo não é reparado; supply chain e smoke permanecem em `EVD-032`.
+
 ## Unreleased - 2026-11-18 - correlation_key analítica não aceita duas raízes vigentes (`EVD-034`)
 
 - Após a guarda de sucessora única, `supersedes=None` ainda aceitava duas raízes com a mesma `correlation_key`. A reprodução obteve duas linhas vigentes na listagem e a leitura singular escolheu a segunda.
