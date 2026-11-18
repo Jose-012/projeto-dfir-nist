@@ -29,7 +29,7 @@ use crate::{
     application::engine::{self, EngineRunnerConfig},
     error::{AppError, AppResult},
     infrastructure::storage::StoragePaths,
-    persistence::{analytical_results, audit, rollback_loudly},
+    persistence::{analytical_results, audit, rollback_loudly, validation_error},
 };
 use chrono::Utc;
 use dfir_protocol::NormalizedEvent;
@@ -691,9 +691,28 @@ pub struct JobStatusResponse {
     pub warnings: Vec<JobWarning>,
 }
 
-impl From<JobRow> for JobStatusResponse {
-    fn from(row: JobRow) -> Self {
-        Self {
+impl TryFrom<JobRow> for JobStatusResponse {
+    type Error = AppError;
+
+    fn try_from(row: JobRow) -> Result<Self, Self::Error> {
+        let warnings: Vec<JobWarning> = match row.warnings.as_deref() {
+            Some(json) => serde_json::from_str(json).map_err(|error| {
+                AppError::Config(format!(
+                    "stored analysis job warnings are malformed JSON: {error}"
+                ))
+            })?,
+            None => Vec::new(),
+        };
+        let warning_count = u64::try_from(row.warning_count).map_err(|_| {
+            AppError::Config("stored analysis job warning_count is negative".into())
+        })?;
+        if warning_count != warnings.len() as u64 {
+            return Err(AppError::Config(format!(
+                "stored analysis job warning_count does not match decoded warnings: {warning_count} != {}",
+                warnings.len()
+            )));
+        }
+        Ok(Self {
             job_id: row.id,
             request_id: row.request_id,
             evidence_id: row.evidence_id,
@@ -707,13 +726,9 @@ impl From<JobRow> for JobStatusResponse {
             created_at: row.created_at,
             started_at: row.started_at,
             finished_at: row.finished_at,
-            warning_count: row.warning_count.max(0) as u64,
-            warnings: row
-                .warnings
-                .as_deref()
-                .and_then(|json| serde_json::from_str(json).ok())
-                .unwrap_or_default(),
-        }
+            warning_count,
+            warnings,
+        })
     }
 }
 
@@ -1039,7 +1054,6 @@ async fn analyze_inner(
                     }
                 }
             }
-            let warnings_json = serde_json::to_string(&warnings).unwrap_or_else(|_| "[]".into());
             let mut connection = match begin_immediate(&services.db).await {
                 Ok(connection) => connection,
                 Err(error) => {
@@ -1055,6 +1069,11 @@ async fn analyze_inner(
                 }
             };
             let transaction_result: Result<(), sqlx::Error> = async {
+                let warnings_json = serde_json::to_string(&warnings).map_err(|error| {
+                    validation_error(format!(
+                        "could not encode analysis job warnings as JSON: {error}"
+                    ))
+                })?;
                 sqlx::query("UPDATE analysis_jobs SET status='COMPLETED',message_count=?,item_count=?,output_reference=?,finished_at=?,warning_count=?,warnings=? WHERE id=?")
                     .bind(summary.message_count as i64)
                     .bind(summary.item_count as i64)
@@ -1811,7 +1830,7 @@ async fn timeline_page_core(
         .fetch_optional(db)
         .await?
         .ok_or_else(|| AppError::NotFound("analysis job not found".into()))?;
-    let job: JobStatusResponse = row.into();
+    let job = JobStatusResponse::try_from(row)?;
     let produces_timeline =
         job.kind == dfir_protocol::ANALYSIS_KIND_EVTX_TIMELINE && job.status == "COMPLETED";
     let Some(reference) = job.output_reference.clone().filter(|_| produces_timeline) else {
@@ -2991,6 +3010,52 @@ mod tests {
 
         assert_eq!(page.job.warning_count, 1);
         assert_eq!(page.job.warnings[0].code, "EVTX_TRUNCATED");
+    }
+
+    #[tokio::test]
+    async fn timeline_page_rejects_malformed_stored_job_warnings() {
+        let fx = fixture().await;
+        let job_id = seed_timeline_job(&fx, "ev_w_bad", 1).await;
+        sqlx::query("UPDATE analysis_jobs SET warning_count=1, warnings='not-json' WHERE id=?")
+            .bind(&job_id)
+            .execute(&fx.pool)
+            .await
+            .expect("malformed warnings fixture");
+
+        let error = timeline_page_core(&fx.pool, &fx.paths, &job_id, 0, 10, None, true)
+            .await
+            .expect_err("JSON inválido não pode apagar os avisos da resposta");
+        assert!(
+            matches!(&error, AppError::Config(message) if message.contains("stored analysis job warnings are malformed JSON")),
+            "{error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn timeline_page_rejects_inconsistent_stored_job_warning_count() {
+        let fx = fixture().await;
+        for (index, warning_count) in [1_i64, -1].into_iter().enumerate() {
+            let job_id = seed_timeline_job(&fx, &format!("ev_w_count_{index}"), 1).await;
+            sqlx::query("UPDATE analysis_jobs SET warning_count=?, warnings='[]' WHERE id=?")
+                .bind(warning_count)
+                .bind(&job_id)
+                .execute(&fx.pool)
+                .await
+                .expect("warning count fixture");
+
+            let error = timeline_page_core(&fx.pool, &fx.paths, &job_id, 0, 10, None, true)
+                .await
+                .expect_err("contagem inválida não pode ser escondida");
+            let expected = if warning_count < 0 {
+                "warning_count is negative"
+            } else {
+                "warning_count does not match"
+            };
+            assert!(
+                matches!(&error, AppError::Config(message) if message.contains(expected)),
+                "count={warning_count}: {error:?}"
+            );
+        }
     }
 
     #[tokio::test]
