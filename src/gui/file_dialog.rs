@@ -82,6 +82,20 @@ pub struct FilePicker {
 }
 
 impl FilePicker {
+    /// Canal controlado pelo teste, sem abrir um diálogo nativo nem exigir
+    /// display. O emissor permite simular escolha, cancelamento e thread morta.
+    #[cfg(test)]
+    pub(crate) fn for_test() -> (Self, std::sync::mpsc::Sender<Option<PathBuf>>) {
+        let (sender, receiver) = channel();
+        (
+            Self {
+                receiver: Some(receiver),
+                busy: true,
+            },
+            sender,
+        )
+    }
+
     pub fn is_busy(&self) -> bool {
         self.busy
     }
@@ -166,7 +180,27 @@ mod tests {
     }
 
     #[test]
-    fn cancellation_and_a_dead_worker_both_end_the_request() {
+    fn an_empty_channel_is_pending_and_cancellation_finishes_without_a_path() {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let mut picker = FilePicker {
+            receiver: Some(receiver),
+            busy: true,
+        };
+        assert_eq!(picker.poll(), None, "sem resultado, continua em andamento");
+        assert!(picker.is_busy());
+
+        sender.send(None).expect("cancelamento");
+        assert_eq!(picker.poll(), Some(super::Picked::Nothing));
+        assert!(!picker.is_busy());
+        assert_eq!(
+            picker.poll(),
+            None,
+            "cancelamento também é consumido uma vez"
+        );
+    }
+
+    #[test]
+    fn a_dead_worker_ends_the_request_without_inventing_a_path() {
         let (sender, receiver) = std::sync::mpsc::channel::<Option<std::path::PathBuf>>();
         drop(sender);
         let mut picker = FilePicker {

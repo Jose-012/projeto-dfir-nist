@@ -22,8 +22,11 @@ pub struct DeliverablesState {
     previewing_for: Option<String>,
     preview: Loadable<DeliverableSet>,
     selected: usize,
-    generating: bool,
+    /// Geração em curso e incidente dono do pedido. Respostas de outro
+    /// incidente não podem concluir nem substituir este estado.
+    generating_for: Option<String>,
     generated: Option<Result<GeneratedDeliverables, String>>,
+    generated_for: Option<String>,
     /// O padrão é mascarar: só a escolha explícita de exportar sem máscara
     /// liga este sinalizador.
     export_without_mask: bool,
@@ -32,6 +35,9 @@ pub struct DeliverablesState {
     picker_hint: Option<String>,
     /// Pasta digitada, alternativa ao seletor nativo (GUI-01).
     manual_out_dir: String,
+    /// Incidente que abriu o seletor; uma escolha depois da troca de
+    /// incidente é descartada em vez de gerar o caso errado.
+    picker_for: Option<String>,
     picker: FilePicker,
 }
 
@@ -48,10 +54,14 @@ impl DeliverablesState {
 
     pub fn on_generated(
         &mut self,
-        _incident_id: &str,
+        incident_id: &str,
         result: Result<GeneratedDeliverables, String>,
     ) {
-        self.generating = false;
+        if self.generating_for.as_deref() != Some(incident_id) {
+            return;
+        }
+        self.generating_for = None;
+        self.generated_for = Some(incident_id.to_string());
         self.generated = Some(result);
     }
 
@@ -62,7 +72,7 @@ impl DeliverablesState {
     /// Gerar exige que não haja uma geração em curso e, se a máscara foi
     /// desligada, que o operador tenha confirmado.
     fn can_generate(&self) -> bool {
-        !self.generating && (self.mask_personal_data() || self.confirmed_without_mask)
+        self.generating_for.is_none() && (self.mask_personal_data() || self.confirmed_without_mask)
     }
 
     fn request_preview(&mut self, incident_id: &str, backend: &Backend) {
@@ -76,11 +86,24 @@ impl DeliverablesState {
     }
 
     fn request_generation(&mut self, incident_id: &str, out_dir: PathBuf, backend: &Backend) {
-        if !self.can_generate() {
+        if self.generating_for.is_some() {
+            self.picker_hint = Some("Já existe uma geração em andamento; aguarde o fim.".into());
             return;
         }
-        self.generating = true;
+        if !self.mask_personal_data() && !self.confirmed_without_mask {
+            self.picker_hint = Some(
+                "Confirme explicitamente a exportação sem máscara antes de gerar os arquivos."
+                    .into(),
+            );
+            return;
+        }
+        // Se o caminho digitado foi usado enquanto o seletor estava aberto, a
+        // resposta tardia dele não pode iniciar uma segunda geração.
+        self.picker_for = None;
+        self.generating_for = Some(incident_id.to_string());
         self.generated = None;
+        self.generated_for = None;
+        self.picker_hint = None;
         backend.send(Command::GenerateDeliverables {
             incident_id: incident_id.to_string(),
             out_dir,
@@ -89,7 +112,7 @@ impl DeliverablesState {
     }
 
     /// A máscara de dados pessoais e a escolha explícita de exportar sem ela.
-    fn mask_options_ui(&mut self, ui: &mut egui::Ui) {
+    fn mask_options_ui(&mut self, ui: &mut egui::Ui, incident_id: &str) {
         let mut mask = self.mask_personal_data();
         if ui
             .checkbox(
@@ -100,13 +123,18 @@ impl DeliverablesState {
         {
             self.export_without_mask = !mask;
             self.confirmed_without_mask = false;
-            // O que está na tela foi gerado com a escolha anterior.
+            // Respostas do pedido anterior precisam ser invalidadas: em
+            // particular, uma prévia sem máscara não pode chegar depois de a
+            // máscara ter sido reativada e expor o conteúdo antigo.
+            self.previewing_for = None;
             self.preview = Loadable::Idle;
+            self.selected = 0;
         }
         if self.export_without_mask {
             let flagged = self
                 .preview
                 .ready()
+                .filter(|_| self.previewing_for.as_deref() == Some(incident_id))
                 .map_or(0, |set| set.personal_data_evidence);
             let marked = if flagged > 0 {
                 format!(" {flagged} evidência(s) foi/foram marcada(s) como contendo dado pessoal.")
@@ -136,32 +164,53 @@ impl DeliverablesState {
             "Gera os cinco documentos da demanda em Markdown, a partir do que está registrado neste incidente, e um manifest.json com os hashes. Seções sem dados aparecem como \"sem registro\"; nada é inventado.",
         );
         ui.label("Escopo do protótipo: só logs EVTX são analisados automaticamente.");
-        self.mask_options_ui(ui);
+        self.mask_options_ui(ui, incident_id);
         match self.picker.poll() {
-            Some(Picked::Path(folder)) => self.request_generation(incident_id, folder, backend),
+            Some(Picked::Path(folder)) => match self.picker_for.take() {
+                Some(requested_for) if requested_for == incident_id => {
+                    self.request_generation(incident_id, folder, backend);
+                }
+                Some(_) => {
+                    self.picker_hint = Some(
+                        "A pasta foi descartada porque o incidente mudou; escolha novamente."
+                            .into(),
+                    );
+                }
+                None => {}
+            },
             Some(Picked::Nothing) => {
-                self.picker_hint = Some(
-                    "Nenhuma pasta escolhida. Se o seletor não abriu, informe a pasta no campo abaixo."
-                        .into(),
-                );
+                if self.picker_for.take().as_deref() == Some(incident_id) {
+                    self.picker_hint = Some(
+                        "Nenhuma pasta escolhida. Se o seletor não abriu, informe a pasta no campo abaixo."
+                            .into(),
+                    );
+                }
             }
             None => {}
         }
         ui.horizontal(|ui| {
-            if ui.button("Pré-visualizar").clicked() {
+            let preview_loading =
+                self.previewing_for.as_deref() == Some(incident_id) && self.preview.is_loading();
+            if ui
+                .add_enabled(!preview_loading, egui::Button::new("Pré-visualizar"))
+                .clicked()
+            {
                 self.request_preview(incident_id, backend);
             }
-            if ui
+            let clicked = ui
                 .add_enabled(
                     self.can_generate() && !self.picker.is_busy(),
                     egui::Button::new("Gerar arquivos…"),
                 )
-                .clicked()
-                && let Err(message) = self.picker.open(Request::Folder {
+                .clicked();
+            if clicked {
+                self.picker_for = Some(incident_id.to_string());
+                if let Err(message) = self.picker.open(Request::Folder {
                     title: "Pasta onde gravar os entregáveis".into(),
-                })
-            {
-                self.picker_hint = Some(message);
+                }) {
+                    self.picker_for = None;
+                    self.picker_hint = Some(message);
+                }
             }
         });
         ui.horizontal(|ui| {
@@ -189,42 +238,45 @@ impl DeliverablesState {
         if let Some(hint) = &self.picker_hint {
             super::hint_banner(ui, hint);
         }
-        if self.generating {
+        if self.generating_for.as_deref() == Some(incident_id) {
             ui.horizontal(|ui| {
                 ui.spinner();
                 ui.label("Gerando…");
             });
         }
-        match &self.generated {
-            Some(Ok(done)) => {
-                ui.colored_label(
-                    egui::Color32::from_rgb(60, 150, 60),
-                    format!("Arquivos gerados em {}", done.output_dir.display()),
-                );
-                egui::Grid::new("generated_files")
-                    .striped(true)
-                    .show(ui, |ui| {
-                        ui.strong("Arquivo");
-                        ui.strong("Bytes");
-                        ui.strong("SHA-256");
-                        ui.end_row();
-                        for file in &done.files {
-                            ui.label(&file.file_name);
-                            ui.label(file.bytes.to_string());
-                            ui.monospace(&file.sha256);
+        if self.generated_for.as_deref() == Some(incident_id) {
+            match &self.generated {
+                Some(Ok(done)) => {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(60, 150, 60),
+                        format!("Arquivos gerados em {}", done.output_dir.display()),
+                    );
+                    egui::Grid::new("generated_files")
+                        .striped(true)
+                        .show(ui, |ui| {
+                            ui.strong("Arquivo");
+                            ui.strong("Bytes");
+                            ui.strong("SHA-256");
                             ui.end_row();
-                        }
-                    });
+                            for file in &done.files {
+                                ui.label(&file.file_name);
+                                ui.label(file.bytes.to_string());
+                                ui.monospace(&file.sha256);
+                                ui.end_row();
+                            }
+                        });
+                }
+                Some(Err(message)) => super::error_banner(ui, message),
+                None => {}
             }
-            Some(Err(message)) => super::error_banner(ui, message),
-            None => {}
         }
         ui.separator();
 
-        let Self {
-            preview, selected, ..
-        } = self;
-        preview.show(ui, |ui, set| {
+        if self.previewing_for.as_deref() == Some(incident_id) {
+            let Self {
+                preview, selected, ..
+            } = self;
+            preview.show(ui, |ui, set| {
             match &set.redaction {
                 Some(summary) => ui.small(format!(
                     "Pré-visualização com máscara: {} IP(s), {} e-mail(s), {} conta(s) e {} pessoa(s) trocados por marcadores.",
@@ -252,7 +304,8 @@ impl DeliverablesState {
                         ));
                     });
             }
-        });
+            });
+        }
     }
 }
 
@@ -263,6 +316,7 @@ mod ui_tests {
     use super::DeliverablesState;
     use crate::gui::Loadable;
     use crate::gui::backend::{Backend, Command};
+    use crate::gui::file_dialog::FilePicker;
     use crate::gui::test_harness::drain;
     use crate::service::deliverables::{
         DeliverableSet, GeneratedDeliverables, GeneratedFile, RenderedDocument,
@@ -270,7 +324,7 @@ mod ui_tests {
     use egui_kittest::{Harness, kittest::Queryable};
     use std::path::PathBuf;
 
-    type State = (DeliverablesState, Backend);
+    type State = (DeliverablesState, Backend, &'static str);
 
     fn sample_set() -> DeliverableSet {
         DeliverableSet {
@@ -296,11 +350,21 @@ mod ui_tests {
     }
 
     fn harness(state: DeliverablesState, backend: Backend) -> Harness<'static, State> {
+        harness_for_incident(state, backend, "inc-1")
+    }
+
+    fn harness_for_incident(
+        state: DeliverablesState,
+        backend: Backend,
+        incident_id: &'static str,
+    ) -> Harness<'static, State> {
         crate::gui::test_harness::builder()
             .with_size(egui::vec2(1000.0, 1400.0))
             .build_ui_state(
-                |ui, (state, backend): &mut State| state.ui(ui, "inc-1", backend),
-                (state, backend),
+                |ui, (state, backend, incident_id): &mut State| {
+                    state.ui(ui, incident_id, backend);
+                },
+                (state, backend, incident_id),
             )
     }
 
@@ -368,7 +432,7 @@ mod ui_tests {
         let (backend, mut commands) = Backend::for_test();
         let mut state = DeliverablesState::default();
         state.request_generation("inc-1", PathBuf::from("/tmp/saida"), &backend);
-        assert!(state.generating);
+        assert_eq!(state.generating_for.as_deref(), Some("inc-1"));
         let sent = drain(&mut commands);
         assert_eq!(sent.len(), 1);
         match &sent[0] {
@@ -396,7 +460,7 @@ mod ui_tests {
                 }],
             }),
         );
-        assert!(!state.generating);
+        assert!(state.generating_for.is_none());
         let mut harness = harness(state, backend);
         harness.run();
         harness.get_by_label("Arquivos gerados em /tmp/saida/entregaveis-inc-1");
@@ -406,8 +470,10 @@ mod ui_tests {
 
     #[test]
     fn a_failed_generation_shows_the_reason() {
-        let (backend, _commands) = Backend::for_test();
+        let (backend, mut commands) = Backend::for_test();
         let mut state = DeliverablesState::default();
+        state.request_generation("inc-1", PathBuf::from("/tmp/saida"), &backend);
+        drain(&mut commands);
         state.on_generated(
             "inc-1",
             Err("the output folder must be outside the application's internal storage".into()),
@@ -431,7 +497,7 @@ mod ui_tests {
         assert!(!state.mask_personal_data());
         assert!(!state.can_generate(), "falta a confirmação");
         state.request_generation("inc-1", PathBuf::from("/tmp/saida"), &backend);
-        assert!(!state.generating);
+        assert!(state.generating_for.is_none());
         assert!(
             drain(&mut commands).is_empty(),
             "nada foi enviado sem confirmar"
@@ -486,5 +552,168 @@ mod ui_tests {
             "Sem a máscara, os documentos trarão IPs, e-mails, contas e nomes reais.",
         );
         harness.get_by_label_contains("Entendo e quero exportar sem máscara");
+    }
+
+    #[test]
+    fn preview_loading_rejects_another_click_and_a_failure_is_visible() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut harness = harness(DeliverablesState::default(), backend);
+        harness.run();
+        harness.get_by_label("Pré-visualizar").click();
+        harness.step();
+        harness.get_by_label("Carregando…");
+        assert_eq!(drain(&mut commands).len(), 1);
+
+        harness.get_by_label("Pré-visualizar").click();
+        harness.step();
+        assert!(
+            drain(&mut commands).is_empty(),
+            "a prévia em andamento não pode ser enfileirada de novo"
+        );
+
+        harness
+            .state_mut()
+            .0
+            .on_previewed("inc-1", Err("falha sintética da prévia".into()));
+        harness.step();
+        harness.get_by_label("Erro: falha sintética da prévia");
+    }
+
+    #[test]
+    fn a_preview_is_never_rendered_for_another_incident() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = DeliverablesState {
+            previewing_for: Some("inc-1".into()),
+            ..DeliverablesState::default()
+        };
+        state.on_previewed("inc-1", Ok(sample_set()));
+        let mut harness = harness_for_incident(state, backend, "inc-2");
+        harness.run();
+
+        assert!(
+            harness
+                .query_by_label_contains("conteudo-do-primeiro")
+                .is_none(),
+            "documento do incidente anterior ficou visível"
+        );
+        assert!(harness.query_by_label("Relatório DFIR").is_none());
+    }
+
+    #[test]
+    fn generation_ignores_a_late_response_and_hides_results_from_another_incident() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = DeliverablesState::default();
+        state.request_generation("inc-1", PathBuf::from("/synthetic/saida"), &backend);
+        assert_eq!(drain(&mut commands).len(), 1);
+
+        state.on_generated("inc-2", Err("resposta-atrasada".into()));
+        assert_eq!(state.generating_for.as_deref(), Some("inc-1"));
+        assert!(state.generated.is_none());
+
+        state.on_generated("inc-1", Err("falha-do-inc-1".into()));
+        assert!(state.generating_for.is_none());
+        let mut harness = harness_for_incident(state, backend, "inc-2");
+        harness.run();
+        assert!(
+            harness
+                .query_by_label_contains("resposta-atrasada")
+                .is_none()
+        );
+        assert!(harness.query_by_label_contains("falha-do-inc-1").is_none());
+    }
+
+    #[test]
+    fn enabling_the_mask_invalidates_an_unmasked_preview_already_in_flight() {
+        let (backend, mut commands) = Backend::for_test();
+        let state = DeliverablesState {
+            export_without_mask: true,
+            confirmed_without_mask: true,
+            ..DeliverablesState::default()
+        };
+        let mut harness = harness(state, backend);
+        harness.run();
+        harness.get_by_label("Pré-visualizar").click();
+        harness.step();
+        assert_eq!(drain(&mut commands).len(), 1);
+
+        harness
+            .get_by_label_contains("Mascarar dados pessoais")
+            .click();
+        harness.step();
+        assert_eq!(harness.state().0.previewing_for, None);
+
+        harness
+            .state_mut()
+            .0
+            .on_previewed("inc-1", Ok(sample_set()));
+        harness.step();
+        assert!(
+            harness
+                .query_by_label_contains("conteudo-do-primeiro")
+                .is_none(),
+            "a resposta sem máscara foi aceita depois de reativar a máscara"
+        );
+    }
+
+    #[test]
+    fn cancelling_the_folder_selector_shows_the_alternative_without_a_job() {
+        let (picker, sender) = FilePicker::for_test();
+        let state = DeliverablesState {
+            picker,
+            picker_for: Some("inc-1".into()),
+            ..DeliverablesState::default()
+        };
+        let (backend, mut commands) = Backend::for_test();
+        let mut harness = harness(state, backend);
+        harness.step();
+        sender.send(None).expect("cancelamento sintético");
+        harness.step();
+
+        harness.get_by_label_contains("Nenhuma pasta escolhida");
+        harness.get_by_label("Ou informe a pasta:");
+        assert!(drain(&mut commands).is_empty());
+    }
+
+    #[test]
+    fn a_folder_chosen_after_switching_incidents_does_not_generate_the_new_case() {
+        let (picker, sender) = FilePicker::for_test();
+        let state = DeliverablesState {
+            picker,
+            picker_for: Some("inc-1".into()),
+            ..DeliverablesState::default()
+        };
+        let (backend, mut commands) = Backend::for_test();
+        let mut harness = harness_for_incident(state, backend, "inc-2");
+        sender
+            .send(Some(PathBuf::from("/synthetic/pasta-de-inc-1")))
+            .expect("escolha sintética");
+        harness.step();
+
+        harness.get_by_label_contains("o incidente mudou");
+        assert!(drain(&mut commands).is_empty());
+    }
+
+    #[test]
+    fn a_manual_generation_invalidates_a_late_folder_selection() {
+        let (picker, sender) = FilePicker::for_test();
+        let mut state = DeliverablesState {
+            picker,
+            picker_for: Some("inc-1".into()),
+            ..DeliverablesState::default()
+        };
+        let (backend, mut commands) = Backend::for_test();
+        state.request_generation("inc-1", PathBuf::from("/synthetic/digitada"), &backend);
+        assert_eq!(drain(&mut commands).len(), 1);
+        state.on_generated("inc-1", Err("geração manual terminou".into()));
+
+        let mut harness = harness(state, backend);
+        sender
+            .send(Some(PathBuf::from("/synthetic/selecionada-depois")))
+            .expect("resposta tardia sintética");
+        harness.step();
+        assert!(
+            drain(&mut commands).is_empty(),
+            "o seletor antigo iniciou uma segunda geração"
+        );
     }
 }
