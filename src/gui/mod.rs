@@ -330,6 +330,30 @@ impl DfirApp {
         }
     }
 
+    fn navigation(&mut self, ui: &mut egui::Ui) {
+        egui::Panel::left("dfir_nav")
+            .resizable(false)
+            .min_size(180.0)
+            .show(ui, |ui| {
+                ui.add_space(8.0);
+                ui.heading("DFIR");
+                ui.label(egui::RichText::new("Local · offline · operador único").weak());
+                ui.separator();
+                if ui
+                    .selectable_label(self.screen == Screen::Evidence, "Evidência")
+                    .clicked()
+                {
+                    self.screen = Screen::Evidence;
+                }
+                if ui
+                    .selectable_label(self.screen == Screen::Incidents, "Incidentes")
+                    .clicked()
+                {
+                    self.screen = Screen::Incidents;
+                }
+            });
+    }
+
     fn apply_event(&mut self, event: Event) {
         match event {
             Event::EvidenceListed(result) => self.evidence.on_listed(result),
@@ -645,27 +669,7 @@ impl eframe::App for DfirApp {
             self.evidence.on_files_dropped(&dropped, &self.backend);
         }
 
-        egui::Panel::left("dfir_nav")
-            .resizable(false)
-            .min_size(180.0)
-            .show(ui, |ui| {
-                ui.add_space(8.0);
-                ui.heading("DFIR");
-                ui.label(egui::RichText::new("Local · offline · operador único").weak());
-                ui.separator();
-                if ui
-                    .selectable_label(self.screen == Screen::Evidence, "Evidência")
-                    .clicked()
-                {
-                    self.screen = Screen::Evidence;
-                }
-                if ui
-                    .selectable_label(self.screen == Screen::Incidents, "Incidentes")
-                    .clicked()
-                {
-                    self.screen = Screen::Incidents;
-                }
-            });
+        self.navigation(ui);
 
         egui::CentralPanel::default().show(ui, |ui| {
             let screen = self.screen;
@@ -711,5 +715,25 @@ pub(crate) mod test_harness {
             out.push(command);
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod navigation_tests {
+    use super::{Backend, DfirApp};
+    use egui_kittest::kittest::Queryable;
+
+    #[test]
+    fn navigation_does_not_depend_on_missing_emoji_fonts() {
+        let (backend, _commands) = Backend::for_test();
+        let app = DfirApp::new(backend);
+        // Mantém o default estrito do kittest: um glifo ausente no caminho
+        // real da navegação faz o teste falhar.
+        let mut harness = egui_kittest::HarnessBuilder::default()
+            .with_size(egui::vec2(240.0, 320.0))
+            .build_ui_state(|ui, app: &mut DfirApp| app.navigation(ui), app);
+        harness.run();
+        harness.get_by_label("Evidência");
+        harness.get_by_label("Incidentes");
     }
 }
