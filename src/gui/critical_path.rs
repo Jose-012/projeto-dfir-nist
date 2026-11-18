@@ -141,7 +141,7 @@ impl CriticalPathState {
                 }
                 ui.label(format!("{} ligações (SEQUENCE_NEXT):", graph.edges.len()));
                 for edge in &graph.edges {
-                    ui.label(format!("{} → {}", edge.from, edge.to));
+                    ui.label(format!("{} -> {}", edge.from, edge.to));
                 }
             }
         });
@@ -225,7 +225,7 @@ mod ui_tests {
     use crate::gui::Loadable;
     use crate::gui::backend::Backend;
     use crate::service::AnalyticalResultResponse;
-    use crate::service::findings::CriticalPathView;
+    use crate::service::findings::{CriticalPathEdge, CriticalPathView};
     use egui_kittest::{Harness, kittest::Queryable};
 
     type State = (CriticalPathState, Backend);
@@ -249,7 +249,9 @@ mod ui_tests {
     }
 
     fn harness_for(state: CriticalPathState, backend: Backend) -> Harness<'static, State> {
-        crate::gui::test_harness::builder()
+        // Mantém o default estrito do kittest: inclusive as arestas não podem
+        // depender de uma fonte de emoji/símbolos ausente na máquina.
+        egui_kittest::HarnessBuilder::default()
             .with_size(egui::vec2(760.0, 1300.0))
             .build_ui_state(
                 |ui, (state, backend): &mut State| state.ui(ui, "inc-1", backend),
@@ -273,7 +275,10 @@ mod ui_tests {
             loaded_for: Some("inc-1".into()),
             graph: Loadable::Ready(CriticalPathView {
                 stages: vec![stage(payload)],
-                edges: vec![],
+                edges: vec![CriticalPathEdge {
+                    from: "stage-1".into(),
+                    to: "stage-2".into(),
+                }],
             }),
             ..CriticalPathState::default()
         };
@@ -288,6 +293,7 @@ mod ui_tests {
             format!("Base analítica: {basis}"),
             "Evidência: ev-42".into(),
             "Situação da evidência: DOCUMENTED".into(),
+            "stage-1 -> stage-2".into(),
         ] {
             harness.get_by_label(label.as_str());
         }
