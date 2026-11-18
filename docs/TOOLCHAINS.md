@@ -44,6 +44,10 @@ Isto **não** substitui o `rustup` do operador; é só o caminho que funcionou o
 
 A versão efetiva de Rust/Cargo/Python usada em um gate deve ser registrada. Manifests pinam a referência; eles não provam que uma ferramenta foi executada.
 
+### Ambiente observado em 2026-11-18
+
+Linux x86_64: rustc/cargo **1.100.0**, Python **3.13.5**, cargo-nextest **0.9.151**, cargo-deny **0.20.2**, just **1.59.0** e Git **2.47.3**. O Python real diverge da referência 3.14.6; os gates Python executados valem para 3.13.5, não para 3.14.6. Alinhar esse interpretador à referência permanece pendente se a reprodução exata for exigida. Nenhuma instalação foi feita para mascarar a divergência.
+
 
 Toolchains de referência: `toolchains.toml`.
 

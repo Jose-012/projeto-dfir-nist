@@ -54,6 +54,8 @@ Python e Shell são tooling de engenharia/QA. Não devem virar backend de produ�
 
 Rust/Cargo no build; CPython/Shell no QA (ADR-0017 removeu o frontend; não há Node.js/npm).
 
+A lista de variáveis `DFIR_*` fica no README; `src/config.rs` e o engine são a referência de implementação. Não crie uma segunda lista em convenções.
+
 ## Dependências e supply chain
 
 Não adicionar dependência sem necessidade demonstrada. Antes de alterar dependências, considerar:

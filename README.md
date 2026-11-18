@@ -101,7 +101,7 @@ Variáveis principais:
 - `DFIR_MAX_UPLOAD_BYTES`
 - `DFIR_MIN_FREE_DISK_BYTES`
 - `RUST_LOG`
-- `DFIR_ENGINE_INPUT_FILE`, `DFIR_ENGINE_INPUT_ROOT`, `DFIR_ENGINE_OUTPUT_ROOT` são internas e não devem ser configuradas manualmente.
+- `DFIR_ENGINE_INPUT_FILE`, `DFIR_ENGINE_INPUT_ROOT`, `DFIR_ENGINE_OUTPUT_ROOT` e `DFIR_ENGINE_MEMORY_LIMIT_BYTES` são internas e não devem ser configuradas manualmente.
 
 Valores, padrões e fallback de instalação: `docs/OPERATION.md` e `src/config.rs`. Toolchain de desenvolvimento: `docs/TOOLCHAINS.md`.
 
