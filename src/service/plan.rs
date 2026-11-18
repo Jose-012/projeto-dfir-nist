@@ -122,9 +122,29 @@ fn payload_str<'a>(item: &'a AnalyticalResultResponse, key: &str) -> Option<&'a 
     item.payload.get(key).and_then(|value| value.as_str())
 }
 
+fn validate_plan_arrays(item: &AnalyticalResultResponse) -> AppResult<()> {
+    for key in ["finding_ids", "nist_subcategories", "depends_on"] {
+        let Some(value) = item.payload.get(key) else {
+            continue;
+        };
+        let values = value
+            .as_array()
+            .ok_or_else(|| AppError::Config(format!("stored plan item {key} is not an array")))?;
+        if values.iter().any(|value| !value.is_string()) {
+            return Err(AppError::Config(format!(
+                "stored plan item {key} contains a non-string id"
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub async fn plan_view(services: &AppServices, incident_id: &str) -> AppResult<PlanView> {
     incident_exists(&services.db, incident_id).await?;
     let mut items = current_results_for_incident(&services.db, incident_id, "PLAN_ITEM").await?;
+    for item in &items {
+        validate_plan_arrays(item)?;
+    }
     // Estável: dentro do mesmo domínio e prioridade, mantém a ordem recebida.
     items.sort_by_key(|item| {
         let domain = payload_str(item, "domain")
@@ -303,6 +323,45 @@ mod tests {
         let view = plan_view(&fx.services, &incident.id).await.expect("view");
         assert_eq!(view.items.len(), 1);
         assert_eq!(view.items[0].payload["priority"], "P1");
+    }
+
+    #[tokio::test]
+    async fn plan_view_accepts_legacy_missing_array_fields() {
+        let fx = fixture().await;
+        let incident = crate::service::create_incident(&fx.services, "legacy arrays")
+            .await
+            .expect("incident");
+        let item = create_plan_item(
+            &fx.services,
+            &incident.id,
+            &plan_input("OS_HARDENING", "legacy plan item", "P1"),
+        )
+        .await
+        .expect("valid plan item");
+        let record = crate::persistence::analytical_results::get(&fx.services.db, &item)
+            .await
+            .expect("get plan item")
+            .expect("plan item exists");
+        let mut payload: serde_json::Value =
+            serde_json::from_str(&record.payload).expect("valid payload");
+        for key in ["finding_ids", "nist_subcategories", "depends_on"] {
+            payload.as_object_mut().expect("payload object").remove(key);
+        }
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('legacy-plan-arrays','analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+            .bind(&record.correlation_key)
+            .bind(&incident.id)
+            .bind(payload.to_string())
+            .bind(record.provenance.to_string())
+            .bind(&item)
+            .execute(&fx.services.db)
+            .await
+            .expect("legacy current plan item");
+
+        let view = plan_view(&fx.services, &incident.id)
+            .await
+            .expect("legacy missing arrays remain valid");
+        assert_eq!(view.items.len(), 1);
+        assert_eq!(view.items[0].id, "legacy-plan-arrays");
     }
 
     #[tokio::test]

@@ -1767,6 +1767,101 @@ mod tests {
         assert_eq!(first.redaction, reordered.redaction);
     }
 
+    #[tokio::test]
+    async fn collect_rejects_malformed_plan_arrays_before_rendering() {
+        let fx = fixture().await;
+        for (key, bad_value, expected) in [
+            (
+                "finding_ids",
+                serde_json::json!("not-an-array"),
+                "stored plan item finding_ids is not an array",
+            ),
+            (
+                "nist_subcategories",
+                serde_json::json!([42]),
+                "stored plan item nist_subcategories contains a non-string id",
+            ),
+            (
+                "depends_on",
+                serde_json::json!({}),
+                "stored plan item depends_on is not an array",
+            ),
+        ] {
+            let incident =
+                crate::service::create_incident(&fx.services, &format!("malformed {key}"))
+                    .await
+                    .expect("incident");
+            let finding = crate::service::findings::create_finding(
+                &fx.services,
+                &incident.id,
+                &crate::service::findings::FindingInput {
+                    kind: "MISSING_CONTROL".into(),
+                    title: "RDP sem MFA".into(),
+                    severity: "HIGH".into(),
+                    basis: "EVTX 4625".into(),
+                    confidence: "MEDIUM".into(),
+                    ..crate::service::findings::FindingInput::default()
+                },
+            )
+            .await
+            .expect("finding");
+            let item = crate::service::plan::create_plan_item(
+                &fx.services,
+                &incident.id,
+                &crate::service::plan::PlanItemInput {
+                    domain: "AUTENTICACAO_ACESSO".into(),
+                    title: "MFA no acesso remoto".into(),
+                    rationale: "motivo".into(),
+                    priority: "P1".into(),
+                    effort: "M".into(),
+                    cost_class: "LOW".into(),
+                    phase: "SHORT_TERM".into(),
+                    verification: "checagem objetiva".into(),
+                    finding_ids: vec![finding],
+                    nist_subcategory_ids: vec!["PR.AA-03".into()],
+                    ..crate::service::plan::PlanItemInput::default()
+                },
+            )
+            .await
+            .expect("valid plan item");
+            let record = crate::persistence::analytical_results::get(&fx.services.db, &item)
+                .await
+                .expect("get valid plan item")
+                .expect("valid plan item exists");
+            let mut payload: serde_json::Value =
+                serde_json::from_str(&record.payload).expect("valid plan payload");
+            payload[key] = bad_value;
+            let bad_id = format!("bad-plan-array-{key}");
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES(?,'analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+                .bind(&bad_id)
+                .bind(&record.correlation_key)
+                .bind(&incident.id)
+                .bind(payload.to_string())
+                .bind(record.provenance.to_string())
+                .bind(&item)
+                .execute(&fx.services.db)
+                .await
+                .expect("malformed current plan item");
+
+            let error = match collect(&fx.services, &incident.id).await {
+                Ok(data) => {
+                    let rendered = render_all(&data).expect("pre-fix render");
+                    let false_general = doc(&rendered, FILE_E4)
+                        .content
+                        .contains("**Recomendação geral**");
+                    panic!(
+                        "malformed {key} reached Entregável 4; false general recommendation={false_general}"
+                    );
+                }
+                Err(error) => error,
+            };
+            assert!(
+                matches!(&error, AppError::Config(message) if message.contains(expected)),
+                "unexpected error for {key}: {error:?}"
+            );
+        }
+    }
+
     #[test]
     fn the_manifest_records_what_was_masked_by_count_and_never_by_value() {
         let (_root, paths) = storage_for_tests();
