@@ -24,6 +24,10 @@ use crate::{config::AppConfig, error::AppError, infrastructure::storage::Storage
 use backend::{Backend, Command, Event};
 use std::collections::BTreeSet;
 
+/// Vermelho legível para erros e severidade alta/crítica no tema escuro.
+/// O tom anterior `(200, 60, 60)` tinha somente 3,42:1 no painel padrão.
+pub(crate) const DANGER_TEXT_COLOR: egui::Color32 = egui::Color32::from_rgb(240, 110, 110);
+
 pub fn launch(config: AppConfig, paths: StoragePaths) -> Result<(), AppError> {
     let backend = backend::spawn(config, paths)?;
     let options = eframe::NativeOptions {
@@ -118,10 +122,7 @@ impl<T> Loadable<T> {
                 });
             }
             Self::Failed(message) => {
-                ui.colored_label(
-                    egui::Color32::from_rgb(200, 60, 60),
-                    format!("Erro: {message}"),
-                );
+                ui.colored_label(DANGER_TEXT_COLOR, format!("Erro: {message}"));
             }
             Self::Ready(value) => render(ui, value),
         }
@@ -226,10 +227,7 @@ pub fn enum_combo(
 }
 
 pub fn error_banner(ui: &mut egui::Ui, message: &str) {
-    ui.colored_label(
-        egui::Color32::from_rgb(200, 60, 60),
-        format!("Erro: {message}"),
-    );
+    ui.colored_label(DANGER_TEXT_COLOR, format!("Erro: {message}"));
 }
 
 /// Campo de texto com `label` à esquerda, vinculando o widget ao label para
@@ -715,6 +713,34 @@ pub(crate) mod test_harness {
             out.push(command);
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod presentation_tests {
+    use super::DANGER_TEXT_COLOR;
+
+    fn luminance(color: egui::Color32) -> f32 {
+        fn channel(value: u8) -> f32 {
+            let value = f32::from(value) / 255.0;
+            if value <= 0.04045 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        }
+        0.2126 * channel(color.r()) + 0.7152 * channel(color.g()) + 0.0722 * channel(color.b())
+    }
+
+    #[test]
+    fn danger_text_meets_normal_text_contrast_on_the_dark_panel() {
+        let foreground = luminance(DANGER_TEXT_COLOR);
+        let background = luminance(egui::Visuals::dark().window_fill);
+        let contrast = (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05);
+        assert!(
+            contrast >= 4.5,
+            "contraste insuficiente para texto normal: {contrast:.2}:1"
+        );
     }
 }
 

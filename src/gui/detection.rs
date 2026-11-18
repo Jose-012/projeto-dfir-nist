@@ -6,8 +6,8 @@
 //! mapeamento, o achado e os IOCs no incidente escolhido) ou rejeitar (com
 //! motivo). Nada vira achado sem esse clique.
 
-use super::Loadable;
 use super::backend::{Backend, Command};
+use super::{DANGER_TEXT_COLOR, Loadable};
 use crate::service::IncidentResponse;
 use crate::service::detection::{CandidateView, DetectionRun};
 use std::collections::{HashMap, HashSet};
@@ -233,7 +233,7 @@ impl DetectionState {
             ui.group(|ui| {
                 ui.horizontal_wrapped(|ui| {
                     let color = match item.severity.as_str() {
-                        "CRITICAL" | "HIGH" => egui::Color32::from_rgb(200, 60, 60),
+                        "CRITICAL" | "HIGH" => DANGER_TEXT_COLOR,
                         "MEDIUM" => egui::Color32::from_rgb(200, 140, 0),
                         _ => egui::Color32::GRAY,
                     };
