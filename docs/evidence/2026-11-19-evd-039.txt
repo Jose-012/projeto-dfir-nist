@@ -1,0 +1,60 @@
+EVD-039 - categoria inválida de recomendação falha fechado
+==========================================================
+
+Commit testado: 0223142d769e0847b4524fce9099721fa4f8bdff
+Tree testada: a8a47256aeba60047aced8b96c9599c4cfe0daf1
+Período dos gates Rust/e2e: 2026-11-19T03:45:18Z..2026-11-19T03:59:31Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+`list_recommendations` só comparava a string quando havia filtro, e
+`export_incident_findings` colocava tudo que não fosse exatamente `IMMEDIATE`
+na partição estratégica. Categoria desconhecida, ausente ou não textual podia
+sumir do filtro ou ser reclassificada.
+
+Regressão antes da correção:
+`cargo nextest run --locked -p dfir-app malformed_stored_recommendation_categories`
+Resultado: exit 100, como prova do defeito. Para categoria `URGENT`:
+- listagem sem filtro: Ok(1);
+- listagem filtrada por IMMEDIATE: Ok(0);
+- exportação: Ok(immediate=0, strategic=1).
+
+As linhas vigentes foram inseridas por SQL em banco descartável sem remover ou
+alterar triggers append-only. O mesmo teste cobre categoria ausente e número no
+lugar de string.
+
+Depois
+------
+`stored_recommendation_category` exige `IMMEDIATE` ou `STRATEGIC` em toda
+recomendação vigente antes de listar ou exportar. Dado inválido retorna
+`AppError::Config` com o ID da recomendação e o campo `category`; não há partição
+default nem reparo silencioso de histórico antigo. O schema e os dados válidos não
+mudaram.
+
+Comando focado: `cargo nextest run --locked -p dfir-app recommendation`
+Resultado: 24/24 testes passaram, incluindo os três casos inválidos, filtros e
+partição de exportação com uma recomendação válida de cada categoria.
+
+Gate Rust e ponta a ponta
+-------------------------
+Comando: `just verify`
+Resultado: exit 0; 511 tests run, 511 passed, 1 skipped; validate-fase0, fmt,
+check, doctests e clippy `-D warnings` verdes.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: 110/110 etapas passaram. O cenário real de demonstração gerou seis
+recomendações e os cinco documentos, preservou filtros/partições válidos, hashes,
+determinismo, auditoria/custódia e descarte.
+
+Gate documental
+---------------
+Executado em 2026-11-19T04:04:52Z: `just doc-gate` PASS, Fase 0 com 0 erros/0
+avisos; especificação canônica e cópia raiz idênticas; `git diff --check` limpo.
+
+Limites
+-------
+Não houve mudança de dependências, schema ou reparo de dados antigos. Supply
+chain não foi repetido e permanece em EVD-036. GUI real, Windows, aarch64,
+incidente real e CI não foram promovidos por esta evidência.

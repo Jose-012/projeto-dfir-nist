@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - categoria inválida de recomendação falha fechado (`EVD-039`)
+
+- Recomendações vigentes com categoria desconhecida, ausente ou não textual apareciam sem filtro, desapareciam do filtro e eram exportadas como estratégicas por default. A reprodução obteve unfiltered=1, filtered=0 e strategic=1 para `URGENT`.
+- Listagem e exportação agora validam a categoria antes de retornar, com erro específico e ID da recomendação. Recomendações válidas mantêm filtros e partição; não há reparo de histórico antigo.
+- `EVD-039`: 24 testes focados, `just verify` com 511 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-036`.
+
 ## Unreleased - 2026-11-19 - harness de sandbox relocável no nextest (`EVD-038`)
 
 - O baseline limpo falhou com ENOENT nos testes reais de sandbox: o nextest podia agendar o teste antes do binário atual existir, e artefatos reutilizados embutiam o caminho absoluto da árvore antiga em `/home/jose/Downloads`.
