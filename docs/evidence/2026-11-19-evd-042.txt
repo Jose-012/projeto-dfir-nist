@@ -1,0 +1,64 @@
+EVD-042 - gap NIST aberto inválido falha antes da cobertura
+===========================================================
+
+Commit testado: 976e612dbf40de4a13fbac7d5e4b3149b49f4386
+Tree testada: e8adb86dddc5cca97739b1ff4c3f7b91ba51b883
+Período dos gates Rust/e2e: 2026-11-19T04:56:48Z..2026-11-19T05:11:24Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+`current_gap_analysis` incluía todo `NIST_GAP` vigente que não tivesse exatamente
+`status = "CLOSED"`. Em `function_view`, `filter_map` descartava campos ausentes
+ou não textuais, e a agregação ignorava prioridade ou Function desconhecida.
+Assim a lista podia devolver uma lacuna que não aparecia em nenhuma contagem.
+
+Regressão antes da correção:
+`cargo nextest run --locked -p dfir-app malformed_open_nist_gap_vocabulary_fails_closed`
+Resultado: exit 100, como prova do defeito. Uma lacuna PR real gerada por
+CURRENT/TARGET e alterada para `priority = "URGENT"` produziu:
+- `open_gaps = 1`;
+- `PR GapCounts { high: 0, medium: 0, low: 0 }`.
+
+O teste usa revisões vigentes com correlation key e proveniência preservadas.
+Cobre prioridade/subcategoria desconhecidas, ausentes e numéricas. O caso de
+subcategoria desconhecida usa `XX.YY-01`, fora das seis Functions.
+
+Depois
+------
+`current_gap_analysis` filtra primeiro `CLOSED` e então exige `subcategory_id`
+com a forma estrutural e Function válidas, além de `priority` HIGH/MEDIUM/LOW.
+Valor desconhecido, ausente ou não textual retorna `AppError::Config` com ID da
+lacuna e campo antes de lista, Function ou `deliverables::collect`.
+
+Gaps `CLOSED` continuam sem exigir prioridade. Gaps abertos legados sem `status`
+permanecem válidos quando seus campos obrigatórios são válidos. Não há mudança
+de schema ou reparo direto de histórico antigo.
+
+Comandos focados:
+- `cargo nextest run --locked -p dfir-app malformed_open_nist_gap_vocabulary_fails_closed`: 1/1 PASS, seis casos inválidos;
+- `cargo nextest run --locked -p dfir-app service::nist::`: 3/3 PASS, incluindo Function válida/stale e CLOSED sem prioridade.
+
+Gate Rust e ponta a ponta
+-------------------------
+Comando: `just verify`
+Resultado: exit 0; 514 tests run, 514 passed, 1 skipped; validate-fase0, fmt,
+check, doctests e clippy `-D warnings` verdes.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: 110/110 etapas passaram. O Entregável 3 manteve dez lacunas NIST
+vigentes, incluindo PR.AA-03 e DE.CM-03; cinco documentos, hashes, determinismo,
+auditoria/custódia e descarte também passaram.
+
+Gate documental
+---------------
+Executado em 2026-11-19T05:15:40Z: `just doc-gate` PASS, Fase 0 com 0 erros/0
+avisos; especificação canônica e cópia raiz idênticas; `git diff --check` limpo.
+
+Limites
+-------
+A mudança cobre a leitura vigente usada por UI e entregáveis. O algoritmo de
+recalcular Gap Analysis não foi alterado nem recebeu nova evidência de rejeição.
+Supply chain não foi repetido e permanece em EVD-041. GUI real, Windows,
+aarch64, incidente real e CI não foram promovidos por esta evidência.

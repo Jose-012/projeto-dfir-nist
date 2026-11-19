@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - gap NIST aberto inválido falha antes da cobertura (`EVD-042`)
+
+- Uma lacuna vigente com `priority = URGENT` aparecia como `open_gaps=1`, mas todas as contagens PR ficavam zeradas. Campos ausentes/não textuais e Function desconhecida tinham efeitos equivalentes.
+- `current_gap_analysis` agora valida subcategoria e prioridade depois de excluir `CLOSED`, retornando ID/campo antes de lista, Function ou entregáveis. Gaps fechados sem prioridade e abertos legados sem `status` continuam cobertos.
+- `EVD-042`: regressão e 3 testes NIST, `just verify` com 514 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-041`; o recálculo de Gap Analysis não mudou.
+
 ## Unreleased - 2026-11-19 - vocabulário completo de plano e supply chain final (`EVD-041`)
 
 - `support_kind = UNKNOWN` era aceito com um item de domínio e zero recomendações gerais; esforço, classe de custo e fase inválidos também podiam chegar aos entregáveis.

@@ -78,7 +78,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-19 (`EVD-041`, nextest 512 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-19 (`EVD-042`, nextest 514 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -115,10 +115,11 @@ cargo audit
 - `PASS` **contenção do engine provada com o engine de verdade** (ADR-0024): `cargo test --locked --workspace` (inclui `engine/tests/sandbox.rs`, que exige `EACCES`/`EPERM` onde devido e tem controle com a política `off`) e `scripts/e2e_headless.py` (repete a prova sobre o EVTX real) — `EVD-005`, `EVD-006`. **Rodar sempre pelo workspace**: `cargo test -p dfir-engine` não unifica as features do tokio e esconde falhas do runtime sob seccomp. Em Linux sem Landlock os testes de enforcement avisam e saem: o release no Linux **não** pode ser fechado nesse ambiente;
 - `WAIVED` **Windows** (`WVR-001`, aprovado pelo operador em 2026-11-14, válido até 2026-12-31): o Job Object só foi compilado; o release **não declara suporte a Windows** nesta rodada. Condição de saída: `dfir-app engine-smoke` + `just e2e <evtx>` em Windows, conferindo o aviso esperado `SANDBOX_NOT_FULLY_APPLIED`;
 - `WAIVED` **aarch64** (`WVR-002`, mesma validade): provado só em x86_64;
-- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-041`);
+- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-042`);
 - `PASS` **identidade analítica versionada:** raiz única, sucessora única e tipo/incidente estáveis; evidência estável exceto agregação IOC no mesmo incidente; violações falham antes de nova linha/auditoria, sem reparar histórico antigo (`EVD-033`/`EVD-034`/`EVD-035`);
 - `PASS` **janela real na árvore final:** build e abertura isolada por 25 s até timeout 124 esperado, backend Gl/Mesa Intel, sem diagnósticos de fonte/glyph/scroll ou nomes de fixtures; sem navegação manual (`EVD-036`);
 - `PASS` **matriz de risco sem perda silenciosa:** severity inválida/`NONE` ou confidence inválida/ausente falha com ID/campo antes dos entregáveis (`EVD-031`);
+- `PASS` **cobertura NIST sem lacuna perdida:** gap aberto vigente com subcategoria/prioridade desconhecida, ausente ou não textual falha com ID/campo antes de lista, Function ou entregáveis; `CLOSED` sem prioridade e legado sem `status` continuam válidos (`EVD-042`);
 - `PASS` **plano sem defaults de vocabulário:** os seis campos obrigatórios vigentes falham com ID/campo antes de ordenação, cobertura ou entregáveis quando desconhecidos, ausentes ou não textuais; arrays legados ausentes continuam válidos (`EVD-040`/`EVD-041`);
 - `PASS` **recomendações sem reclassificação silenciosa:** categoria vigente desconhecida, ausente ou não textual falha com ID/campo antes de listar ou exportar; filtros e partição válidos preservados (`EVD-039`);
 - `PASS` **caminho crítico limitado ao incidente:** os dois lados de `SEQUENCE_NEXT` devem pertencer ao incidente solicitado; relações antigas não são reparadas automaticamente (`EVD-030`);
