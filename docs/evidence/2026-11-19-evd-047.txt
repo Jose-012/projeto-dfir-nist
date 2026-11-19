@@ -1,0 +1,74 @@
+EVD-047 - identidade entre IOC vigente e correlation key
+=======================================================
+
+Commit testado: 4a82191933ea0d933722d603c77e56e500521337
+Tree testada: 66bd565d871fff5d9e22f4864be66430e59ce579
+Período dos gates Rust/e2e: 2026-11-19T07:59:43Z..2026-11-19T08:05:22Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+`record_ioc_sighting` normaliza tipo e valor e grava a identidade
+`ioc:<incident>:<TYPE>:<normalized>`, mas `list_iocs` e
+`export_incident_findings` retornavam o IOC vigente sem verificar essa forma ou
+a correspondência com o payload.
+
+Regressão antes da correção:
+`cargo test -p dfir-app stored_ioc_rejects_divergent_payload_identity -- --nocapture`
+Resultado: FAILED, 0 passed/1 failed. Uma sucessora com correlation key de
+IP/203.0.113.5 e payload DOMAIN/evil.example foi aceita pelos dois caminhos:
+`list=Ok(["bad-ioc-divergent-identity"])` e
+`export=Ok(["bad-ioc-divergent-identity"])`. O log está em
+`validation/task-011-before.txt` no run overnight.
+
+Depois
+------
+Um helper compartilhado por listagem e exportação exige `ioc_type` reconhecido,
+`normalized_value` textual aceito por `normalize_ioc_value` e já igual à forma
+normalizada, e correlation key exatamente igual à identidade de
+incidente/tipo/valor. Falhas retornam `AppError::Config` com ID do IOC e campo
+`ioc_type`, `normalized_value` ou `correlation_key`.
+
+Nove formas inválidas foram exercidas nos dois caminhos: tipo desconhecido,
+ausente ou não textual; valor ausente, não textual, estruturalmente inválido ou
+não normalizado; payload válido divergente da chave e chave de incidente errada.
+Um IOC vigente válido sem `sighting_count` continua aceito, preservando o
+formato legado. Não houve mudança de criação, agregação, sightings, schema,
+evidência/confiança ou histórico antigo.
+
+Comandos focados:
+`cargo nextest run --locked -p dfir-app stored_ioc`
+Resultado: 5/5 testes passaram no worker e, independentemente, no coordinator.
+Logs: `validation/task-011-focused.txt` e
+`validation/task-011-focused-coordinator.txt`.
+
+Gate Rust e ponta a ponta
+-------------------------
+Uma primeira execução de `just verify` passou 526 testes com 1 skipped, mas o
+clippy rejeitou dois `.err().expect()` nos testes novos. O idiom foi corrigido
+para `expect_err`, sem mudança comportamental, e o log foi preservado em
+`validation/task-011-verify-initial-clippy.txt`.
+
+Comando final: `just verify`
+Resultado: `JUST_VERIFY_EXIT=0`; 526 tests run, 526 passed, 1 skipped;
+validate-fase0, fmt, workspace check, doctests e clippy `-D warnings` verdes.
+Período: 2026-11-19T07:59:43Z..08:03:16Z.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: `JUST_E2E_EXIT=0`; 110/110 etapas passaram. Documentos, hashes,
+determinismo, auditoria/custódia, resultados e descarte permaneceram verdes.
+Período: 2026-11-19T08:03:32Z..08:05:22Z.
+
+Gate documental
+---------------
+Comando: `just doc-gate`
+Resultado: PASS, com Fase 0 sem erros/avisos, especificação canônica e cópia
+raiz idênticas e `git diff --check` limpo. Log:
+`validation/task-011-doc-gate.txt` no run overnight.
+
+Limites
+-------
+Não houve mudança de dependências. Supply chain não foi repetido e permanece
+em EVD-041. GUI real, Windows, aarch64, incidente real e CI não foram promovidos
+por esta evidência.

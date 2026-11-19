@@ -68,6 +68,8 @@ Ao indexar ou reindexar `results.jsonl`, JSON inválido ou profundidade acima de
 
 `current_impact_assessment` exige que `availability_impact`, `confidentiality_impact` e `integrity_impact` sejam níveis canônicos (`NONE` incluso) e que a confiança vigente esteja presente e seja reconhecida. Nível desconhecido, ausente ou não textual, ou confiança inválida/ausente, falha com ID/campo antes da UI ou `deliverables::collect`; impacto financeiro ausente permanece válido (`EVD-046`).
 
+`list_iocs` e `export_incident_findings` validam todo IOC vigente antes de retornar: `ioc_type` deve ser canônico, `normalized_value` deve ter forma válida e já estar normalizado, e a correlation key deve corresponder exatamente a incidente/tipo/valor. Nove formas inválidas falham com ID/campo; IOC legado sem `sighting_count` continua válido (`EVD-047`).
+
 `list_recommendations` e `export_incident_findings` validam toda categoria vigente antes de retornar. Categoria desconhecida, ausente ou não textual falha com o ID da recomendação e o campo `category`, em vez de desaparecer do filtro ou ser exportada como estratégica (`EVD-039`).
 
 `create_ioc` valida o agregado vigente antes de acrescentar uma ocorrência: `sightings` deve ser array, `sighting_count` presente deve ser inteiro não negativo e pelo menos igual ao tamanho do array, e o incremento não pode exceder `u64`. Qualquer falha impede a nova versão. O legado sem `sighting_count` continua válido e infere o total do array (`EVD-027`).

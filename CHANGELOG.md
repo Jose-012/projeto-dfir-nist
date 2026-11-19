@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - identidade entre IOC vigente e correlation key (`EVD-047`)
+
+- Uma sucessora com correlation key de IP e payload `DOMAIN/evil.example` era aceita tanto por `list_iocs` quanto por `export_incident_findings`.
+- Listagem e exportação agora exigem tipo canônico, valor válido e já normalizado, e chave exatamente correspondente a incidente/tipo/valor. Nove formas inválidas falham com ID/campo; legado sem `sighting_count` continua válido.
+- `EVD-047`: 5 testes focados no worker e no coordinator, `just verify` com 526 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-041`.
+
 ## Unreleased - 2026-11-19 - IMPACT_ASSESSMENT vigente exige níveis e confiança (`EVD-046`)
 
 - Uma sucessora sem `availability_impact` era retornada normalmente; níveis obrigatórios podiam ficar vazios no relatório e confiança ausente virava “não informada”.
