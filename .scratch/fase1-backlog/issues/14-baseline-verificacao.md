@@ -6,10 +6,10 @@
 
 **Status:** PLANNED (ADR-0018)
 
-**Status vigente (2026-11-04, espelho de `docs/rtm.md`; Gap origem: INC-03):** PARCIAL — detalhe na linha F1-14 da RTM, que é a autoridade. A linha `PLANNED` acima é histórica.
+**Status vigente (2026-11-19, espelho de `docs/rtm.md`; Gap origem: INC-03):** VERIFIED: `EVD-052` cobre o baseline local e `EVD-054` cobre o CI em Linux x86_64; Windows permanece separado em F1-22/WVR-001. A linha `PLANNED` acima é histórica.
 
 **Origem:** DOC-06, AGENTS §12
 
-- [ ] Relatório de gates com versões efetivas de rustc/cargo; nenhum PASS sem execução.
-- [ ] Defeitos abertos para cada falha e ligados a ticket.
-- [ ] CI executa `just verify` e `just supply-chain` em cada mudança.
+- [x] Relatório de gates com versões efetivas de rustc/cargo; nenhum PASS sem execução (`EVD-052`, `EVD-054`).
+- [x] Falhas registradas e ligadas a este ticket, com correção rastreável; a falha inicial de setup do CI está preservada em `EVD-054` e foi corrigida em `7acf795`.
+- [x] CI executa `just verify` e `just supply-chain` em cada mudança na main e em pull requests (`EVD-054`, execução 44567609855).

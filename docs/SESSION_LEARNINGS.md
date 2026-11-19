@@ -79,6 +79,14 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** silêncio dispara inspeção de progresso/processo, não cancelamento automático; builds pesados permanecem sequenciais.
 - **Confirmação:** pendente.
 
+### 10. Pin de action sem a ferramenta no manifesto da tag
+
+- **Classe:** erro de execução.
+- **Fato:** a primeira execução do CI falhou porque a `install-action` pinada não oferecia `cargo-nextest 0.9.151` para Linux x86_64; os gates posteriores foram skipped. A inspeção do manifesto em uma tag atual confirmou versão/hash e a execução seguinte passou (`EVD-054`).
+- **Risco:** confundir SHA completo e versão exata com disponibilidade garantida do binário, ou esconder a falha usando fallback não controlado.
+- **Prevenção:** `docs/TOOLCHAINS.md` exige conferir versão e hash no manifesto da tag exata antes da atualização; o workflow mantém checksum e `fallback: none`, e a evidência preserva a falha inicial.
+- **Confirmação:** pendente.
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.

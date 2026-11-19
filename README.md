@@ -3,6 +3,8 @@
 
 Aplicação local/offline para preservar e analisar evidências, reconstruir timelines e produzir entregáveis alinhados ao NIST CSF 2.0.
 
+Repositório remoto privado: [Jose-012/projeto-dfir-nist](https://github.com/Jose-012/projeto-dfir-nist).
+
 ## Arquitetura
 
 ```text
@@ -116,6 +118,8 @@ just e2e tests/fixtures/senai-demo.evtx
 ```
 
 `just verify` executa nextest e doc-tests, sem rodar unitários/integração duas vezes. `just test` permanece disponível para o runner padrão completo.
+
+O workflow `.github/workflows/ci.yml` executa esses gates no GitHub Actions, em `ubuntu-24.04`, com Rust 1.100.0 e CPython 3.14.6. A execução [44567609855](https://github.com/Jose-012/projeto-dfir-nist/actions/runs/44567609855) terminou com nextest 536 passed/1 skipped, supply chain e doc-gate verdes e E2E 110/110 (`EVD-054`). Esse resultado cobre Linux x86_64 e não substitui as verificações externas ou nativas pendentes.
 
 Testes adicionais de runtime:
 

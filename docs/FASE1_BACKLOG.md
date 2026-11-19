@@ -8,9 +8,8 @@ Este arquivo lista somente trabalho remanescente. Estado de requisitos/tickets: 
 | Pista | Escopo restante | Estado |
 |---|---|---|
 | A. Verificação externa | Windows x86_64 (F1-22), Linux aarch64 e incidente real com sanitização | `PENDING-HUMAN`; Windows/aarch64 têm WVR-001/WVR-002 até 2026-12-31 |
-| B. CI | Definir hospedagem remota e, se houver, pipeline no toolchain pinado (F1-14) | não implementado; WVR-003 até 2026-12-31; sem repositório remoto no momento |
-| E. Supply chain | Repetir `just supply-chain` a cada mudança de dependência e revisar as exceções informativas bincode/chrono | manual verde em `EVD-051`; oito vulnerabilidades de Wasmtime foram corrigidas e `WVR-004` foi encerrado; revisões recorrentes continuam em `docs/SUPPLY_CHAIN.md` |
-| F. Fechamento do RC | Resolver ou aceitar formalmente as pendências externas, nativas e a decisão de CI antes de declarar aceite final | bloqueado pelas pistas A, B e G; estado normativo em `docs/RELEASE_GATE.md` |
+| E. Supply chain | Repetir `just supply-chain` a cada mudança de dependência e revisar as exceções informativas bincode/chrono | local verde em `EVD-051` e CI verde em `EVD-054`; oito vulnerabilidades de Wasmtime foram corrigidas e `WVR-004` foi encerrado; revisões recorrentes continuam em `docs/SUPPLY_CHAIN.md` |
+| F. Fechamento do RC | Resolver ou aceitar formalmente as pendências externas e nativas antes de declarar aceite final | bloqueado pelas pistas A e G; estado normativo em `docs/RELEASE_GATE.md` |
 | G. Fluxo nativo X11 | Confirmar navegação, abrir/cancelar seletor e importar fixture sanitizada sem travamento | `BLOCKED/PENDING-HUMAN` em `EVD-050`; somente janela/resize observados, com `Xlib BadMatch` no smoke final |
 
 Nenhuma pista autoriza afirmar verificação em ambiente não executado. Fixture DEMO, testes sintéticos e os dois datasets públicos externos de `EVD-052` não substituem incidente real autorizado e sanitizado.

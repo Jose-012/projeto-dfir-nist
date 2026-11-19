@@ -63,5 +63,6 @@ O parser EVTX do MVP é `evtx 0.15.1` com `default-features = false` (primeira v
 
 - **`egui_kittest` 0.37.0** (dev-dependency): testes de GUI sem janela, pela árvore de acessibilidade. Exige o mesmo rustc do egui 0.37. O harness de teste usa `allow_missing_glyphs()` e nome acessível em cada widget (`labelled_by`/`from_label`), por causa das checagens novas do 0.37 (`src/gui/mod.rs`, `test_harness`).
 - **`cargo-deny` 0.20.2** (binário oficial, fora do `Cargo.lock`): `cargo deny --workspace check`; o banco RustSec é baixado a cada execução.
+- **GitHub Actions:** o workflow usa actions fixadas por SHA completo e ferramentas com versões exatas, checksum e `fallback: none`. Antes de trocar uma action ou versão de ferramenta, confira na tag exata da `install-action` que o manifesto contém a versão e o hash da plataforma; pin de SHA, sozinho, não prova essa disponibilidade (`EVD-054`).
 - **Xvfb + `xdotool` + ImageMagick** (apenas verificação manual da GUI em ambiente sem display, **não** é gate): renderiza com software; cliques e rolagem funcionam, o teclado sintético não chega ao egui. Para digitar, usar `egui_kittest`.
 - **Python** (`scripts/e2e_headless.py`): tooling de QA, nunca backend do produto.

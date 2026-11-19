@@ -1,0 +1,80 @@
+EVD-054 - repositório remoto privado e CI automático no GitHub Actions
+====================================================================
+
+Status: PASS para CI automático em Linux x86_64 na execução 44567609855
+Commit testado: 7acf795fc0d67eab751805eecde22671884d0073
+Tree testada: 122de0f24c2c2c21774d80788645adf90f73b3a0
+Período do run: 2026-11-19T16:34:26Z..16:49:10Z
+Ambiente: GitHub Actions hospedado, ubuntu-24.04, Linux x86_64.
+Escopo: Build Toolchain e Engineering/QA Tooling; nenhum runtime de produção mudou.
+
+Implementação integrada
+-----------------------
+- Repositório privado `Jose-012/projeto-dfir-nist`, criado pelo MCP GitHub com
+  `create_repository`, sem inicialização automática e com o histórico local preservado.
+- Workflow `.github/workflows/ci.yml`, ativo como workflow 424072727, acionado em
+  push na main, pull requests e workflow_dispatch.
+- Permissão `contents: read`; credenciais de checkout não persistidas; nenhum secret
+  específico do projeto, artefato de caso ou publicação de release no workflow.
+- Rust/Cargo 1.100.0 e CPython 3.14.6; cargo-nextest 0.9.151, cargo-audit 0.22.2,
+  cargo-deny 0.20.2 e just 1.59.0. Quatro actions fixadas por SHA completo e
+  instalação das ferramentas com checksum e `fallback: none`.
+- Gates remotos: doctor, metadata/tree com `--locked`, `just verify`, `cargo audit`,
+  `just supply-chain`, `just doc-gate` e `just e2e tests/fixtures/senai-demo.evtx`
+  com `DFIR_ENGINE_SANDBOX=required`.
+
+Falha inicial preservada
+------------------------
+A execução 44566509562, no commit 3c7e6da469934be1c9ccb80267ac7ff353ae9941,
+terminou `completed/failure` em 2026-11-19T16:29:34Z e não conta como PASS.
+Checkout, CPython, dependências Linux, Rust e cache passaram. A etapa Install QA
+tools falhou; todos os gates posteriores foram skipped.
+
+Diagnóstico do job 135709611175:
+`cargo-nextest@0.9.151 for 'x86_64_linux' is not supported`.
+A action install-action v2.62.55 não continha essa versão no manifesto. A tag
+v2.90.6 foi inspecionada antes da correção e contém a versão 0.9.151 e o hash
+SHA-256 GNU `1d4ce302b820c41f4b89c5fb9bce45f0f0c94882c1cf08fc360caf08be6e7df4`.
+O commit 7acf795 alterou somente o SHA da install-action para a v2.90.6.
+
+Execução verificada
+-------------------
+Run: https://github.com/Jose-012/projeto-dfir-nist/actions/runs/44567609855
+Job: 135713548967, `Linux x86_64 quality gates`, duração de 14m40s.
+O MCP `actions_get` retornou `status=completed`, `conclusion=success` e o HEAD
+acima. O MCP `actions_list` confirmou sucesso em todas as 27 etapas do job.
+
+- Diagnose toolchain, 16:37:12Z: doctor 0 erros/0 avisos; rustc/cargo 1.100.0,
+  nextest 0.9.151, Python 3.14.6, audit 0.22.2, deny 0.20.2 e just 1.59.0.
+- Inspect locked dependency graph, 16:37:12Z..16:37:16Z: `cargo metadata --locked`
+  e `cargo tree --locked -e features` concluídos.
+- Run Rust gates, 16:37:16Z..16:47:04Z: `just verify` concluído; nextest
+  536 passed/1 skipped em 144,397 s; doctests verdes; Clippy `-D warnings` limpo.
+- Run supply-chain gates, 16:47:04Z..16:47:11Z: 1550 advisories carregados e
+  613 dependências varridas; `cargo audit` e `cargo audit --no-yanked` concluídos
+  com somente a exceção informativa permitida de bincode; o comando
+  `cargo deny --workspace check` terminou com advisories, bans, licenses e sources ok.
+- Run documentation gate, 16:47:11Z..16:47:12Z: Fase 0 com 0 erros/0 avisos e
+  `documentation gate: PASS`.
+- Run headless end-to-end gate, 16:47:12Z..16:48:24Z: engine real reconstruído;
+  110/110 etapas passaram com a fixture sanitizada versionada; timeline com 12
+  eventos, cinco candidatos pendentes inicialmente e estado final 1 confirmado,
+  1 rejeitado e 3 pendentes; cinco entregáveis, máscara, determinismo, auditoria,
+  custódia e descarte verificados. O passo usou `DFIR_ENGINE_SANDBOX=required`.
+
+Artefatos e pós-condições
+-------------------------
+- Workflow ativo: `.github/workflows/ci.yml`, id 424072727.
+- Log completo baixado somente para scratch: `ci-run-44567609855.log`, 6915 linhas,
+  SHA-256 `536bacafe35d56aa9b466d69625a0778f79633a044f385ae8c014d1ee3223637`.
+- O runner emitiu uma annotation não fatal de depreciação de Node.js 20 para
+  checkout, setup-python e cache, executados à época com Node.js 24 forçado.
+  Isso não foi convertido em aviso de produto nem ocultado; atualizações dessas
+  actions ficam para manutenção controlada, com nova execução.
+
+Limites
+-------
+O PASS cobre o CI em Linux x86_64 e a árvore/commit indicados. Não declara
+Windows, Linux aarch64, incidente real, aceite final, navegação/diálogo nativo ou
+PASS de GUI. `EVD-050` permanece BLOCKED. A primeira execução falhou de setup e
+foi mantida como histórico; somente a segunda sustenta o encerramento de WVR-003.
