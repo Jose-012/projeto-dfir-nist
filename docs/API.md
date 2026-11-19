@@ -102,7 +102,7 @@ Ao revisar um item, a checagem de ciclos exige que `depends_on` presente nos ite
 
 `current_gap_analysis` exclui primeiro gaps `CLOSED` e valida os demais antes de retornar: `subcategory_id` deve ter forma/Function válidas e `priority` deve ser HIGH, MEDIUM ou LOW. Valor desconhecido, ausente ou não textual falha com o ID da lacuna e o campo, impedindo que um gap listado desapareça da cobertura por Function ou dos entregáveis. `CLOSED` não exige prioridade; gaps abertos legados sem `status` continuam válidos (`EVD-042`).
 
-`run_gap_analysis` rejeita payload inválido de um `NIST_GAP` vigente antes de abrir a transação. O registro inválido não é fechado nem substituído silenciosamente; a regressão verifica que nenhuma nova linha é escrita (`EVD-024`).
+`run_gap_analysis` rejeita payload inválido de um `NIST_GAP` vigente antes de abrir a transação. Além de JSON malformado (`EVD-024`), `subcategory_id` e `priority` de gaps abertos seguem a mesma validação da leitura; o erro identifica ID/campo e nenhuma sucessora é escrita (`EVD-043`). `CLOSED` sem prioridade continua recalculável e o legado aberto sem `status` permanece válido quando os campos obrigatórios são válidos.
 
 ### `src/service/timeline_filter.rs` — Filtro estruturado da timeline
 

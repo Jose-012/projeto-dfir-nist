@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - gap NIST inválido não é normalizado pelo recálculo (`EVD-043`)
+
+- Antes, `run_gap_analysis` aceitava `priority = URGENT`, retornava um novo ID e aumentava `analytical_results` de 2 para 3 linhas, substituindo a revisão malformada sem diagnóstico.
+- `previously_open_gaps` agora aplica a mesma validação de subcategoria/prioridade antes do `BEGIN IMMEDIATE`. Seis casos falham com ID/campo e contagem inalterada; `CLOSED` sem prioridade continua recalculável.
+- `EVD-043`: 38 testes NIST, `just verify` com 515 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-041`.
+
 ## Unreleased - 2026-11-19 - gap NIST aberto inválido falha antes da cobertura (`EVD-042`)
 
 - Uma lacuna vigente com `priority = URGENT` aparecia como `open_gaps=1`, mas todas as contagens PR ficavam zeradas. Campos ausentes/não textuais e Function desconhecida tinham efeitos equivalentes.

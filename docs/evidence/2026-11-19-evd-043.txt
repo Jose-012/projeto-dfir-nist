@@ -1,0 +1,62 @@
+EVD-043 - gap NIST inválido não é normalizado pelo recálculo
+=============================================================
+
+Commit testado: 7dcfc5dd90baaa4e914160f74ad38efd88fa101d
+Tree testada: 15971faf85ea27f8737abad121283f24b1d7cacc
+Período dos gates Rust/e2e: 2026-11-19T05:19:46Z..2026-11-19T05:31:46Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+`previously_open_gaps` validava a sintaxe JSON e filtrava `CLOSED`, mas não
+validava `subcategory_id` nem `priority`. O recálculo podia criar uma sucessora
+válida para uma lacuna vigente malformada, normalizando o histórico em vez de
+sinalizar o dado inválido.
+
+Regressão antes da correção:
+`cargo nextest run --locked -p dfir-app malformed_open_nist_gap_blocks_recompute_without_new_rows`
+Resultado: exit 100, como prova do defeito. Uma lacuna PR real alterada para
+`priority = "URGENT"` foi recalculada com `new_ids = 1`; a contagem de
+`analytical_results` aumentou de 2 para 3.
+
+O teste usa revisões vigentes com correlation key e proveniência preservadas.
+Cobre prioridade/subcategoria desconhecidas, ausentes e numéricas.
+
+Depois
+------
+`previously_open_gaps` filtra primeiro `CLOSED` e então exige `subcategory_id`
+com forma/Function válidas e `priority` HIGH/MEDIUM/LOW. A validação acontece
+antes de `BEGIN IMMEDIATE`. O erro contém ID da lacuna e campo; nenhuma nova
+linha analítica é escrita.
+
+O teste verifica explicitamente que a contagem permanece igual nos seis casos.
+Um controle separado fecha uma lacuna sem `priority`, recalcula e obtém uma nova
+lacuna HIGH válida. O recálculo normal de gaps abertos legados sem `status`
+continua coberto pelos testes existentes.
+
+Comando focado: `cargo nextest run --locked -p dfir-app nist`
+Resultado: 38/38 testes passaram, cobrindo serviço, persistência, Functions,
+GUI kittest e entregáveis relacionados a NIST.
+
+Gate Rust e ponta a ponta
+-------------------------
+Comando: `just verify`
+Resultado: exit 0; 515 tests run, 515 passed, 1 skipped; validate-fase0, fmt,
+check, doctests e clippy `-D warnings` verdes.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: 110/110 etapas passaram. O Entregável 3 manteve dez lacunas NIST
+vigentes, incluindo PR.AA-03 e DE.CM-03; cinco documentos, hashes, determinismo,
+auditoria/custódia e descarte também passaram.
+
+Gate documental
+---------------
+Executado em 2026-11-19T05:34:33Z: `just doc-gate` PASS, Fase 0 com 0 erros/0
+avisos; especificação canônica e cópia raiz idênticas; `git diff --check` limpo.
+
+Limites
+-------
+Não houve mudança de dependências, schema ou reparo direto de histórico antigo.
+Supply chain não foi repetido e permanece em EVD-041. GUI real, Windows,
+aarch64, incidente real e CI não foram promovidos por esta evidência.
