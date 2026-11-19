@@ -1,0 +1,72 @@
+EVD-041 - vocabulário completo de plano e supply chain final
+============================================================
+
+Commit testado: 19f0c9e3817433b750ccab26af90e0191f8b5fbc
+Tree testada: 85b374b2e0e11735d54306b39930730dcf7a98da
+Período dos gates Rust/e2e/supply chain: 2026-11-19T04:29:04Z..2026-11-19T04:39:59Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151,
+cargo-audit 0.22.2 e cargo-deny 0.20.2.
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+`plan_view` validava domínio/prioridade e arrays, mas não validava `effort`,
+`cost_class`, `phase` nem `support_kind`. Esses campos obrigatórios podiam chegar
+aos entregáveis com valores inválidos; `support_kind` inválido também deixava de
+contar uma recomendação geral.
+
+Regressão antes da correção:
+`cargo nextest run --locked -p dfir-app malformed_stored_plan_vocabulary_fails_closed`
+Resultado: exit 100, como prova do defeito. `support_kind = "UNKNOWN"` foi
+aceito; a cobertura de OS_HARDENING ficou com `items = 1` e `general_items = 0`.
+
+Cada caso usa uma revisão vigente de um item originalmente válido, preservando
+correlation key, proveniência e histórico. O teste cobre três formas inválidas
+(desconhecido, ausente e numérico) para cada um dos seis campos de vocabulário,
+18 casos no total.
+
+Depois
+------
+`validate_plan_payload` usa os parsers canônicos de domínio, prioridade,
+esforço, classe de custo e fase, e exige `FINDING_BACKED` ou
+`GENERAL_RECOMMENDATION` em `support_kind`. Toda forma inválida retorna
+`AppError::Config` com ID do item e campo antes de ordenação, cobertura ou
+`deliverables::collect`; não há reparo silencioso de histórico antigo.
+
+Comandos focados:
+- `cargo nextest run --locked -p dfir-app malformed_stored_plan_vocabulary_fails_closed`: 1/1 PASS, 18 casos inválidos;
+- `cargo nextest run --locked -p dfir-app service::plan::`: 5/5 PASS, incluindo ordenação/cobertura válida e arrays legados ausentes.
+
+Gate Rust e ponta a ponta
+-------------------------
+Comando: `just verify`
+Resultado: exit 0; 512 tests run, 512 passed, 1 skipped; validate-fase0, fmt,
+check, doctests e clippy `-D warnings` verdes.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: 110/110 etapas passaram. O cenário de demonstração gerou 13 itens de
+plano e os cinco documentos; E4 manteve cinco grupos/9 itens e E5 três
+dimensões/4 itens. Hashes, determinismo, auditoria/custódia e descarte também
+passaram.
+
+Supply chain
+------------
+Comando: `just supply-chain`
+Resultado: exit 0. `cargo audit --no-yanked` carregou 1533 advisories e varreu
+612 dependências do lock, mantendo apenas o aviso permitido de bincode
+(`RUSTSEC-2025-0141`). `cargo deny --workspace check` terminou com
+`advisories ok, bans ok, licenses ok, sources ok`.
+
+Não houve mudança de dependências, lock, exceções ou waivers. `WVR-004` e as
+exceções informativas de bincode/chrono permanecem com seus próprios prazos e
+justificativas; este PASS não os transforma em prova de inexploração.
+
+Gate documental
+---------------
+Executado em 2026-11-19T04:44:39Z: `just doc-gate` PASS, Fase 0 com 0 erros/0
+avisos; especificação canônica e cópia raiz idênticas; `git diff --check` limpo.
+
+Limites
+-------
+Não houve mudança de schema ou reparo de dados antigos. GUI real, Windows,
+aarch64, incidente real e CI não foram promovidos por esta evidência.

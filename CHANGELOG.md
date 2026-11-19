@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - vocabulário completo de plano e supply chain final (`EVD-041`)
+
+- `support_kind = UNKNOWN` era aceito com um item de domínio e zero recomendações gerais; esforço, classe de custo e fase inválidos também podiam chegar aos entregáveis.
+- `plan_view` agora valida os seis campos de vocabulário obrigatórios antes de ordenação, cobertura ou coleta. A regressão cobre 18 combinações desconhecidas, ausentes e não textuais, sem reparo de histórico antigo.
+- `EVD-041`: regressão e 5 testes de plano, 512 passed/1 skipped, e2e 110/110, `just supply-chain` e doc-gate PASS. Não houve mudança de dependências ou exceções.
+
 ## Unreleased - 2026-11-19 - vocabulário inválido de plano falha antes da cobertura (`EVD-040`)
 
 - Um `PLAN_ITEM` vigente com domínio desconhecido era listado, mas omitido da cobertura dos oito domínios; prioridade inválida recebia ordenação default. A reprodução com `DATABASE` obteve cobertura zerada sem erro.
