@@ -1,0 +1,79 @@
+EVD-037 - auditoria e conclusão de fluxos da GUI
+================================================
+
+Commit testado: 3c5e11271ba98ebf64c5a92b5585a8ef303fa5ef
+Período: 2026-11-18T22:54:08Z..2026-11-19T01:14:53Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, Xorg :0
+Dados: somente armazenamento isolado e fixtures sintéticas/versionadas.
+
+Decisão
+-------
+ADR-0029 mantém eframe/egui 0.37. Os defeitos eram de viewports, IDs, foco,
+roteamento assíncrono e escrita de exportação. Nenhuma migração de framework
+ou nova dependência de produção foi introduzida.
+
+Regressões e suíte GUI
+----------------------
+Comando: cargo test -q -p dfir-app --locked gui::
+Resultado: running 115 tests; 115 passed; 0 failed; 274 filtered out.
+
+Inclui, entre outras:
+- viewport vertical de Evidência e conteúdo YARA além da dobra;
+- foco que revela o último candidato na viewport externa de Detecções;
+- salts distintos de ComboBox sem o glifo de colisão do egui;
+- respostas tardias isoladas por incidente/evidência/job;
+- panic do backend convertido em evento de erro, encerrando loading;
+- seletor pendente/cancelado e morte do worker;
+- confirmação, privacidade, entregáveis e exportação sem clobber;
+- tooltip e seleção acessível com hash integral de auditoria;
+- rolagem da Timeline virtualizada até evento-449, com pedido do offset 400.
+
+A primeira versão do novo teste de Timeline falhou por Harness::run exceder 4
+passos. A suíte registrou 114 passed/1 failed. O teste foi corrigido para
+run_steps(8), passou isoladamente 1/1 e depois a suíte passou 115/115.
+
+Gate Rust
+---------
+Comando: just verify
+Resumo observado:
+- validate-fase0: 0 erros, 0 avisos;
+- fmt e cargo check --workspace --locked --all-targets: verdes;
+- nextest: 509 tests run; 509 passed; 1 skipped;
+- doctests: verdes;
+- clippy --workspace --all-targets --all-features --locked -D warnings: verde.
+
+Ponta a ponta
+-------------
+Comando: just e2e tests/fixtures/senai-demo.evtx
+Resultado: 110/110 etapas passaram.
+Cobertura observada: importação real, hashes, timeline, resultados analíticos,
+candidatos e decisões, cinco documentos, máscara e escolha sem máscara,
+determinismo, auditoria/custódia, descarte e destruição com confirmação de nome.
+
+Gate documental
+---------------
+Comando: just doc-gate
+Resultado: Fase 0 com 0 erros/0 avisos; documentation gate: PASS.
+A especificação canônica e a cópia raiz foram comparadas com cmp e são iguais.
+
+X11 e limites da evidência visual
+---------------------------------
+A build de produção abriu com DFIR_DATA_ROOT isolado, engine explícito e
+backend Gl/Mesa Intel. Os logs não contêm No glyph, No font, ID clash, panic
+ou ScrollArea ID. As instâncias foram fechadas normalmente com Alt+F4.
+
+Na sessão com cliente 960x600 e origem 40,40, selecionar a evidência alterou
+78.615 pixels (13,6484%) e a roda alterou 73.221 pixels (12,7120%). Essas são
+medições de mudança, não identificação OCR nem prova de todos os controles.
+
+As capturas após redimensionar o frame não foram aceitas como evidência: a
+entrada seguinte alterou zero pixels. XGetImage também não leu o conteúdo GL,
+mesmo antes do resize. Isso invalida esse método de captura neste ambiente;
+não comprova tela em branco nem funcionamento visual pós-resize. Nenhuma
+captura foi copiada para o repositório ou enviada a agentes/serviços.
+
+Não se declara: navegação manual completa, diálogo nativo exercitado via X11,
+integração AT-SPI/Orca, ausência global de IDs duplicados, Windows, aarch64,
+incidente real ou CI. Importação e entregáveis reais acima são E2E headless;
+os caminhos correspondentes da GUI foram testados com kittest/estado.
+Supply chain não foi repetido nesta rodada e permanece em EVD-036.

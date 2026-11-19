@@ -57,9 +57,10 @@ A limitação de AT-SPI permanece explícita e não é mascarada pela decisão d
 
 ## Evidência desta reavaliação
 
-- `cargo test -p dfir-app --locked gui::`: 114/114 após recompilação limpa do pacote.
+- `cargo test -p dfir-app --locked gui::`: 115/115 na árvore integrada.
 - Regressão de colisão de `ComboBox`: o panic 🔥 ocorreu antes da correção e o teste estrito passou depois, sem `allow_missing_glyphs`.
 - Regressão de foco: o último controle começa fora da viewport e fica visível após foco.
+- Regressão de Timeline: a roda pede a página final e a linha 449 fica visível na tabela virtualizada.
 - Backend: 4/4, incluindo panic roteado e preservação de arquivo existente na exportação.
 - Incidentes: 8/8, incluindo tooltip e seleção acessível do hash.
 - `cargo fmt --all -- --check`, `git diff --check` e clippy da GUI: verdes.

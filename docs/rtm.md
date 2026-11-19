@@ -61,7 +61,7 @@ A implementação abaixo pertence à base já concluída e não redefine os `RF-
 | F1-32 | RF-055 | Redação de dados pessoais | IMPLEMENTED / PENDING-HUMAN (ADR-0023; testado em rustc 1.97.1 em 2026-10-27) |
 | F1-33 | RF-046 | Estado da GUI/UX | VERIFIED (2026-11-15, `EVD-010`): AUD-32 corrigido — YARA não sobrescreve a timeline (só análise EVTX recarrega eventos); teste próprio em `src/gui/evidence.rs` |
 | F1-34 | Enabler (sem RF próprio; ADR-0019) | CLI headless fina e teste ponta a ponta | IMPLEMENTED / PENDING-HUMAN |
-| F1-35 | Enabler (sem RF próprio; ADR-0022) | Observabilidade e testes de GUI | IMPLEMENTED / PENDING-HUMAN (`EVD-036`: janela real isolada aberta por 25 s com backend Gl/Mesa e log sem fonte/glyph/scroll ou fixtures; sem navegação manual) |
+| F1-35 | Enabler (sem RF próprio; ADR-0022) | Observabilidade e testes de GUI | IMPLEMENTED / PENDING-HUMAN (`EVD-036`: janela real isolada aberta por 25 s com backend Gl/Mesa e log sem fonte/glyph/scroll ou fixtures; sem navegação manual; `EVD-037`: suíte GUI 115/115, verify 509 passed/1 skipped e e2e 110/110; captura pós-resize inconclusiva, sem AT-SPI ou diálogo nativo X11 declarado) |
 
 Backlog detalhado: `docs/FASE1_BACKLOG.md`. Tickets locais: `.scratch/fase1-backlog/issues/`. Rastreabilidade demanda → RF → ticket: `docs/DEMAND_TRACE.md`.
 

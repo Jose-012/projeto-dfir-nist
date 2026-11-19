@@ -1,6 +1,13 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - auditoria e conclusão de fluxos da GUI (`EVD-037`)
+
+- ADR-0029 mantém `eframe/egui` 0.37: os defeitos eram de viewports, IDs, foco, roteamento assíncrono e escrita, sem justificar migração ou nova dependência.
+- Evidência tem rolagem vertical; Detecções usa uma só viewport e revela o foco; Timeline alcança a última linha virtualizada. Seletores preservam salts, respostas tardias ficam isoladas, panics encerram loading e exportação JSON usa criação exclusiva com `shutdown`.
+- Suíte GUI 115/115; `just verify` com 509 passed/1 skipped, doctests e Clippy verdes; e2e 110/110; doc-gate 0 erros/0 avisos.
+- X11 abriu com Gl/Mesa e log sem glyph/ID/panic. Captura pós-resize ficou inconclusiva e não sustenta navegação manual, diálogo nativo ou AT-SPI. Supply chain permanece em `EVD-036`.
+
 ## Unreleased - 2026-11-18 - verificação ambiental da árvore final (`EVD-036`)
 
 - Sobre `3e3132c`, sem mudança de produção ou dependências, `just supply-chain` passou com as exceções documentadas; `cargo deny --workspace check` terminou com advisories/bans/licenses/sources OK.
