@@ -131,6 +131,21 @@ fn validate_plan_payload(item: &AnalyticalResultResponse) -> AppResult<()> {
     payload_str(item, "priority")
         .and_then(plan_model::PlanPriority::from_str)
         .ok_or_else(|| invalid("priority"))?;
+    payload_str(item, "effort")
+        .and_then(plan_model::PlanEffort::from_str)
+        .ok_or_else(|| invalid("effort"))?;
+    payload_str(item, "cost_class")
+        .and_then(plan_model::CostClass::from_str)
+        .ok_or_else(|| invalid("cost_class"))?;
+    payload_str(item, "phase")
+        .and_then(plan_model::PlanPhase::from_str)
+        .ok_or_else(|| invalid("phase"))?;
+    if !matches!(
+        payload_str(item, "support_kind"),
+        Some("FINDING_BACKED" | "GENERAL_RECOMMENDATION")
+    ) {
+        return Err(invalid("support_kind"));
+    }
     for key in ["finding_ids", "nist_subcategories", "depends_on"] {
         let Some(value) = item.payload.get(key) else {
             continue;
@@ -201,8 +216,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn malformed_stored_plan_domain_and_priority_fail_closed() {
+    async fn malformed_stored_plan_vocabulary_fails_closed() {
         let cases = [
+            (
+                "unknown support kind",
+                "support_kind",
+                serde_json::json!("UNKNOWN"),
+            ),
+            (
+                "missing support kind",
+                "support_kind",
+                serde_json::Value::Null,
+            ),
+            ("numeric support kind", "support_kind", serde_json::json!(1)),
+            ("unknown effort", "effort", serde_json::json!("XL")),
+            ("missing effort", "effort", serde_json::Value::Null),
+            ("numeric effort", "effort", serde_json::json!(1)),
+            (
+                "unknown cost class",
+                "cost_class",
+                serde_json::json!("FREE"),
+            ),
+            ("missing cost class", "cost_class", serde_json::Value::Null),
+            ("numeric cost class", "cost_class", serde_json::json!(1)),
+            ("unknown phase", "phase", serde_json::json!("NOW")),
+            ("missing phase", "phase", serde_json::Value::Null),
+            ("numeric phase", "phase", serde_json::json!(1)),
             ("unknown domain", "domain", serde_json::json!("DATABASE")),
             ("missing domain", "domain", serde_json::Value::Null),
             ("numeric domain", "domain", serde_json::json!(1)),
