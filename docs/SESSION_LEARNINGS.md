@@ -13,7 +13,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** documentos chegaram a mencionar `EVD-051` e `EVD-052` antes dos respectivos arquivos e resultados finais existirem. A reconciliação posterior corrigiu isso antes do commit.
 - **Risco:** uma referência vigente poderia parecer `PASS` sem execução correspondente.
 - **Prevenção:** IDs futuros ficam em scratch; arquivo e registro precedem qualquer referência vigente, seguidos de novo `doc-gate` (`docs/SESSION_IMPROVEMENT.md`, início e execução).
-- **Confirmação:** pendente.
+- **Confirmação:** confirmada em 2026-11-19: `EVD-054` teve arquivo criado antes do registro e das demais referências; `just doc-gate` final passou.
 
 ### 2. Investigação gráfica sem orçamento eficaz
 
@@ -29,7 +29,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** cliques X11 tiveram exit 0 enquanto a tela permaneceu `Screen::Evidence`. O smoke final de resize também teve exit 0 e emitiu `Xlib.error.BadMatch`.
 - **Risco:** transformar envio de evento em falsa prova de navegação ou resize limpo.
 - **Prevenção:** toda ação exige pós-condição independente e inspeção de diagnósticos; `EVD-050` registra janela/resize apenas como resultado parcial e bloqueado.
-- **Confirmação:** pendente.
+- **Confirmação:** confirmada em 2026-11-19: `gh run watch` foi seguido de confirmação MCP do run e das 27 etapas; o diagnóstico do doc-gate foi lido e uma divergência de ticket foi corrigida antes do PASS.
 
 ### 4. Evidência vigente sensível a advisories e premissas antigas
 
@@ -37,7 +37,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** a nova execução encontrou oito vulnerabilidades de `wasmtime 48.0.8`, invalidando o supply-chain vigente de `EVD-041`. Dry-runs também mostraram que a premissa de `WVR-004` estava superada por SQLx 0.9.1.
 - **Risco:** carregar um `PASS` histórico como atual sem repetir o gate ou reavaliar a exceção.
 - **Prevenção:** revisar gatilhos de `STALE` no início e repetir supply-chain quando lock/advisories mudarem; exceções exigem dry-run e justificativa atual.
-- **Confirmação:** pendente.
+- **Confirmação:** confirmada em 2026-11-19: a execução 44567609855 recarregou 1550 advisories e repetiu audit/deny; o resultado foi registrado separadamente em `EVD-054`.
 
 ### 5. Binário executado sem vínculo com o HEAD modificado
 
@@ -45,7 +45,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** o primeiro e2e com CPython 3.14.6 usou binários pré-existentes identificados por SHA-256 e não provou a árvore posteriormente modificada. `EVD-049` declara esse limite; a reconstrução e o novo e2e foram registrados separadamente em `EVD-052`.
 - **Risco:** atribuir ao HEAD um resultado obtido com outro binário.
 - **Prevenção:** toda evidência deve ligar commit/tree, hashes dos binários e comando de build, ou dizer explicitamente que o binário era pré-existente.
-- **Confirmação:** pendente.
+- **Confirmação:** confirmada em 2026-11-19: `EVD-054` liga commit `7acf795`, tree `122de0f` e build no checkout limpo do runner; a execução 44576017693 repetiu o fluxo no commit documental `172cd70`.
 
 ### 6. Busca vazia incompatível com o conteúdo conhecido
 
@@ -61,7 +61,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** um `bg wait` usou um ID de await incompleto e retornou `Task not found`. Uma tentativa de parar workers com parâmetro inadequado também falhou; o worker CPython já não existia quando outra parada foi tentada.
 - **Risco:** esperar ou encerrar o alvo errado, ou acreditar que a coordenação terminou quando a chamada falhou.
 - **Prevenção:** copiar IDs completos, usar `todo.waiting_on`, consultar `swarm list`/`bg list` e verificar o resultado efetivo de cada parada.
-- **Confirmação:** pendente.
+- **Confirmação:** confirmada em 2026-11-19: os IDs completos foram usados em `bg wait`; `bg list` confirmou todas as tarefas próprias em estado terminal e os resultados foram lidos.
 
 ### 8. Encurtamento acidental de linhas históricas da RTM
 
@@ -69,7 +69,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** a primeira edição para acrescentar `EVD-050..052` também removeu detalhes históricos de algumas linhas. A revisão do diff identificou a perda e restaurou o texto, mantendo os acréscimos.
 - **Risco:** apagar rastreabilidade enquanto se faz uma atualização aparentemente pequena.
 - **Prevenção:** edições aditivas e revisão semântica do diff, não apenas `git diff --check`.
-- **Confirmação:** pendente.
+- **Confirmação:** confirmada em 2026-11-19: `git diff --numstat` e a revisão das linhas editadas preservaram o histórico da RTM; somente F1-12/F1-14/F1-15 mudaram, com `doc-gate` final verde.
 
 ### 9. Silêncio de build confundível com travamento
 
