@@ -54,7 +54,75 @@ pub async fn list_attack_mappings(
     incident_id: &str,
 ) -> AppResult<Vec<AnalyticalResultResponse>> {
     incident_exists(&services.db, incident_id).await?;
-    current_results_for_incident(&services.db, incident_id, "ATTACK_MAPPING").await
+    let records = current_results_for_incident(&services.db, incident_id, "ATTACK_MAPPING").await?;
+    for record in &records {
+        validate_stored_attack_mapping(record)?;
+    }
+    Ok(records)
+}
+
+fn validate_stored_attack_mapping(record: &AnalyticalResultResponse) -> AppResult<()> {
+    let invalid = |field| {
+        AppError::Config(format!(
+            "stored attack mapping {} has invalid {field}",
+            record.id
+        ))
+    };
+    record
+        .payload
+        .get("tactic")
+        .and_then(serde_json::Value::as_str)
+        .and_then(attack_impact::AttackTactic::from_str)
+        .ok_or_else(|| invalid("tactic"))?;
+    let technique_id = record
+        .payload
+        .get("technique_id")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| attack_impact::is_valid_technique_id(value))
+        .ok_or_else(|| invalid("technique_id"))?;
+    if let Some(value) = record.payload.get("sub_technique_id")
+        && !value.is_null()
+        && !value
+            .as_str()
+            .is_some_and(attack_impact::is_valid_technique_id)
+    {
+        return Err(invalid("sub_technique_id"));
+    }
+    let basis = record
+        .payload
+        .get("basis")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| invalid("basis"))?;
+    let confidence = record
+        .confidence
+        .as_deref()
+        .and_then(analytical_results::Confidence::from_str)
+        .ok_or_else(|| invalid("confidence"))?;
+    attack_impact::require_evidence_for_high_confidence(basis, confidence)
+        .map_err(|_| invalid("basis"))?;
+    let expected_status = if basis.trim().is_empty() {
+        "GAP"
+    } else {
+        "DOCUMENTED"
+    };
+    if record
+        .payload
+        .get("evidence_status")
+        .and_then(serde_json::Value::as_str)
+        != Some(expected_status)
+    {
+        return Err(invalid("evidence_status"));
+    }
+    let expected_key = format!(
+        "attack-mapping:{}:{}:{}",
+        record.incident_id.as_deref().unwrap_or_default(),
+        record.evidence_id.as_deref().unwrap_or("none"),
+        technique_id
+    );
+    if record.correlation_key != expected_key {
+        return Err(invalid("correlation_key"));
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------
@@ -606,8 +674,7 @@ pub async fn findings_view(services: &AppServices, incident_id: &str) -> AppResu
     incident_exists(&services.db, incident_id).await?;
     let findings = current_results_for_incident(&services.db, incident_id, "FINDING").await?;
     let root_causes = current_results_for_incident(&services.db, incident_id, "ROOT_CAUSE").await?;
-    let attack_mappings =
-        current_results_for_incident(&services.db, incident_id, "ATTACK_MAPPING").await?;
+    let attack_mappings = list_attack_mappings(services, incident_id).await?;
     let risk_matrix = risk_matrix_of(&findings)?;
     Ok(FindingsView {
         findings,
@@ -650,6 +717,390 @@ mod tests {
         )
         .await
         .expect("critical path stage")
+    }
+
+    fn valid_stored_attack_mapping_payload() -> serde_json::Value {
+        serde_json::json!({
+            "kind": "ATTACK_MAPPING",
+            "tactic": "INITIAL_ACCESS",
+            "technique_id": "T1078",
+            "sub_technique_id": null,
+            "basis": "documented basis",
+            "analyst_note": null,
+            "evidence_status": "DOCUMENTED",
+        })
+    }
+
+    async fn insert_current_attack_mapping_successor(
+        services: &AppServices,
+        label: &str,
+        payload: serde_json::Value,
+        confidence: Option<&str>,
+        correlation_key: Option<&str>,
+    ) -> (String, String) {
+        let incident = crate::service::create_incident(services, label)
+            .await
+            .expect("incident");
+        let original = create_attack_mapping(
+            services,
+            &incident.id,
+            None,
+            "INITIAL_ACCESS",
+            "T1078",
+            None,
+            "documented basis",
+            "MEDIUM",
+            None,
+        )
+        .await
+        .expect("original attack mapping");
+        let bad_id = format!("bad-attack-mapping-{label}");
+        let correlation_key = correlation_key
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("attack-mapping:{}:none:T1078", incident.id));
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,confidence,payload,provenance,supersedes,created_at) VALUES(?,'analytical-result-v1','ATTACK_MAPPING',?,?,?,?,'{}',?,'2026-11-19T00:00:00Z')")
+            .bind(&bad_id)
+            .bind(correlation_key)
+            .bind(&incident.id)
+            .bind(confidence)
+            .bind(payload.to_string())
+            .bind(&original)
+            .execute(&services.db)
+            .await
+            .expect("malformed current attack mapping");
+        (incident.id, bad_id)
+    }
+
+    #[tokio::test]
+    async fn stored_attack_mapping_rejects_invalid_technique_in_current_successor() {
+        let fx = fixture().await;
+        let mut payload = valid_stored_attack_mapping_payload();
+        payload["technique_id"] = serde_json::json!("not-a-technique");
+        let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+            &fx.services,
+            "invalid-technique",
+            payload,
+            Some("MEDIUM"),
+            None,
+        )
+        .await;
+
+        let listed = list_attack_mappings(&fx.services, &incident_id).await;
+        let delivered = crate::service::deliverables::collect(&fx.services, &incident_id).await;
+        let listed_shape = match &listed {
+            Ok(rows) => format!(
+                "Ok({:?})",
+                rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>()
+            ),
+            Err(error) => format!("Err({error})"),
+        };
+        let delivered_shape = match &delivered {
+            Ok(data) => format!(
+                "Ok({:?})",
+                data.attack_mappings
+                    .iter()
+                    .map(|row| row.id.as_str())
+                    .collect::<Vec<_>>()
+            ),
+            Err(error) => format!("Err({error})"),
+        };
+        let (Err(list_error), Err(deliverable_error)) = (listed, delivered) else {
+            panic!(
+                "malformed technique accepted: list={listed_shape} deliverables={delivered_shape}"
+            );
+        };
+        for error in [list_error, deliverable_error] {
+            assert!(
+                matches!(&error, AppError::Config(message) if message.contains(&bad_id) && message.contains("technique_id")),
+                "unexpected invalid technique error: {error:?}"
+            );
+        }
+    }
+
+    fn assert_stored_attack_mapping_error(error: &AppError, id: &str, field: &str) {
+        assert!(
+            matches!(error, AppError::Config(message) if message.contains(id) && message.contains(field)),
+            "unexpected error for {field} on {id}: {error:?}"
+        );
+    }
+
+    async fn assert_stored_attack_mapping_rejected(
+        services: &AppServices,
+        incident_id: &str,
+        bad_id: &str,
+        field: &str,
+    ) {
+        let errors = [
+            list_attack_mappings(services, incident_id)
+                .await
+                .expect_err("list accepted malformed attack mapping"),
+            findings_view(services, incident_id)
+                .await
+                .expect_err("findings view accepted malformed attack mapping"),
+            crate::service::deliverables::collect(services, incident_id)
+                .await
+                .expect_err("deliverables accepted malformed attack mapping"),
+        ];
+        for error in &errors {
+            assert_stored_attack_mapping_error(error, bad_id, field);
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_attack_mapping_rejects_unknown_missing_and_non_string_tactics() {
+        let fx = fixture().await;
+        for (label, value) in [
+            ("unknown", serde_json::json!("PHISHING")),
+            ("missing", serde_json::Value::Null),
+            ("non-string", serde_json::json!(7)),
+        ] {
+            let mut payload = valid_stored_attack_mapping_payload();
+            if label == "missing" {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove("tactic");
+            } else {
+                payload["tactic"] = value;
+            }
+            let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+                &fx.services,
+                &format!("tactic-{label}"),
+                payload,
+                Some("MEDIUM"),
+                None,
+            )
+            .await;
+            assert_stored_attack_mapping_rejected(&fx.services, &incident_id, &bad_id, "tactic")
+                .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_attack_mapping_rejects_missing_and_non_string_techniques() {
+        let fx = fixture().await;
+        for (label, value) in [
+            ("missing", serde_json::Value::Null),
+            ("non-string", serde_json::json!(7)),
+        ] {
+            let mut payload = valid_stored_attack_mapping_payload();
+            if label == "missing" {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove("technique_id");
+            } else {
+                payload["technique_id"] = value;
+            }
+            let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+                &fx.services,
+                &format!("technique-{label}"),
+                payload,
+                Some("MEDIUM"),
+                None,
+            )
+            .await;
+            assert_stored_attack_mapping_rejected(
+                &fx.services,
+                &incident_id,
+                &bad_id,
+                "technique_id",
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_attack_mapping_rejects_invalid_and_non_string_sub_techniques() {
+        let fx = fixture().await;
+        for (label, value) in [
+            ("invalid", serde_json::json!("not-a-technique")),
+            ("non-string", serde_json::json!(7)),
+        ] {
+            let mut payload = valid_stored_attack_mapping_payload();
+            payload["sub_technique_id"] = value;
+            let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+                &fx.services,
+                &format!("sub-technique-{label}"),
+                payload,
+                Some("MEDIUM"),
+                None,
+            )
+            .await;
+            assert_stored_attack_mapping_rejected(
+                &fx.services,
+                &incident_id,
+                &bad_id,
+                "sub_technique_id",
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_attack_mapping_rejects_invalid_basis_and_confidence() {
+        let fx = fixture().await;
+        for (label, value) in [
+            ("missing", serde_json::Value::Null),
+            ("non-string", serde_json::json!(7)),
+        ] {
+            let mut payload = valid_stored_attack_mapping_payload();
+            if label == "missing" {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove("basis");
+            } else {
+                payload["basis"] = value;
+            }
+            let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+                &fx.services,
+                &format!("basis-{label}"),
+                payload,
+                Some("MEDIUM"),
+                None,
+            )
+            .await;
+            assert_stored_attack_mapping_rejected(&fx.services, &incident_id, &bad_id, "basis")
+                .await;
+        }
+        let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+            &fx.services,
+            "confidence-missing",
+            valid_stored_attack_mapping_payload(),
+            None,
+            None,
+        )
+        .await;
+        assert_stored_attack_mapping_rejected(&fx.services, &incident_id, &bad_id, "confidence")
+            .await;
+
+        let mut payload = valid_stored_attack_mapping_payload();
+        payload["basis"] = serde_json::json!("  \t");
+        payload["evidence_status"] = serde_json::json!("GAP");
+        let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+            &fx.services,
+            "high-without-basis",
+            payload,
+            Some("HIGH"),
+            None,
+        )
+        .await;
+        assert_stored_attack_mapping_rejected(&fx.services, &incident_id, &bad_id, "basis").await;
+    }
+
+    #[tokio::test]
+    async fn stored_attack_mapping_rejects_missing_non_string_and_mismatched_evidence_status() {
+        let fx = fixture().await;
+        for (label, value) in [
+            ("missing", serde_json::Value::Null),
+            ("non-string", serde_json::json!(7)),
+            ("mismatched", serde_json::json!("GAP")),
+        ] {
+            let mut payload = valid_stored_attack_mapping_payload();
+            if label == "missing" {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove("evidence_status");
+            } else {
+                payload["evidence_status"] = value;
+            }
+            let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+                &fx.services,
+                &format!("evidence-status-{label}"),
+                payload,
+                Some("MEDIUM"),
+                None,
+            )
+            .await;
+            assert_stored_attack_mapping_rejected(
+                &fx.services,
+                &incident_id,
+                &bad_id,
+                "evidence_status",
+            )
+            .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_attack_mapping_rejects_divergent_technique_and_correlation_identity() {
+        let fx = fixture().await;
+        let mut divergent = valid_stored_attack_mapping_payload();
+        divergent["technique_id"] = serde_json::json!("T1566");
+        let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+            &fx.services,
+            "divergent-technique",
+            divergent,
+            Some("MEDIUM"),
+            None,
+        )
+        .await;
+        assert_stored_attack_mapping_rejected(
+            &fx.services,
+            &incident_id,
+            &bad_id,
+            "correlation_key",
+        )
+        .await;
+
+        let (incident_id, bad_id) = insert_current_attack_mapping_successor(
+            &fx.services,
+            "wrong-correlation-key",
+            valid_stored_attack_mapping_payload(),
+            Some("MEDIUM"),
+            Some("attack-mapping:wrong:none:T1078"),
+        )
+        .await;
+        assert_stored_attack_mapping_rejected(
+            &fx.services,
+            &incident_id,
+            &bad_id,
+            "correlation_key",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn stored_attack_mapping_accepts_documented_and_gap_controls() {
+        let fx = fixture().await;
+        let mut documented = valid_stored_attack_mapping_payload();
+        documented
+            .as_object_mut()
+            .expect("payload object")
+            .remove("sub_technique_id");
+        let mut gap = valid_stored_attack_mapping_payload();
+        gap["basis"] = serde_json::json!("  ");
+        gap["evidence_status"] = serde_json::json!("GAP");
+        for (label, payload, confidence) in [
+            ("documented-absent-sub-technique", documented, "MEDIUM"),
+            ("gap-null-sub-technique", gap, "LOW"),
+        ] {
+            let (incident_id, current_id) = insert_current_attack_mapping_successor(
+                &fx.services,
+                label,
+                payload,
+                Some(confidence),
+                None,
+            )
+            .await;
+            let listed = list_attack_mappings(&fx.services, &incident_id)
+                .await
+                .expect("valid attack mapping control");
+            assert_eq!(listed.len(), 1);
+            assert_eq!(listed[0].id, current_id);
+            let view = findings_view(&fx.services, &incident_id)
+                .await
+                .expect("valid attack mapping findings view control");
+            assert_eq!(view.attack_mappings.len(), 1);
+            assert_eq!(view.attack_mappings[0].id, current_id);
+            let delivered = crate::service::deliverables::collect(&fx.services, &incident_id)
+                .await
+                .expect("valid attack mapping deliverable control");
+            assert_eq!(delivered.attack_mappings.len(), 1);
+            assert_eq!(delivered.attack_mappings[0].id, current_id);
+        }
     }
 
     #[tokio::test]
