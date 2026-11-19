@@ -60,17 +60,18 @@ jobs:
           rustc --version --verbose
           cargo --version --verbose
 
-      - name: Cache Cargo downloads and build
+      - name: Cache Cargo downloads
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
+          # target/ fica fora do cache: 1,88 GiB compactado causou ENOSPC na
+          # restauração da execução 44578097661. O lock continua na chave.
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-rust-1.100.0-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-registry-1.100.0-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-rust-1.100.0-
+            ${{ runner.os }}-cargo-registry-1.100.0-
 
       - name: Install QA tools
         uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
