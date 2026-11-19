@@ -45,6 +45,47 @@ pub async fn create_source_gap(
     Ok(id)
 }
 
+fn validate_source_gap_payload(gap: &AnalyticalResultResponse) -> AppResult<()> {
+    let invalid =
+        |field| AppError::Config(format!("stored source gap {} has invalid {field}", gap.id));
+    gap.payload
+        .get("expected_source")
+        .and_then(serde_json::Value::as_str)
+        .filter(|source| !source.trim().is_empty())
+        .ok_or_else(|| invalid("expected_source"))?;
+    let period = |field| match gap.payload.get(field) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(value) => value
+            .as_str()
+            .and_then(gap_model::parse_instant)
+            .map(Some)
+            .ok_or_else(|| invalid(field)),
+    };
+    let from = period("period_from")?;
+    let to = period("period_to")?;
+    if let (Some(from), Some(to)) = (from, to)
+        && from > to
+    {
+        return Err(invalid("period"));
+    }
+    let reason = gap
+        .payload
+        .get("reason")
+        .and_then(serde_json::Value::as_str)
+        .and_then(gap_model::GapReason::from_str)
+        .ok_or_else(|| invalid("reason"))?;
+    if reason == gap_model::GapReason::Other
+        && gap
+            .payload
+            .get("note")
+            .and_then(serde_json::Value::as_str)
+            .is_none_or(|note| note.trim().is_empty())
+    {
+        return Err(invalid("note"));
+    }
+    Ok(())
+}
+
 /// Lacunas vigentes do incidente, da fonte esperada e do período mais
 /// antigos para os mais recentes (ordem estável: o id desempata).
 pub async fn list_source_gaps(
@@ -53,6 +94,9 @@ pub async fn list_source_gaps(
 ) -> AppResult<Vec<AnalyticalResultResponse>> {
     incident_exists(&services.db, incident_id).await?;
     let mut gaps = current_results_for_incident(&services.db, incident_id, "SOURCE_GAP").await?;
+    for gap in &gaps {
+        validate_source_gap_payload(gap)?;
+    }
     let text = |gap: &AnalyticalResultResponse, key: &str| -> String {
         gap.payload
             .get(key)
@@ -144,6 +188,267 @@ mod tests {
             .filter_map(|gap| gap.payload["reason"].as_str())
             .collect();
         assert!(reasons.contains(&"NOT_COLLECTED") && !reasons.contains(&"RETENTION"));
+    }
+
+    #[tokio::test]
+    async fn malformed_current_source_gap_missing_expected_source_fails_closed() {
+        let fx = fixture().await;
+        let incident = crate::service::create_incident(&fx.services, "incidente")
+            .await
+            .expect("incident");
+        let valid = create_source_gap(
+            &fx.services,
+            &incident.id,
+            &input("logs do firewall", "RETENTION"),
+        )
+        .await
+        .expect("valid source gap");
+        create_source_gap(
+            &fx.services,
+            &incident.id,
+            &input("logs de e-mail", "NOT_PROVIDED"),
+        )
+        .await
+        .expect("independent valid source gap");
+        let record = crate::persistence::analytical_results::get(&fx.services.db, &valid)
+            .await
+            .expect("get source gap")
+            .expect("source gap exists");
+        let mut payload: serde_json::Value =
+            serde_json::from_str(&record.payload).expect("valid payload");
+        payload
+            .as_object_mut()
+            .expect("payload object")
+            .remove("expected_source");
+        let bad_id = "bad-source-gap-missing-expected-source";
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES(?,'analytical-result-v1','SOURCE_GAP',?,?,?,?,?,'2026-11-19T00:00:00Z')")
+            .bind(bad_id)
+            .bind(&record.correlation_key)
+            .bind(&incident.id)
+            .bind(payload.to_string())
+            .bind(record.provenance.to_string())
+            .bind(&valid)
+            .execute(&fx.services.db)
+            .await
+            .expect("malformed current source gap");
+
+        match list_source_gaps(&fx.services, &incident.id).await {
+            Ok(gaps) => {
+                let shape: Vec<(&str, Option<&serde_json::Value>)> = gaps
+                    .iter()
+                    .map(|gap| (gap.id.as_str(), gap.payload.get("expected_source")))
+                    .collect();
+                assert_eq!(
+                    shape.first().map(|(id, _)| *id),
+                    Some(bad_id),
+                    "the missing source should receive the empty sort key: {shape:?}"
+                );
+                panic!("missing expected_source was accepted and sorted first: {shape:?}");
+            }
+            Err(error) => assert!(
+                matches!(&error, AppError::Config(message) if message.contains(bad_id) && message.contains("expected_source")),
+                "unexpected error: {error:?}"
+            ),
+        }
+    }
+
+    #[tokio::test]
+    async fn malformed_current_source_gap_fields_fail_before_listing() {
+        let cases = [
+            (
+                "non-string-source",
+                "RETENTION",
+                "expected_source",
+                Some(serde_json::json!(7)),
+                "expected_source",
+            ),
+            (
+                "blank-source",
+                "RETENTION",
+                "expected_source",
+                Some(serde_json::json!(" \t\n")),
+                "expected_source",
+            ),
+            (
+                "invalid-period-from",
+                "RETENTION",
+                "period_from",
+                Some(serde_json::json!("not-a-date")),
+                "period_from",
+            ),
+            (
+                "non-string-period-from",
+                "RETENTION",
+                "period_from",
+                Some(serde_json::json!(7)),
+                "period_from",
+            ),
+            (
+                "invalid-period-to",
+                "RETENTION",
+                "period_to",
+                Some(serde_json::json!("2026-02-30")),
+                "period_to",
+            ),
+            (
+                "non-string-period-to",
+                "RETENTION",
+                "period_to",
+                Some(serde_json::json!(false)),
+                "period_to",
+            ),
+            (
+                "reversed-period",
+                "RETENTION",
+                "period_from",
+                Some(serde_json::json!("2026-10-01")),
+                "period",
+            ),
+            (
+                "unknown-reason",
+                "RETENTION",
+                "reason",
+                Some(serde_json::json!("UNKNOWN")),
+                "reason",
+            ),
+            ("missing-reason", "RETENTION", "reason", None, "reason"),
+            (
+                "non-string-reason",
+                "RETENTION",
+                "reason",
+                Some(serde_json::json!(7)),
+                "reason",
+            ),
+            ("other-missing-note", "OTHER", "note", None, "note"),
+            (
+                "other-non-string-note",
+                "OTHER",
+                "note",
+                Some(serde_json::json!(7)),
+                "note",
+            ),
+            (
+                "other-blank-note",
+                "OTHER",
+                "note",
+                Some(serde_json::json!("  \n")),
+                "note",
+            ),
+        ];
+        for (label, reason, field, replacement, error_field) in cases {
+            let fx = fixture().await;
+            let incident = crate::service::create_incident(&fx.services, label)
+                .await
+                .expect("incident");
+            let valid = create_source_gap(
+                &fx.services,
+                &incident.id,
+                &input("logs do firewall", reason),
+            )
+            .await
+            .expect("valid source gap");
+            let record = crate::persistence::analytical_results::get(&fx.services.db, &valid)
+                .await
+                .expect("get source gap")
+                .expect("source gap exists");
+            let mut payload: serde_json::Value =
+                serde_json::from_str(&record.payload).expect("valid payload");
+            if let Some(replacement) = replacement {
+                payload[field] = replacement;
+            } else {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove(field);
+            }
+            let bad_id = format!("bad-source-gap-{label}");
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES(?,'analytical-result-v1','SOURCE_GAP',?,?,?,?,?,'2026-11-19T00:00:00Z')")
+                .bind(&bad_id)
+                .bind(&record.correlation_key)
+                .bind(&incident.id)
+                .bind(payload.to_string())
+                .bind(record.provenance.to_string())
+                .bind(&valid)
+                .execute(&fx.services.db)
+                .await
+                .expect("malformed current source gap");
+
+            let result = list_source_gaps(&fx.services, &incident.id).await;
+            let shape = match &result {
+                Ok(gaps) => format!(
+                    "Ok({:?})",
+                    gaps.iter().map(|gap| &gap.id).collect::<Vec<_>>()
+                ),
+                Err(error) => format!("Err({error})"),
+            };
+            let Err(error) = result else {
+                panic!("{label} was accepted: {shape}");
+            };
+            assert!(
+                matches!(&error, AppError::Config(message) if message.contains(&bad_id) && message.contains(error_field)),
+                "{label}: unexpected error: {error:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn valid_source_gaps_keep_missing_or_null_periods_and_other_note() {
+        let fx = fixture().await;
+        let incident = crate::service::create_incident(&fx.services, "incidente")
+            .await
+            .expect("incident");
+        let null_periods = create_source_gap(
+            &fx.services,
+            &incident.id,
+            &SourceGapInput {
+                period_from: None,
+                period_to: None,
+                ..input("z-null-periods", "OTHER")
+            },
+        )
+        .await
+        .expect("valid OTHER source gap with null periods");
+        let legacy = create_source_gap(
+            &fx.services,
+            &incident.id,
+            &input("a-legacy-missing-periods", "RETENTION"),
+        )
+        .await
+        .expect("valid source gap to revise");
+        let record = crate::persistence::analytical_results::get(&fx.services.db, &legacy)
+            .await
+            .expect("get source gap")
+            .expect("source gap exists");
+        let mut payload: serde_json::Value =
+            serde_json::from_str(&record.payload).expect("valid payload");
+        let object = payload.as_object_mut().expect("payload object");
+        object.remove("period_from");
+        object.remove("period_to");
+        let legacy_id = "legacy-source-gap-without-period-keys";
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES(?,'analytical-result-v1','SOURCE_GAP',?,?,?,?,?,'2026-11-19T00:00:00Z')")
+            .bind(legacy_id)
+            .bind(&record.correlation_key)
+            .bind(&incident.id)
+            .bind(payload.to_string())
+            .bind(record.provenance.to_string())
+            .bind(&legacy)
+            .execute(&fx.services.db)
+            .await
+            .expect("valid legacy current source gap");
+
+        let listed = list_source_gaps(&fx.services, &incident.id)
+            .await
+            .expect("valid legacy and null-period gaps");
+        let ids: Vec<&str> = listed.iter().map(|gap| gap.id.as_str()).collect();
+        assert_eq!(ids, vec![legacy_id, null_periods.as_str()]);
+        let legacy = &listed[0];
+        assert!(legacy.payload.get("period_from").is_none());
+        assert!(legacy.payload.get("period_to").is_none());
+        let null_periods = &listed[1];
+        assert!(null_periods.payload["period_from"].is_null());
+        assert!(null_periods.payload["period_to"].is_null());
+        assert_eq!(null_periods.payload["reason"], "OTHER");
+        assert_eq!(null_periods.payload["note"], "retenção de 7 dias");
     }
 
     #[tokio::test]
