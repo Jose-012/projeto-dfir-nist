@@ -1,6 +1,14 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - QA, supply chain e EVTX públicos (`EVD-049`..`EVD-052`)
+
+- CPython 3.14.6 foi instalado somente em scratch com hashes verificados; os gates Python e o e2e identificado passaram (`EVD-049`). O host continua em 3.13.5.
+- SQLx 0.9.1, libsqlite3-sys 0.40.0 e Wasmtime 48.0.9 eliminaram a exceção SQLite e oito vulnerabilidades conhecidas; `WVR-004` foi encerrado e o inventário passou a 613 pacotes (`EVD-051`).
+- Dois EVTX públicos GPL-3.0, mantidos fora do Git, reproduziram Event ID 7045 qualificado serializado como objeto e ausência de candidato para MiniDumpWriteDump/LSASS. Regressões falharam Before e passaram After; `R-CRED-001` v2 e `RULE_SET_VERSION=2026.11.1` (`EVD-052`).
+- Gates finais: 536 passed/1 skipped, doc-tests/Clippy verdes, supply chain sem vulnerabilidades, e2e 110/110 com sandbox `required` e doc-gate PASS. Datasets públicos não são incidente real.
+- `EVD-050` permanece `BLOCKED`: janela/resize foram observados, mas navegação, importação e diálogo nativo não foram confirmados; o resize final emitiu `Xlib BadMatch`.
+
 ## Unreleased - 2026-11-19 - ATTACK_MAPPING vigente exige campos e identidade válidos (`EVD-048`)
 
 - Uma sucessora com `technique_id=not-a-technique` era aceita pela listagem e pelos entregáveis; a view de achados também lia o vigente sem revalidação.

@@ -1,0 +1,82 @@
+EVD-051 - atualização de segurança e revisão supply-chain
+=========================================================
+
+Status: PASS
+Commit testado: b45c92274211427703504ecf47aa93c0462b3201
+Tree testada: 973a144de177df62f94c3b68b8e9037247885441
+Período da revisão e gates: 2026-11-19T13:10:13Z..13:42:20Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0,
+cargo-audit 0.22.2 e cargo-deny 0.20.2. Advisory-db atualizado na execução.
+
+Antes
+-----
+`cargo metadata --locked`, `cargo tree --locked -e features` e
+`cargo tree --locked -d` passaram no lock antigo. Dry-runs confirmaram:
+- `libsqlite3-sys 0.39.0` não era selecionável com `sqlx 0.9.0` (exit 101);
+- `sqlx 0.9.1` estava disponível e, em atualização conjunta, permitia
+  `libsqlite3-sys 0.40.0`;
+- `wasmtime 48.0.9` era selecionável sem atualizar yara-x;
+- `yara-x 1.23.0` continuava com `bincode 2.0.1` obrigatório;
+- chrono não tinha atualização compatível no dry-run.
+
+Comando: `just supply-chain` no lock antigo.
+Resultado: exit 1. Foram carregados 1550 advisories e varridas 612 dependências.
+Oito vulnerabilidades de `wasmtime 48.0.8` foram relatadas:
+RUSTSEC-2026-0566, -0567, -0568, -0569, -0570, -0571, -0572 e -0573.
+`cargo deny --workspace check` terminou `advisories FAILED`; bans, licenses e
+sources ok. Esse resultado tornou `EVD-041` STALE como evidência vigente.
+Log: `logs/supply/just-supply-chain.txt` no scratch da rodada.
+
+Mudança mínima
+--------------
+Dry-run validado:
+`cargo update -p sqlx -p libsqlite3-sys -p wasmtime --dry-run` -> exit 0.
+
+Aplicado:
+`cargo update -p sqlx -p libsqlite3-sys -p wasmtime` -> exit 0.
+
+Somente Cargo.lock e as configurações/documentação correspondentes mudaram.
+Não houve troca de yara-x, chrono ou framework. Resolução principal:
+- sqlx e componentes 0.9.0 -> 0.9.1;
+- libsqlite3-sys 0.37.0 -> 0.40.0;
+- wasmtime e componentes 48.0.8 -> 48.0.9;
+- Cranelift 0.135.8 -> 0.135.9;
+- objc2-system-configuration 0.3.2 entrou como dependência transitiva permitida.
+
+`RUSTSEC-2026-0459` foi removido de `deny.toml` e `.cargo/audit.toml`.
+`WVR-004` ficou encerrado, com a decisão histórica preservada.
+A justificativa de bincode foi corrigida para yara-x 1.22.1.
+
+Depois
+------
+Antes de remover o ignore antigo:
+- `cargo audit --no-yanked`: exit 0;
+- `cargo deny --workspace check advisories`: exit 0.
+
+Gate final já sem o ignore de SQLite:
+`just supply-chain` -> exit 0.
+- 1550 advisories carregados;
+- 613 dependências varridas;
+- zero vulnerabilidades;
+- um aviso informativo permitido: `RUSTSEC-2025-0141` (bincode);
+- `advisories ok, bans ok, licenses ok, sources ok`.
+
+`cargo check --workspace --locked --all-targets` -> exit 0 em 2m13s.
+Logs: `logs/supply/just-supply-chain-updated.txt` e
+`logs/supply/cargo-check-updated.txt`.
+
+Inventário e escopo
+-------------------
+`cargo metadata --locked --format-version 1` confirmou 613 pacotes: 3 do workspace
+e 610 de terceiros. `LICENSES_THIRD_PARTY.md` foi regenerado para o lock com
+SHA-256 `bf5c5f5fef7c83af6846085681b5ee9587285df68f280e7a29d75d9fd1be4a14`.
+`validate_fase0.py` passou com 0 erros/0 avisos; `git diff --check` ficou limpo.
+O commit `b45c922` contém somente lock, exceções, receita e inventário da
+atualização de segurança. As correções EVTX ficaram em commit separado.
+
+Limites
+-------
+Restam duas exceções informativas, não vulnerabilidades aceitas: bincode e chrono.
+O dry-run de yara-x 1.23.0 não foi aplicado e não eliminaria bincode.
+Não houve execução Windows, aarch64, CI hospedado ou incidente real. O banco de
+advisories muda com o tempo; este PASS vale para a execução e o lock identificados.

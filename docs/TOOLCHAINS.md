@@ -46,7 +46,11 @@ A versão efetiva de Rust/Cargo/Python usada em um gate deve ser registrada. Man
 
 ### Ambiente observado em 2026-11-18
 
-Linux x86_64: rustc/cargo **1.100.0**, Python **3.13.5**, cargo-nextest **0.9.151**, cargo-deny **0.20.2**, just **1.59.0** e Git **2.47.3**. O Python real diverge da referência 3.14.6; os gates Python executados valem para 3.13.5, não para 3.14.6. Alinhar esse interpretador à referência permanece pendente se a reprodução exata for exigida. Nenhuma instalação foi feita para mascarar a divergência.
+Linux x86_64: rustc/cargo **1.100.0**, Python **3.13.5**, cargo-nextest **0.9.151**, cargo-deny **0.20.2**, just **1.59.0** e Git **2.47.3**. O Python real divergia da referência 3.14.6; os gates Python executados naquela rodada valiam para 3.13.5, não para 3.14.6. Esta observação histórica não foi reescrita.
+
+### CPython alinhado em 2026-11-19
+
+`EVD-049` registra CPython **3.14.6** instalado somente em scratch com uv 0.12.3. O archive teve SHA-256 conferido contra o release do GitHub e o executável instalado foi comparado byte a byte com o executável extraído do archive verificado. `validate_fase0.py` (0 erros/0 avisos), `doc_gate.py` (PASS) e `e2e_headless.py` (110/110) passaram com esse interpretador. O coordinator conferiu independentemente todos os hashes do manifesto. O `/usr/bin/python3` do host continua 3.13.5; a reprodução exige selecionar o caminho 3.14.6 documentado em `EVD-049`, não uma instalação global implícita. CPython continua fora do runtime de produção.
 
 
 Toolchains de referência: `toolchains.toml`.

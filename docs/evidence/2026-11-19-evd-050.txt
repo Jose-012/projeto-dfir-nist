@@ -1,0 +1,71 @@
+EVD-050 - fluxos da GUI nativa X11, resultado parcial/bloqueado
+================================================================
+
+Status consolidado: BLOCKED
+Código final do smoke do coordinator: d30ef0c7eea1a75db690d4556a090369af5a2bcf
+Binário final SHA-256: 4134d3d78e581bf374c0bce5ce184e70e52cbd6a818bd0e8bf631bdffec4d2a8
+Período: 2026-11-19T13:29:08Z..14:38:50Z
+Ambiente: Linux x86_64, Debian 13, X11 `DISPLAY=:0`, eframe/egui 0.37.0,
+Mesa Intel HD Graphics 2000, backend Gl. Raízes de dados isoladas em scratch.
+Sem AT-SPI/accesskit, screenshots como evidência, imports ou conteúdo de eventos.
+
+Veredito
+--------
+EVD-050 NÃO É PASS para navegação, importação ou diálogo nativo.
+Somente criação/identificação da janela e mudança de geometria foram confirmadas.
+Exits 0 dos injetores X11 provam apenas que o evento foi enviado, não que o widget
+foi ativado. Não houve evidência importada nem workflow de incidente executado.
+
+Worker substituto
+-----------------
+Sessão e logs: `gui/replacement-evidence.md` e arquivos relacionados em scratch.
+Binário `target/debug/dfir-app` já existente, PID 414067, nova raiz
+`replacement-data`. Nenhum build, edição ou commit pelo worker.
+
+1. Janela principal: PASS parcial.
+   `x11_ctl.py wait 'DFIR — Análise Forense Local' 30` -> exit 0.
+   Janela `0xa00002`, `_NET_WM_PID=414067`, cliente 1280x820.
+   `xwininfo`/`xprop`: exits 0, `IsViewable`, `WM_STATE Normal`, foco observado.
+2. Resize: PASS parcial com limite de método.
+   `x11_ctl.py resize ... 960 600` -> exit 0; cliente 1279x820 -> 960x600;
+   frame 972x632. Um resize posterior 1024x640 também foi observado.
+3. Navegação: BLOCKED.
+   Cliques e teclado tiveram exits de injeção 0, mas leituras diretas posteriores
+   mantiveram `dfir_app::gui::Screen::Evidence`; `Incidentes` não foi confirmado.
+   Exemplo: clique relativo `(50,120)` -> injector exit 0;
+   `DIRECT_SCREEN_AFTER_ACTIVE_CLICK ... Screen::Evidence`, GDB exit 0.
+   Observador por breakpoint expirou 124; isso não prova defeito funcional do app.
+4. Diálogo nativo: BLOCKED/PENDING.
+   Tentativa anterior registrou timeout de 40 s aguardando
+   `Selecionar arquivo de evidência`, `org.freedesktop.DBus.Error.NoReply` e
+   `Using zenity fallback`. Não se confirmou janela/processo zenity, cancelamento,
+   retorno ao estado ocioso nem importação. Não se repetiu após a navegação falhar.
+5. Encerramento: SIGTERM exit 0, `process_stopped=1`; nenhum app/zenity/gdb/xev
+   dessa sessão permaneceu. Não se matou processo de terceiros.
+
+Repetição independente do coordinator
+-------------------------------------
+No binário final, após `just verify` e e2e, o coordinator iniciou PID 427301 com
+`DFIR_DATA_ROOT=.../gui/coordinator-final-data` e engine explícito, sem build.
+
+- `x11_ctl.py wait 'DFIR — Análise Forense Local' 30` -> `window_exit=0`;
+  janela `0xc00002`, PID 427301, cliente 1280x820.
+- `x11_ctl.py resize ... 960 600` -> `resize_exit=0`; cliente final 960x600 e
+  frame 972x632. O helper também emitiu `Xlib.error.BadMatch` (opcode 42).
+  Portanto a geometria foi observada, mas o resize não é declarado limpo.
+- SIGTERM -> exit 0; wait do app -> 143, esperado pelo término por sinal.
+- Console registrou adaptador Gl/Intel e os erros EGL já conhecidos; não registrou
+  panic. Não houve navegação, clique de importação ou diálogo nessa repetição.
+
+Logs: `coordinator-final-{window,resize,console}.log`,
+`coordinator-final-exits.txt` e `coordinator-final-binary.sha256`.
+
+Limite e próxima evidência necessária
+-------------------------------------
+A falha de injeção automatizada não é, sozinha, prova de bug da UI; também não é
+PASS. O portal DBus/zenity permanece ambiente não resolvido. É necessária uma
+sessão manual do operador, ou outro método independente válido, que confirme:
+(1) navegação Evidence -> Incidentes; (2) abertura e cancelamento do seletor;
+(3) importação da fixture sanitizada e retorno ao estado ocioso sem travamento.
+Até lá, o fluxo nativo permanece BLOCKED/PENDING-HUMAN. Testes `egui_kittest`,
+janela aberta e e2e headless não substituem essa verificação.

@@ -5,23 +5,23 @@
 
 > Resumo do estado atual; o histórico cronológico segue abaixo, sem alteração.
 
-- `cargo audit` e `cargo deny --workspace check` foram executados em Linux x86_64 com Rust/Cargo 1.100.0 e estão verdes em `EVD-041` (anteriores `EVD-020`/`EVD-036`): 1533 advisories carregados, 612 dependências do lock varridas; advisories, bans, licenses e sources ok.
-- Há **uma exceção de vulnerabilidade** (`RUSTSEC-2026-0459`, `libsqlite3-sys 0.37.0`, formalizada como `WVR-004`) e **duas exceções informativas** no `deny.toml`: `RUSTSEC-2025-0141` (`bincode`, via `yara-x`) e `RUSTSEC-2026-0543` (`chrono 0.4.45`, sem CVE). SQLite e chrono têm revisão até 2026-12-31; bincode é reavaliado a cada upgrade do `yara-x`.
+- `cargo audit` e `cargo deny --workspace check` foram executados em Linux x86_64 com Rust/Cargo 1.100.0 e estão verdes em `EVD-051`: 1550 advisories carregados, 613 dependências do lock varridas, zero vulnerabilidades e um aviso informativo permitido de bincode; advisories, bans, licenses e sources ok. A parte supply-chain de `EVD-041` ficou `STALE` quando a mesma rotina encontrou oito vulnerabilidades novas de Wasmtime antes desta atualização.
+- Não há exceção de vulnerabilidade vigente. As duas exceções informativas restantes no `deny.toml` são `RUSTSEC-2025-0141` (`bincode`, via `yara-x`) e `RUSTSEC-2026-0543` (`chrono 0.4.45`, sem CVE). `WVR-004` foi encerrado após `sqlx 0.9.1` + `libsqlite3-sys 0.40.0` remover `RUSTSEC-2026-0459` do lock; chrono tem revisão até 2026-12-31 e bincode é reavaliado a cada upgrade do `yara-x`.
 - `encoding`/`RUSTSEC-2021-0153` e a cadeia zbus/AT-SPI estão fora do grafo. As exceções correspondentes foram removidas.
 - `cargo vet`: dispensado no MVP (ADR-0018 D-2; confirmado pelo operador em 2026-11-04).
 - As execuções anteriores permanecem registradas como `EVD-001` a `EVD-009`; pistas C/D usam `EVD-010`/`EVD-011`. Não se reescrevem evidências históricas.
 
 | Crate | Versão no lock | Estado e evidência registrados | EVD |
 |---|---|---|---|
-| `wasmtime` | 48.0.8 | os 8 avisos de 2026-10-29 (`RUSTSEC-2026-0222`, `-0269`, `-0316`, `-0327`, `-0362`, `-0363`, `-0359`, `-0379`) vinham do `45.0.3`; resolvidos pela atualização; as 4 exceções do `deny.toml` foram removidas | `[PENDING-HUMAN]` |
+| `wasmtime` | 48.0.9 | os oito advisories antigos foram resolvidos por 48.0.8; a revisão de 2026-11-19 encontrou `RUSTSEC-2026-0566`..`RUSTSEC-2026-0573` em 48.0.8 e a atualização mínima para 48.0.9 os removeu, sem trocar `yara-x` | `EVD-051` |
 | `yara-x` | 1.22.1 | atualizado de `1.20.0`; destrava `wasmtime >= 48`; repetir `cargo test --workspace` e e2e a cada atualização (seccomp/Landlock validados contra o JIT de cada versão) | `[PENDING-HUMAN]` |
 | `ctutils` | 0.4.7 | `RUSTSEC-2026-0385` resolvido (`0.4.2` → `0.4.7`) | `[PENDING-HUMAN]` |
 | `tokio` | 1.54.1 | `RUSTSEC-2026-0386` resolvido (`1.53.1` → `1.54.1`) | `[PENDING-HUMAN]` |
 | `clipboard-win` | 5.4.3 | *yanked* `5.4.1` resolvido (`5.4.3`) | `[PENDING-HUMAN]` |
 | `rkyv` | 0.8.18 | **resolvido**: o baseline `0.8.16` exigia `>= 0.8.17`; o lock está em `0.8.18` | `[PENDING-HUMAN]` |
 | `evtx` | 0.15.1 | **`RUSTSEC-2026-0431` resolvido** (`0.12.3` → `0.15.1`; alocação sem limite em `.wevtcache`). O crate passou a usar `encoding_rs` desde 0.13, então `RUSTSEC-2021-0153` (`encoding`) **saiu do grafo** e a exceção foi removida do `deny.toml`. e2e 110/110 com `security.evtx`: 2 261 eventos, 6 candidatos, sem avisos do parser — mesmo resultado da versão anterior | `EVD-002` |
-| `libsqlite3-sys` | 0.37.0 | **`RUSTSEC-2026-0459` aceito como exceção temporária** (SQLite < 3.54.0, CVE-2026-119375), **formalizada como `WVR-004`** (aprovada pelo operador em 2026-11-14T22:00:30Z, válida até 2026-12-31). `sqlx 0.9.0` (última versão) exige `<0.38.0`; nenhuma versão publicada admite o `>=0.39.0` corrigido. Alcance: só o banco local no volume protegido, em WAL, sob o operador único (ADR-0007); ver a análise no `deny.toml` e em `.cargo/audit.toml`. **Reavaliar até 2026-12-31.** | `EVD-007` + `WVR-004` |
-| `bincode` | 2.0.1 | exceção informativa `RUSTSEC-2025-0141` (dependência obrigatória do `yara-x`) mantida | `EVD-007` |
+| `libsqlite3-sys` | 0.40.0 | **`RUSTSEC-2026-0459` resolvido**. `sqlx 0.9.1` admite a versão corrigida; a atualização conjunta substituiu `sqlx 0.9.0` + `libsqlite3-sys 0.37.0`. A exceção foi removida de `deny.toml` e `.cargo/audit.toml`, e `WVR-004` ficou encerrado, sem apagar seu histórico. | `EVD-051` |
+| `bincode` | 2.0.1 | exceção informativa `RUSTSEC-2025-0141` (dependência obrigatória do `yara-x 1.22.1` e também presente no dry-run de 1.23.0) mantida | `EVD-051` |
 | `chrono` | 0.4.45 | exceção informativa `RUSTSEC-2026-0543` ("unmaintained", sem CVE); uso restrito a timestamps locais e parsing RFC 3339 de dados internos; revisão até 2026-12-31 | `EVD-012` |
 | `ttf-parser` | — | **fora do grafo de build** desde o `eframe 0.37.0` sem `accesskit` (a exceção `RUSTSEC-2026-0192` foi removida do `deny.toml`) | `EVD-007` |
 | `zvariant, zbus_names, zvariant_derive` | — | **fora do grafo de build** desde o `eframe 0.37.0` sem `accesskit` (exceções `RUSTSEC-2026-0370`/`0371`/`0372` removidas do `deny.toml`). A pendência de política do operador ("aceitar as três ou esperar o eframe que larga o zbus") foi resolvida pelo upgrade: o `eframe 0.37.0` permite desligar a feature `accesskit` do `egui-winit`, e o projeto a desligou | `EVD-007` |
@@ -56,7 +56,7 @@ O projeto trata mudanças de dependências e de toolchain como mudanças que afe
 O release deve distinguir claramente dependências de runtime, build e tooling:
 
 - **Rust 1.100.0** (até 2026-11 era a 1.99.1; decisão do operador de usar a stable mais recente): toolchain do produto e dos testes Rust.
-- **CPython:** 3.14.6 é a referência declarada em `toolchains.toml`; a execução registrada em `EVD-012` usou 3.13.5. Essa diferença deve ser resolvida pelo alinhamento do pin ou pela instalação da referência, e a versão efetiva deve constar em cada evidência. Não entra na imagem de produção por padrão.
+- **CPython:** 3.14.6 é a referência declarada em `toolchains.toml` e foi efetivamente instalado em scratch, com hash conferido contra o release, para `EVD-049`: `validate_fase0.py`, `doc_gate.py` e e2e 110/110 passaram com esse interpretador. O `/usr/bin/python3` do host continua 3.13.5; os comandos devem escolher explicitamente o interpretador 3.14.6 registrado. CPython não entra na imagem de produção por padrão.
 - **Shell**: automação de desenvolvimento/QA; não é runtime da plataforma.
 
 A versão efetivamente usada no gate deve ser capturada por `rustc --version --verbose`, `cargo --version --verbose` e `python3 --version`, conforme disponibilidade. Uma linha de toolchain no manifesto não constitui prova de execução.
@@ -71,7 +71,7 @@ A versão efetivamente usada no gate deve ser capturada por `rustc --version --v
 
 ## Exceções explícitas de advisories
 
-- `RUSTSEC-2026-0459` (`libsqlite3-sys 0.37.0` / CVE-2026-119375) é uma **vulnerabilidade** (não um aviso informativo) sem correção possível no momento: o `sqlx 0.9.0` fixa `libsqlite3-sys >=0.30.1,<0.38.0` e o `cargo update -p libsqlite3-sys --precise 0.39.0` falha. A exceção temporária está no `deny.toml` **e** em `.cargo/audit.toml`, com a mesma justificativa, análise de alcance e data de revisão (2026-12-31). Um atacante que possa escrever um `-wal` forjado na pasta de dados já pode alterar a evidência e o banco; a pasta é protegida (docs/OPERATION.md §2) e nenhum banco/`-wal` de origem não confiável é aberto.
+- `RUSTSEC-2026-0459` (`libsqlite3-sys 0.37.0` / CVE-2026-119375) **não é mais uma exceção vigente**. Em 2026-11-19, dry-runs mostraram que `sqlx 0.9.1` admite `libsqlite3-sys 0.40.0`. A atualização foi aplicada no lock, os ignores foram removidos de `deny.toml` e `.cargo/audit.toml`, e o gate completo passou sem essa exceção (`EVD-051`). O registro histórico de `WVR-004` permanece, mas não cobre o lock atual nem prova inexploração de versões antigas.
 - `RUSTSEC-2021-0153` (`encoding`) **deixou de existir no grafo** com o `evtx 0.15.1`; a exceção correspondente foi removida do `deny.toml` em 2026-11-14.
 - Vulnerabilidades de segurança do `rkyv` não são aceitáveis como exceção. O baseline `rkyv 0.8.16` deve ser atualizado para `0.8.17` ou superior antes do fechamento do gate. **[Resolvido — nota de 2026-11-04, Gap origem: VAZ-04: o lock está em `rkyv 0.8.18`; ver "Estado vigente" no topo.]**
 - A mudança de `cargo-deny` 0.20 removeu a chave legada `licenses.unlicensed`; a configuração usa somente a semântica atual de allow-list explícita.
@@ -179,3 +179,9 @@ Rodada executada com rustc/cargo 1.99.1 em Linux x86_64, `--locked`. Resolve a p
 - **`deny.toml`**: removidas as 4 exceções mortas (`RUSTSEC-2026-0370/0371/0372`, `RUSTSEC-2026-0192`). Restam apenas `RUSTSEC-2026-0459` (`libsqlite3-sys`, SEC-02) e `RUSTSEC-2025-0141` (`bincode`, via `yara-x`).
 - **Resultado:** `cargo audit`: **0 vulnerabilidades**, 1 aviso permitido (`bincode`); `cargo deny --workspace check`: `advisories ok, bans ok, licenses ok, sources ok`; `just verify` PASS (nextest 410/410, clippy `-D warnings` limpo, fmt ok); `just e2e <security.evtx>` **110/110** (`EVD-005`, `EVD-006`, `EVD-007`).
 - **Não repetido nesta rodada:** Windows (Job Object), Linux aarch64, janela real da GUI. A `accesskit` desligada remove a dependência de D-Bus do processo da UI no Linux; se no futuro for preciso leitor de tela, a decisão volta por ADR.
+
+## Atualização 2026-11-19 (segurança): Wasmtime 48.0.9 e SQLite 0.40.0
+
+Antes da mudança, `just supply-chain` falhou com oito vulnerabilidades de `wasmtime 48.0.8` (`RUSTSEC-2026-0566`..`RUSTSEC-2026-0573`), tornando `STALE` a parte supply-chain de `EVD-041`. Dry-runs também mostraram que a antiga premissa de `WVR-004` estava superada: `sqlx 0.9.1` permite `libsqlite3-sys 0.40.0`.
+
+Foi aplicado apenas `cargo update -p sqlx -p libsqlite3-sys -p wasmtime`, sem trocar `yara-x`, `chrono` ou framework. O lock passou a 613 pacotes. Depois, `cargo audit --no-yanked` e `cargo deny --workspace check advisories` passaram; os ignores de SQLite foram removidos dos dois arquivos de configuração. `just supply-chain` voltou a passar sem `RUSTSEC-2026-0459`, e `cargo check --workspace --locked --all-targets` terminou em 2m13s (`EVD-051`). O dry-run de `yara-x 1.23.0` ainda mostra `bincode 2.0.1`; o dry-run de chrono não propõe atualização. As duas exceções informativas restantes continuam sob revisão.

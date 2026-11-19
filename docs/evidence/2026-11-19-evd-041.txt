@@ -1,6 +1,13 @@
 EVD-041 - vocabulário completo de plano e supply chain final
 ============================================================
 
+Status atual: STALE. Em 2026-11-19T13:20Z, uma nova execução de
+`just supply-chain` encontrou oito vulnerabilidades de `wasmtime 48.0.8`
+(`RUSTSEC-2026-0566`..`RUSTSEC-2026-0573`). O PASS abaixo permanece como
+registro histórico da execução original, não como evidência supply-chain vigente.
+`EVD-051` registra a atualização e o novo gate; `EVD-052` renova o Gate Rust na
+árvore posterior. Nenhum resultado histórico foi apagado ou reescrito.
+
 Commit testado: 19f0c9e3817433b750ccab26af90e0191f8b5fbc
 Tree testada: 85b374b2e0e11735d54306b39930730dcf7a98da
 Período dos gates Rust/e2e/supply chain: 2026-11-19T04:29:04Z..2026-11-19T04:39:59Z

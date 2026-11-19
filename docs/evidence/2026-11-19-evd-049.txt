@@ -1,0 +1,72 @@
+EVD-049 - CPython 3.14.6 para tooling de QA
+============================================
+
+Status: PASS
+Commit observado: 7b95a81c379f4bfb2a8038b8c19e3967b6f81591
+Tree observada: 040af106ece2e24982da38dcbb3e1a340320e430
+Período do worker: 2026-11-19T13:05:47Z..13:20:17Z
+Verificação independente do coordinator: 2026-11-19T13:30:07Z
+Ambiente: Linux x86_64, Debian 13; somente scratch, sem sudo ou instalação global.
+
+Escopo e proveniência
+---------------------
+O host manteve /usr/bin/python3 em 3.13.5. O worker instalou CPython 3.14.6 em:
+`/home/jose/.jcode/scratch/dfir-residual-2026-11-19/qa/python/cpython-3.14.6-linux-x86_64-gnu/bin/python3.14`.
+
+Instalação com uv 0.12.3, cache/temp/install-dir confinados e `--no-bin`.
+Fonte:
+https://releases.astral.sh/github/python-build-standalone/releases/download/20260804/cpython-3.14.6%2B20260804-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz
+
+Archive SHA-256 publicado pelo GitHub e confirmado por download independente:
+ba960817e542642021135db330d875f410f4e14c64a62e2ae5faf3697ada08b2
+Archive size: 35.843.409 bytes.
+Installed python3.14 SHA-256:
+2f7fff382c9d335d6d63f134b55cb8ced9d0b2e1d47e6f210ad3f059adfa71c1
+O executável instalado é byte a byte igual ao extraído do archive verificado (`cmp` exit 0).
+
+Comandos e resultados
+---------------------
+Versão:
+`python3.14 --version` -> Python 3.14.6, exit 0.
+`platform.python_implementation()` -> CPython; `platform.python_version()` -> 3.14.6.
+
+Validator:
+`PYTHONDONTWRITEBYTECODE=1 TMPDIR=<scratch>/qa/tmp <scratch-python> scripts/validate_fase0.py`
+Exit 0: `Fase 0 static checks: 0 error(s), 0 warning(s)`.
+
+Documentação:
+`PYTHONDONTWRITEBYTECODE=1 TMPDIR=<scratch>/qa/tmp <scratch-python> scripts/doc_gate.py`
+Exit 0: `documentation gate: PASS`.
+
+E2E com binários pré-existentes identificados:
+`PYTHONDONTWRITEBYTECODE=1 TMPDIR=<scratch>/qa/tmp <scratch-python> scripts/e2e_headless.py --evtx tests/fixtures/senai-demo.evtx --app target/debug/dfir-app --engine target/debug/dfir-engine --keep`
+Exit 0: 110/110 etapas. Incluiu parser EVTX, YARA, detecção, documentos,
+auditoria/custódia e sandbox `required` (no_new_privs, Landlock ABI 6 e seccomp).
+
+Hashes dos binários pré-existentes:
+- dfir-app: f12a1513f3fdab311beb6d652d2b10165a30cdf6fc8554acd12e21ea66b17027
+- dfir-engine: 06e8a2306243aea22894d80a001453b4511ca57b10bf3256588f4846775a9440
+- fixture: 256a655a7e259908e1dfd23b914abf27b7ecb8fd98c0b3f73033336f6ed448be
+
+Revisão independente
+--------------------
+O coordinator leu `qa/SUMMARY.md`, os logs e o manifesto, e executou
+`cd <scratch>/qa && sha256sum -c SHA256SUMS`: todos os 16 artefatos passaram.
+Também repetiu `--version` e o hash do interpretador, com `COORDINATOR_QA_INTEGRITY=PASS`.
+Nenhum arquivo do repositório, dependência, commit ou configuração global foi alterado pelo worker.
+
+Artefatos preservados
+---------------------
+- `qa/SUMMARY.md`: comandos literais, exits, URLs, hashes e limitações.
+- `qa/SHA256SUMS`: manifesto dos artefatos.
+- `qa/logs/01..10`: instalação, integridade, gates e observação do repositório.
+- `qa/tmp/dfir-e2e-xc0l8vrd`: dados isolados do e2e.
+Raiz: `/home/jose/.jcode/scratch/dfir-residual-2026-11-19`.
+
+Limites
+-------
+O e2e vale para os hashes pré-existentes acima, não para uma relação HEAD-to-binary
+reconstruída nesta lane. A reconstrução e a repetição na árvore nova são evidência separada.
+O host continua 3.13.5; callers devem escolher o interpretador scratch explícito.
+Não há cobertura Windows, aarch64, incidente real ou AT-SPI. CPython é Engineering/QA,
+não runtime de produção.

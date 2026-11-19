@@ -1,0 +1,111 @@
+EVD-052 - datasets EVTX públicos e regressões de integração
+============================================================
+
+Status: PASS para o escopo externo executado
+Commit Before: b45c92274211427703504ecf47aa93c0462b3201
+Commit After: d30ef0c7eea1a75db690d4556a090369af5a2bcf
+Tree After: 96082a71f75c8720138dfdc218b808ee4b315e61
+Período externo: 2026-11-19T13:37:37Z..14:18:40Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, CPython 3.14.6
+em scratch para o harness público. Runtime de dados descartável, sem push.
+
+Aquisição e integridade
+-----------------------
+Dois arquivos públicos de laboratório foram baixados de
+`sbousseaden/EVTX-ATTACK-SAMPLES`, repositório licenciado GPL-3.0:
+- `sample-lateral-service`: `LM_Remote_Service02_7045.evtx`;
+  69.632 bytes; SHA-256 `af758eb492b6d5ab6665f7e4c44b31490f57be78c37dc0a8b1da714bb0d3d458`;
+  Git blob SHA `defba62c09d9c2a478a0048a4f08ffdea32dac22`.
+- `sample-credential-lsass`: `Powershell_4104_MiniDumpWriteDump_Lsass.evtx`;
+  69.632 bytes; SHA-256 `54ff62eff26af588782e066b7b3b1b952bc83e1b75a84d81f9492e654cb5c319`;
+  Git blob SHA `230d0d1b91e76223bb20d820624f2ea442241bae`.
+
+`scripts/public_evtx_smoke.py` --download-only conferiu tamanho, SHA-256 e
+Git blob SHA; `DOWNLOAD_INTEGRITY=PASS`. URLs completas, pesquisa e limites
+constam em `scratch/datasets/research.md` e `download.txt`, fora do Git.
+Nenhum EVTX, banco, export ou conteúdo de evento foi adicionado ao repositório.
+
+Antes
+-----
+Binários pré-existentes identificados por SHA-256:
+`dfir-app=e59b916a025b42d94799687badb666932a51b74f4a7856cc08fa33ffbc70bc`;
+`dfir-engine=8ce2ae98a44912c7cf36337a76a99c001d0068bc4b48586c8aa7f6dd66d12f`.
+
+Harness: `scripts/public_evtx_smoke.py <sample-id>` com `--app`, `--engine`,
+`--data-root` descartável e `--required-sandbox=off`.
+Resultado agregado: exit 0 em 2s para os dois arquivos.
+- lateral: 3 eventos; ID serializado como objeto qualificado `7045`, não como
+  inteiro; 3 candidatos `R-PERS-002`; checks 20/23 (falharam numeric IDs).
+- LSASS: 4 eventos; IDs 4104, 53504, 40961 e 40962; zero candidatos;
+  checks 21/23 (faltou a regra esperada e a proveniência vazia).
+- ambos: timeline cronológica e sem warnings, YARA concluído, detecção repetida
+  idempotente, `audit-verify` exit 0, `findings` vazio, diagnóstico e logs sem
+  o nome do arquivo. Candidatos iniciais eram `pending`, nunca findings.
+Logs: `datasets/external-baseline.log` e summaries 20261119T133707/133708.
+
+Reproduções de regressão, antes da correção:
+- `cargo nextest run --locked -p dfir-app timeline_items_keep_qualified_evtx_event_id_numeric --no-fail-fast`:
+  exit 100, 1 fail. Expected `7045`, actual objeto `{"Qualifiers":0,"#text":7045}`.
+- `cargo nextest run --locked -p dfir-engine minidump_script_block_near_lsass_creates_candidate --no-fail-fast`:
+  exit 100, 1 fail, candidato `R-CRED-001` ausente.
+
+Correção mínima
+---------------
+- `timeline_event_from_item` passou a preferir `item.event.event_id` normalizado
+  antes de qualquer fallback bruto, sem silenciar XML ausente/malformado.
+- `R-CRED-001` v2 aceita `MiniDumpWriteDump` próximo de referência a LSASS em
+  script-block, além das formas anteriores de `MiniDumpWriteDump` e procdump.
+- `RULE_SET_VERSION=2026.11.1`; documentação de regra atualizada.
+- dois testes de regressão adicionados; não houve exceção de erro, migração de
+  framework ou mudança de escopo.
+
+Depois
+------
+Regressões focadas: 2/2, exit 0.
+Sincronismo `detection_rules_document_matches_code`: exit 0.
+`cargo build --locked --bin dfir-app` e `cargo build --locked --manifest-path
+engine/Cargo.toml --bin dfir-engine`: exit 0 em 7m07s.
+Binários reconstruídos, SHA-256:
+`dfir-app=4134d3d78e581bf374c0bce5ce184e70e52cbd6a818bd0e8bf631bdffec4d2a8`;
+`dfir-engine=eca378c2400f801589fddce541d2443320842d5a9fb607ae2ce8e12ccca5228b`.
+
+Harness externo repetido com os mesmos arquivos e checks endurecidos:
+`external_after=0`.
+- lateral: 3 eventos 7045, todos numéricos; 3 candidatos `R-PERS-002`;
+  checks 23/23.
+- LSASS: 4 eventos, todos numéricos; 1 candidato `R-CRED-001`; checks 23/23.
+- ambos: proveniência presente, repetição idempotente, auditoria íntegra,
+  YARA concluído, findings vazio e zero arquivo de log contendo o nome da
+  evidência. Não houve parser warning.
+Logs: `datasets/external-after.log` e summaries 20261119T141838/141839.
+`cargo fmt --all -- --check` e `git diff --check`: exit 0.
+Commit funcional isolado: `d30ef0c`, três arquivos, 60 inserções/9 remoções.
+
+Gates finais na árvore corrigida
+--------------------------------
+Com CPython 3.14.6 no `PATH` e sem trabalho Rust concorrente:
+- `just verify` -> exit 0 em 11m51s (2026-11-19T14:22:26Z..14:34:38Z):
+  Fase 0 0 erros/0 avisos, fmt, check, nextest **536 passed/1 skipped**,
+  setup real do engine PASS, doc-tests e Clippy `-D warnings` verdes.
+  Compilação de testes 9m12s; suíte 56,598s; Clippy 48,13s.
+- `just supply-chain` -> exit 0: audit/deny verdes, zero vulnerabilidades,
+  sem exceção SQLite. Detalhes e Before/After de dependências em `EVD-051`.
+- `just e2e tests/fixtures/senai-demo.evtx` -> exit 0, **110/110**;
+  build incremental 15,59s; sandbox `required` com no_new_privs, Landlock ABI6,
+  seccomp e negações de arquivo/rede/exec; documentos marcam `2026.11.1`.
+
+- `just doc-gate` -> exit 0 em 2026-11-19T14:50:41Z..14:50:46Z:
+  Fase 0 0 erros/0 avisos, `documentation gate: PASS`; `git diff --check` exit 0.
+
+Logs: `logs/final-verify.txt`, `logs/final-supply-chain.txt`,
+`logs/final-e2e.txt` e `logs/final-doc-gate.txt`. `EVD-050` é separado e permanece BLOCKED para o fluxo
+nativo; estes gates não o convertem em verificação de GUI real.
+
+Limites
+-------
+Os arquivos são datasets públicos de ataque em laboratório, não um incidente
+real autorizado. O resultado não prova cobertura geral de EVTX, Windows,
+Linux aarch64 ou eficácia investigativa. A regra gera hipótese para análise;
+não converte candidato em finding automaticamente. `--required-sandbox=off`
+foi necessário no host por restrição de namespace; o e2e sintético continua
+sendo a evidência do sandbox obrigatório. Arquivos e runtimes ficam em scratch.

@@ -65,9 +65,11 @@ O release é fechado somente com evidência executada.
 
 > **Atualização 2026-11-19 (reavaliação e fluxos da GUI).** ADR-0029 mantém `eframe/egui` após auditoria prática. `EVD-037`: suíte GUI 115/115, `just verify` com 509 passed/1 skipped, doctests/Clippy verdes, e2e 110/110 e doc-gate PASS. A janela X11 abriu com Gl/Mesa e log sem glyph/ID/panic; captura pós-resize é inconclusiva e não sustenta navegação manual, diálogo nativo ou AT-SPI. Supply chain e smoke anterior permanecem em `EVD-036`.
 
+> **Atualização 2026-11-19 (QA, supply chain e EVTX públicos).** `EVD-049`: CPython 3.14.6 de QA em scratch com hashes verificados. `EVD-051`: oito vulnerabilidades de Wasmtime corrigidas, SQLx/SQLite atualizados, `WVR-004` encerrado e zero vulnerabilidades no gate final. `EVD-052`: dois datasets públicos íntegros revelaram e ajudaram a corrigir Event ID qualificado e `R-CRED-001`; `just verify` terminou com 536 passed/1 skipped, e2e 110/110 e supply chain verde. `EVD-050` permanece **BLOCKED** para navegação/importação/diálogo nativo; janela/resize foram observados, com `Xlib BadMatch` no smoke final. Nada disso declara incidente real, aceite final ou PASS de GUI nativa.
+
 ## Gate documental
 
-Estado: `PASS` em 2026-11-19 (`EVD-048`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-036`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-19 (`EVD-052`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-036`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`/`EVD-049`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -78,7 +80,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-19 (`EVD-048`, nextest 534 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-19 (`EVD-052`, nextest 536 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -98,7 +100,7 @@ cargo test --workspace --locked --doc
 
 ## Supply chain
 
-Estado: `PASS` em 2026-11-19 (`EVD-041`; anteriores `EVD-003`/`EVD-007`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-032`/`EVD-036`), com **uma** exceção de vulnerabilidade justificada (`RUSTSEC-2026-0459`, `WVR-004`) e duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono). SQLite e chrono têm revisão até 2026-12-31. Exceção é risco aceito ou aviso analisado, não prova de inexploração.
+Estado: `PASS` em 2026-11-19 (`EVD-051`; anteriores históricos `EVD-003`/`EVD-007`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-032`/`EVD-036`/`EVD-041`). A revisão encontrou oito vulnerabilidades de `wasmtime 48.0.8`, corrigidas em 48.0.9; `sqlx 0.9.1` + `libsqlite3-sys 0.40.0` eliminaram `RUSTSEC-2026-0459`, e `WVR-004` foi encerrado. Não há exceção de vulnerabilidade vigente. Permanecem duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono), esta última com revisão até 2026-12-31. Exceção informativa analisada não é prova de inexploração nem de correção.
 
 ```bash
 cargo deny --workspace check
@@ -115,9 +117,9 @@ cargo audit
 - `PASS` **contenção do engine provada com o engine de verdade** (ADR-0024): `cargo test --locked --workspace` (inclui `engine/tests/sandbox.rs`, que exige `EACCES`/`EPERM` onde devido e tem controle com a política `off`) e `scripts/e2e_headless.py` (repete a prova sobre o EVTX real) — `EVD-005`, `EVD-006`. **Rodar sempre pelo workspace**: `cargo test -p dfir-engine` não unifica as features do tokio e esconde falhas do runtime sob seccomp. Em Linux sem Landlock os testes de enforcement avisam e saem: o release no Linux **não** pode ser fechado nesse ambiente;
 - `WAIVED` **Windows** (`WVR-001`, aprovado pelo operador em 2026-11-14, válido até 2026-12-31): o Job Object só foi compilado; o release **não declara suporte a Windows** nesta rodada. Condição de saída: `dfir-app engine-smoke` + `just e2e <evtx>` em Windows, conferindo o aviso esperado `SANDBOX_NOT_FULLY_APPLIED`;
 - `WAIVED` **aarch64** (`WVR-002`, mesma validade): provado só em x86_64;
-- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-048`);
+- `WAIVED` **CI automático** (`WVR-003`, F1-14, mesma validade): baseline roda manual (`just verify`, `EVD-052`);
 - `PASS` **identidade analítica versionada:** raiz única, sucessora única e tipo/incidente estáveis; evidência estável exceto agregação IOC no mesmo incidente; violações falham antes de nova linha/auditoria, sem reparar histórico antigo (`EVD-033`/`EVD-034`/`EVD-035`);
-- `PASS` **janela real na árvore final:** build e abertura isolada por 25 s até timeout 124 esperado, backend Gl/Mesa Intel, sem diagnósticos de fonte/glyph/scroll ou nomes de fixtures; sem navegação manual (`EVD-036`);
+- `BLOCKED` **fluxo nativo X11:** `EVD-050` confirma abertura da janela e geometria de resize, mas a navegação não saiu de Evidence, importação/diálogo não foram confirmados e o smoke final emitiu `Xlib BadMatch`. Não é PASS; requer sessão manual ou método independente válido. A abertura anterior sem navegação permanece histórica em `EVD-036`;
 - `PASS` **matriz de risco sem perda silenciosa:** severity inválida/`NONE` ou confidence inválida/ausente falha com ID/campo antes dos entregáveis (`EVD-031`);
 - `PASS` **ATT&CK vigente sem campos/identidade inválidos:** tática, técnica/sub-técnica, base/confiança, evidence_status e correlation key são validados antes de list/findings_view/entregáveis; 17 formas alcançáveis falham com ID/campo, DOCUMENTED e LOW/GAP continuam válidos (`EVD-048`);
 - `PASS` **impacto sem campos obrigatórios normalizados:** IMPACT_ASSESSMENT vigente com disponibilidade/confidencialidade/integridade desconhecida, ausente ou não textual, ou confiança inválida/ausente, falha com ID/campo antes da UI/entregáveis; `NONE` e impacto financeiro ausente continuam válidos (`EVD-046`);

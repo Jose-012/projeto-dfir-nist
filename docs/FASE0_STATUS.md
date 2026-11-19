@@ -22,16 +22,16 @@ Ferramenta forense local/offline. Autenticação, RBAC, sessões e server-mode f
 | Podman/containerização | RETIRADO | adendo à ADR-0007 | não aplicável |
 | UI local server-rendered (`templates/`, `src/web`) | RETIRADO | ADR-0017 | substituída por interface nativa, ver linha abaixo |
 | Frontend TypeScript/Node.js/npm (`frontend/`) | RETIRADO | ADR-0017 | removido por inteiro junto com `src/web`/`templates/`; ADR-0009 (Bun→Node) fica só de valor histórico |
-| Interface nativa (eframe/egui/egui_extras) | VERIFIED (Linux x86_64) | `src/gui/`, `src/service/`, ADR-0017, `docs/NATIVE_UI_ARCHITECTURE.md` | `EVD-009` (janela real X11) e `EVD-012` (426/426 no Rust 1.100.0); Windows/aarch64 seguem `WVR-001`/`WVR-002` |
-| EVTX via `evtx` (requisito e lock 0.15.1) | VERIFIED (Linux x86_64) | `engine/`, `tests/fixtures/senai-demo.evtx` | `EVD-011`/`EVD-012`: fixture sanitizada versionada e e2e 110/110 sem arquivo externo |
+| Interface nativa (eframe/egui/egui_extras) | VERIFIED parcial (Linux x86_64) | `src/gui/`, `src/service/`, ADR-0017, `docs/NATIVE_UI_ARCHITECTURE.md` | `EVD-009` (janela X11), `EVD-012` (testes Rust) e `EVD-050` (janela/resize observados; navegação/importação/diálogo `BLOCKED`); Windows/aarch64 seguem `WVR-001`/`WVR-002` |
+| EVTX via `evtx` (requisito e lock 0.15.1) | VERIFIED (Linux x86_64) | `engine/`, `tests/fixtures/senai-demo.evtx` | `EVD-011`/`EVD-012`: fixture sanitizada e e2e; `EVD-052`: dois datasets públicos externos, 536 passed/1 skipped e e2e 110/110 |
 | Auth/RBAC/server-mode | RETIRADO | ADR-0007 | não aplicável |
 
 ## Gates e limites de verificação
 
-- `PASS` em Linux x86_64 com Rust/Cargo 1.100.0: validação estática, fmt, check, test, nextest 426/426, clippy e e2e 110/110 (`EVD-012`); supply chain verde (`EVD-012`).
+- `PASS` vigente em Linux x86_64 com Rust/Cargo 1.100.0 e CPython 3.14.6 de QA: validação estática, fmt, check, nextest 536 passed/1 skipped, clippy, doc-tests e e2e 110/110 (`EVD-052`; anterior `EVD-012`); supply chain vigente verde em `EVD-051`.
 - `WAIVED`: Windows (`WVR-001`), Linux aarch64 (`WVR-002`) e CI automático (`WVR-003`), todos com validade e escopo em `docs/EVIDENCE_REGISTER.md`.
-- `WVR-004`: exceção temporária para `RUSTSEC-2026-0459`; risco aceito não equivale a verificação de inexploração.
-- `PENDING-HUMAN`: execução sobre incidente real. A fixture sanitizada e o cenário DEMO não substituem essa verificação.
+- `WVR-004`: exceção temporária para `RUSTSEC-2026-0459`, **encerrada em 2026-11-19** após `sqlx 0.9.1` + `libsqlite3-sys 0.40.0`; não é exceção vigente no lock atual (`EVD-051`). O risco aceito histórico nunca equivaleu a verificação de inexploração.
+- `PENDING-HUMAN`: execução sobre incidente real. A fixture sanitizada, o cenário DEMO e os datasets públicos de `EVD-052` não substituem essa verificação. O fluxo nativo completo também permanece pendente (`EVD-050`).
 - SBOM (`cyclonedx`): fora do escopo por ADR-0028, não é gate.
 
 > Gap origem: INC-07 e INC-04 (2026-11-04): migrations atualizadas para 0001–0012, verificação de 2026-09-22 marcada como histórica e gates reescritos com ponteiro para o registro de evidências.
