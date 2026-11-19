@@ -152,16 +152,36 @@ pub async fn current_gap_analysis(
 ) -> AppResult<Vec<AnalyticalResultResponse>> {
     incident_exists(&services.db, incident_id).await?;
     let results = current_results_for_incident(&services.db, incident_id, "NIST_GAP").await?;
-    Ok(results
-        .into_iter()
-        .filter(|result| {
+    let mut open = Vec::new();
+    for result in results {
+        if result
+            .payload
+            .get("status")
+            .and_then(|value| value.as_str())
+            == Some("CLOSED")
+        {
+            continue;
+        }
+        let invalid =
+            |field| AppError::Config(format!("stored NIST gap {} has invalid {field}", result.id));
+        result
+            .payload
+            .get("subcategory_id")
+            .and_then(|value| value.as_str())
+            .filter(|value| nist_profiles::is_valid_subcategory_id(value))
+            .ok_or_else(|| invalid("subcategory_id"))?;
+        if !matches!(
             result
                 .payload
-                .get("status")
-                .and_then(|value| value.as_str())
-                != Some("CLOSED")
-        })
-        .collect())
+                .get("priority")
+                .and_then(|value| value.as_str()),
+            Some("HIGH" | "MEDIUM" | "LOW")
+        ) {
+            return Err(invalid("priority"));
+        }
+        open.push(result);
+    }
+    Ok(open)
 }
 
 /// Resumo de um profile vigente para a visão por Function. O Tier é do
@@ -396,5 +416,151 @@ mod tests {
             nist_functions::GapAnalysisState::Stale,
             "recalcular deixa os gaps em dia (ou sem gaps)"
         );
+    }
+
+    async fn create_one_pr_gap(
+        fx: &crate::service::test_support::Fixture,
+    ) -> (String, AnalyticalResultResponse) {
+        let incident = crate::service::create_incident(&fx.services, "gap vocabulary")
+            .await
+            .expect("incident");
+        create_profile(
+            &fx.services,
+            &incident.id,
+            "CURRENT",
+            "c1",
+            "entrevista",
+            Some("TIER_1_PARTIAL"),
+            None,
+            &[entry("PR.AA-03", "NOT_IMPLEMENTED")],
+        )
+        .await
+        .expect("current");
+        create_profile(
+            &fx.services,
+            &incident.id,
+            "TARGET",
+            "t1",
+            "alvo acordado",
+            Some("TIER_3_REPEATABLE"),
+            None,
+            &[entry("PR.AA-03", "IMPLEMENTED")],
+        )
+        .await
+        .expect("target");
+        run_gap_analysis(&fx.services, &incident.id)
+            .await
+            .expect("gap run");
+        let gaps = current_gap_analysis(&fx.services, &incident.id)
+            .await
+            .expect("valid open gap");
+        assert_eq!(gaps.len(), 1);
+        assert_eq!(gaps[0].payload["priority"], "HIGH");
+        (incident.id, gaps[0].clone())
+    }
+
+    #[tokio::test]
+    async fn malformed_open_nist_gap_vocabulary_fails_closed() {
+        let cases = [
+            ("unknown priority", "priority", serde_json::json!("URGENT")),
+            ("missing priority", "priority", serde_json::Value::Null),
+            ("numeric priority", "priority", serde_json::json!(1)),
+            (
+                "unknown subcategory",
+                "subcategory_id",
+                serde_json::json!("XX.YY-01"),
+            ),
+            (
+                "missing subcategory",
+                "subcategory_id",
+                serde_json::Value::Null,
+            ),
+            (
+                "numeric subcategory",
+                "subcategory_id",
+                serde_json::json!(1),
+            ),
+        ];
+        for (name, field, replacement) in cases {
+            let fx = fixture().await;
+            let (incident_id, gap) = create_one_pr_gap(&fx).await;
+            let record = crate::persistence::analytical_results::get(&fx.services.db, &gap.id)
+                .await
+                .expect("get gap")
+                .expect("gap exists");
+            let mut payload: serde_json::Value =
+                serde_json::from_str(&record.payload).expect("valid payload");
+            if replacement.is_null() {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove(field);
+            } else {
+                payload[field] = replacement;
+            }
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('bad-gap-vocabulary','analytical-result-v1','NIST_GAP',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+                .bind(&record.correlation_key)
+                .bind(&incident_id)
+                .bind(payload.to_string())
+                .bind(record.provenance.to_string())
+                .bind(&gap.id)
+                .execute(&fx.services.db)
+                .await
+                .expect("malformed current gap");
+
+            match current_gap_analysis(&fx.services, &incident_id).await {
+                Ok(open) => {
+                    let view = function_view(&fx.services, &incident_id)
+                        .await
+                        .expect("malformed gap is currently omitted from coverage");
+                    panic!(
+                        "{name} was accepted: open_gaps={}, PR coverage={:?}",
+                        open.len(),
+                        view.functions[2].gaps
+                    );
+                }
+                Err(error) => {
+                    assert!(
+                        error.to_string().contains("bad-gap-vocabulary"),
+                        "{name}: {error}"
+                    );
+                    assert!(error.to_string().contains(field), "{name}: {error}");
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn closed_nist_gap_does_not_require_open_priority() {
+        let fx = fixture().await;
+        let (incident_id, gap) = create_one_pr_gap(&fx).await;
+        let record = crate::persistence::analytical_results::get(&fx.services.db, &gap.id)
+            .await
+            .expect("get gap")
+            .expect("gap exists");
+        let payload = serde_json::json!({
+            "kind": "NIST_GAP",
+            "status": "CLOSED",
+            "subcategory_id": "PR.AA-03",
+            "closed_reason": "target_met"
+        });
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('closed-gap-without-priority','analytical-result-v1','NIST_GAP',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+            .bind(&record.correlation_key)
+            .bind(&incident_id)
+            .bind(payload.to_string())
+            .bind(record.provenance.to_string())
+            .bind(&gap.id)
+            .execute(&fx.services.db)
+            .await
+            .expect("closed current gap");
+
+        let open = current_gap_analysis(&fx.services, &incident_id)
+            .await
+            .expect("closed gap without priority remains valid");
+        assert!(open.is_empty());
+        let view = function_view(&fx.services, &incident_id)
+            .await
+            .expect("closed gap does not enter Function coverage");
+        assert_eq!(view.functions[2].gaps, nist_functions::GapCounts::default());
     }
 }
