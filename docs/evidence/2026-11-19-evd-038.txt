@@ -1,0 +1,66 @@
+EVD-038 - harness de sandbox relocável no nextest
+=================================================
+
+Commit testado: 6a57bc0b2f7b2326d533910e95127640f5a8a4d6
+Tree testada: a9a71c7000519d805801f89a61493c0d165ed70c
+Período: 2026-11-19T02:06:57Z..2026-11-19T03:38:23Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: somente artefatos de build e fixtures sintéticas/versionadas.
+
+Problema e reproduções
+----------------------
+Baseline sobre 3c6d3d6976085c9ce5bcee4ea7eb27790883d88a:
+- `just verify`: validate-fase0, fmt e check verdes;
+- nextest falhou em dois testes `dfir-engine::sandbox` com ENOENT ao executar o engine;
+- resumo: 388 passed, 2 failed, 1 skipped; 119 testes não executados pelo fail-fast;
+- doctest e clippy não foram alcançados nesse baseline.
+
+O teste isolado passou depois que o binário existia, o que não explicava o workspace.
+A reprodução exata com `cargo nextest run --workspace --locked`, começando com
+`target/debug/dfir-engine` movido para backup com restauração garantida, repetiu
+ENOENT e exit 100.
+
+Os binários de teste reutilizados continham o caminho absoluto antigo
+`/home/jose/Downloads/projeto-dfir-nist-v6_5_1-2026-11-09/target/debug/dfir-engine`,
+inexistente, em vez da árvore atual `/mnt/hd/projetos/...`.
+
+Tentativas falsificadas, não aceitas como correção:
+- somente construir o engine antes do nextest: ainda falhou pelo caminho antigo;
+- somente resolver o caminho por `current_exe`: ainda falhou porque o harness real
+  fica em `target/debug/build/.../out`, não em `target/debug/deps`;
+- setup script com o helper por `current_exe`: o setup passou, mas o teste falhou.
+
+Correção
+--------
+- `.config/nextest.toml`: setup script experimental, escopado a
+  `binary_id(=dfir-engine::sandbox)`, executa `cargo build --locked --package
+  dfir-engine --bin dfir-engine` depois da compilação dos testes e antes deles.
+- `engine/tests/sandbox.rs`: lê `NEXTEST_BIN_EXE_dfir_engine` em runtime, com
+  fallback `CARGO_BIN_EXE_dfir-engine` em runtime e o fallback de compilação
+  existente para `cargo test`. O nextest remapeia o caminho ao reutilizar builds.
+- Nenhuma mudança em produção, dependências, protocolo ou política de sandbox.
+
+Verificação independente do coordenador
+---------------------------------------
+Condição inicial: `target/debug/dfir-engine` ausente, preservado em backup.
+Comando: `just nextest`.
+Resultado: setup `build-sandbox-engine` PASS antes dos testes; 509 tests run;
+509 passed; 1 skipped; exit 0. O binário foi restaurado após a execução.
+
+Gate final
+----------
+Comando: `just verify`.
+Resultado: exit 0.
+- validate-fase0: 0 erros, 0 avisos;
+- fmt e cargo check --workspace --locked --all-targets: verdes;
+- nextest: 509 tests run; 509 passed; 1 skipped;
+- doctests: verdes;
+- clippy --workspace --all-targets --all-features --locked -D warnings: verde.
+
+Limites
+-------
+Não houve mudança de comportamento do engine ou do aplicativo. E2E, supply chain,
+GUI real, Windows, aarch64, incidente real e CI não foram repetidos nesta tarefa.
+Esses estados não são promovidos por esta evidência; E2E permanece em EVD-037 e
+supply chain em EVD-036. Setup scripts do nextest permanecem um recurso experimental
+na versão pinada e foram efetivamente executados neste gate.

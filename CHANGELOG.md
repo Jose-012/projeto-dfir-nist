@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - harness de sandbox relocável no nextest (`EVD-038`)
+
+- O baseline limpo falhou com ENOENT nos testes reais de sandbox: o nextest podia agendar o teste antes do binário atual existir, e artefatos reutilizados embutiam o caminho absoluto da árvore antiga em `/home/jose/Downloads`.
+- Setup script escopado a `dfir-engine::sandbox` agora constrói o engine real antes dos testes; o helper usa `NEXTEST_BIN_EXE_dfir_engine` em runtime com fallback de Cargo. Tentativas apenas de build ou `current_exe` foram reproduzidas e descartadas.
+- `EVD-038`: começando sem o binário, setup PASS e nextest 509 passed/1 skipped; `just verify` completo com fmt/check/doctests/clippy verdes. E2E e supply chain não foram repetidos; permanecem em `EVD-037`/`EVD-036`.
+
 ## Unreleased - 2026-11-19 - auditoria e conclusão de fluxos da GUI (`EVD-037`)
 
 - ADR-0029 mantém `eframe/egui` 0.37: os defeitos eram de viewports, IDs, foco, roteamento assíncrono e escrita, sem justificar migração ou nova dependência.
