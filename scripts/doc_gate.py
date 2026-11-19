@@ -73,11 +73,6 @@ session_instruction_needles = {
         "docs/SESSION_IMPROVEMENT.md",
         "docs/SESSION_LEARNINGS.md",
     ),
-    ROOT / "PROMPT_NOVA_CONVERSA.md": (
-        "## 7. Loop obrigatório de sessão",
-        "docs/SESSION_IMPROVEMENT.md",
-        "docs/SESSION_LEARNINGS.md",
-    ),
     ROOT / "CLAUDE.md": (
         "# Loop obrigatório de sessão",
         "docs/SESSION_IMPROVEMENT.md",

@@ -60,7 +60,7 @@ Confirmação: pendente | confirmada | recorrente, com sessão/comando
 
 ## Antipadrões
 
-`scripts/doc_gate.py` verifica a presença dos dois arquivos vivos e suas ligações em `AGENTS.md`, `CLAUDE.md`, `CONVENTIONS.md`, `PROMPT_NOVA_CONVERSA.md` e `docs/DOCUMENT_AUTHORITY.md`. Esse controle impede remoção/desconexão silenciosa, mas não prova que uma sessão aplicou a regra; essa confirmação continua exigindo ação observada.
+`scripts/doc_gate.py` verifica a presença dos dois arquivos vivos e suas ligações em `AGENTS.md`, `CLAUDE.md`, `CONVENTIONS.md` e `docs/DOCUMENT_AUTHORITY.md`. Esse controle impede remoção/desconexão silenciosa, mas não prova que uma sessão aplicou a regra; essa confirmação continua exigindo ação observada.
 
 - Criar uma retrospectiva permanente para toda rotina ou copiar toda a narrativa da conversa.
 - Guardar a lição apenas em scratch, onde a próxima sessão não a encontrará.

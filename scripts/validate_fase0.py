@@ -376,7 +376,7 @@ HISTORICAL_DOCS = {
     "docs/rtm.md",
     "CHANGELOG.md",
 }
-live_docs = [ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "PROMPT_NOVA_CONVERSA.md"]
+live_docs = [ROOT / "README.md", ROOT / "AGENTS.md"]
 live_docs += [path for path in (ROOT / "docs").glob("*.md") if not path.name.startswith("PROJECT_SPEC")]
 for doc_path in live_docs:
     relative = doc_path.relative_to(ROOT).as_posix()
@@ -485,7 +485,7 @@ for rel in id_sources:
 just_text = _read("justfile")
 just_recipes = set(re.findall(r"^([a-z][\w-]*)\b[^\n:=]*:(?!=)", just_text, re.M))
 WORKSPACE_COMMAND = re.compile(r"^(?:[@-]\s*)?cargo (check|clippy|nextest run|deny)\b")
-command_files = ["docs/RELEASE_GATE.md", "AGENTS.md", "PROMPT_NOVA_CONVERSA.md", "CONVENTIONS.md"]
+command_files = ["docs/RELEASE_GATE.md", "AGENTS.md", "CONVENTIONS.md"]
 for rel in command_files:
     text = _read(rel)
     for number, line in _code_blocks(text):
@@ -607,7 +607,7 @@ rtm_text = _read("docs/rtm.md")  # INC-15
 for rf in sorted(set(re.findall(r"^\|\s*(RF-\d{3})\s*\|\s*MVP\s*\|", spec_all, re.M))):
     if rf not in rtm_text:
         errors.append(f"docs/rtm.md has no trace for the MVP requirement {rf} (INC-15)")
-if re.search(r"(?i)aider", "\n".join(_read(rel) for rel in ("CONVENTIONS.md", "AGENTS.md", "README.md", "PROMPT_NOVA_CONVERSA.md", "CONTRIBUTING.md"))):  # ADR-0027
+if re.search(r"(?i)aider", "\n".join(_read(rel) for rel in ("CONVENTIONS.md", "AGENTS.md", "README.md", "CONTRIBUTING.md"))):  # ADR-0027
     errors.append("a live document mentions the removed Aider harness (ADR-0027)")
 for path in ROOT.rglob("*.md"):
     relative = path.relative_to(ROOT).as_posix()
@@ -648,9 +648,8 @@ native_ui = _read("docs/NATIVE_UI_ARCHITECTURE.md")
 missing_gui = [name for name in gui_modules if name not in native_ui]
 if missing_gui:
     warnings.append(f"INC-10 open: docs/NATIVE_UI_ARCHITECTURE.md does not mention src/gui modules {', '.join(missing_gui)}")
-prompt_text = _read("PROMPT_NOVA_CONVERSA.md")
-if "F1-15 (cargo audit)" in prompt_text or "F1-26..F1-28 (a spec os classifica como MVP)" in prompt_text:
-    warnings.append("INC-12 open: PROMPT_NOVA_CONVERSA.md keeps superseded 'o que resta' statements")
+if (ROOT / "PROMPT_NOVA_CONVERSA.md").exists():
+    errors.append("PROMPT_NOVA_CONVERSA.md must stay removed; agent instructions belong in AGENTS.md and CONVENTIONS.md")
 index_range = re.search(r"<requisitos-funcionais[^>]*>\s*RF-001 a RF-055", spec_all)
 if index_range and (KNOWN_OPEN_RF - rf_ids):
     warnings.append("INC-16 open: the XML index declares RF-001 to RF-055 but " + ", ".join(sorted(KNOWN_OPEN_RF - rf_ids)) + " are not in the requirement table")

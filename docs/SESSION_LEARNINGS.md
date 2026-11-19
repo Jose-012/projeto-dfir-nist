@@ -87,6 +87,14 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** `docs/TOOLCHAINS.md` exige conferir versão e hash no manifesto da tag exata antes da atualização; o workflow mantém checksum e `fallback: none`, e a evidência preserva a falha inicial.
 - **Confirmação:** pendente.
 
+### 11. Cache de build e E2E disputam o orçamento de disco
+
+- **Classe:** erro de execução e guarda fail-closed.
+- **Fato:** um run falhou com ENOSPC ao restaurar aproximadamente 1,88 GiB de cache contendo `target/`; o seguinte passou nos demais gates, mas o E2E rejeitou corretamente 965 MiB livres diante da guarda de 1 GiB. Após restringir o cache e executar `cargo clean`, o run final removeu 7,8 GiB, ficou com 14 G livres e concluiu 110/110 etapas (`EVD-055`).
+- **Risco:** quebrar o runner por cache de artefatos derivados ou enfraquecer a guarda de disco para transformar uma falha legítima em PASS.
+- **Prevenção:** o workflow não cacheia `target/`, mede espaço antes/depois de `cargo clean` e mantém `DFIR_MIN_FREE_DISK_BYTES` e `DFIR_ENGINE_SANDBOX=required`; `docs/TOOLCHAINS.md` registra a regra.
+- **Confirmação:** pendente.
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.

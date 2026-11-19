@@ -19,9 +19,24 @@ Ordem de precedência:
 
 Nunca transforme hipótese, exemplo ou sugestão em requisito.
 
+## Leitura por tarefa
+
+Comece por `AGENTS.md` e `docs/DOCUMENT_AUTHORITY.md`. Depois adicione somente o contexto exigido pela tarefa:
+
+- requisito/escopo: demanda original, `docs/DEMAND_TRACE.md`, especificação canônica e ADRs afetadas;
+- estado atual: `docs/rtm.md`, sem narrativas duplicadas;
+- trabalho restante: `docs/FASE1_BACKLOG.md` e tickets afetados;
+- gates/evidências: `docs/RELEASE_GATE.md` e `docs/EVIDENCE_REGISTER.md`;
+- autoaprimoramento: `docs/SESSION_IMPROVEMENT.md` e as lições aplicáveis em `docs/SESSION_LEARNINGS.md`;
+- operação/toolchain: somente os documentos e manifests afetados.
+
+O histórico completo não é contexto automático. Use `docs/archive/` e o histórico Git somente quando houver necessidade.
+
 ## Regra de mudança mínima
 
 Faça a menor alteração estrutural suficiente para atender ao requisito. Não introduza dependências, serviços, APIs, abstrações, bibliotecas ou funcionalidades extras sem necessidade demonstrada e validação correspondente.
+
+Não reescreva um arquivo inteiro para uma alteração local e preserve correções concorrentes.
 
 Antes de alterar arquitetura, transporte, persistência, fronteiras de segurança ou dependências, procure o ADR/contrato existente. Mudança de decisão exige atualização da documentação correspondente.
 
@@ -91,6 +106,8 @@ just supply-chain
 ```
 
 Não declarar um gate como PASS sem execução real. `just verify` usa nextest mais doc-tests, sem repetir unitários/integração com `cargo test`; `just test` permanece disponível para o runner padrão completo.
+
+Linux x86_64 não prova Windows nem Linux aarch64. Fixture DEMO, testes sintéticos e datasets públicos não substituem incidente real autorizado e sanitizado.
 
 ## Documentação e rastreabilidade
 

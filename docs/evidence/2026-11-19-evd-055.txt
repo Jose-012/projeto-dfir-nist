@@ -1,0 +1,101 @@
+ID: EVD-055
+Gate: F1-14 / F1-15 / instruções operacionais para LLMs
+Estado: PASS no escopo executado; limites externos preservados
+Data: 2026-11-19T17:57:59Z..2026-11-19T18:29:44Z
+Ambiente CI: GitHub Actions ubuntu-24.04, Linux x86_64
+Toolchain CI: rustc/cargo 1.100.0; CPython 3.14.6; nextest 0.9.151; audit 0.22.2; deny 0.20.2
+Repositório: privado, https://github.com/Jose-012/projeto-dfir-nist
+
+1. Commit e run do CI final
+
+Commit: bcd9c4c1b5c5be8f285ab68dabfd856386000bcc
+Tree: c3a26ae21529ec9dfb4b08c43a111103378060e7
+Run: 44582760249
+Job: 135767519111
+Início: 2026-11-19T17:57:59Z
+Conclusão: 2026-11-19T18:18:17Z
+Estado MCP: completed / success
+
+O workflow usou o remoto oficial persistido no checkout do runner, actions por
+SHA completo, ferramentas por versão exata, checksum e fallback none. Não usou
+secrets próprios nem publicou dados de caso.
+
+2. Falhas preservadas e prevenção aplicada
+
+Run 44566509562: a install-action pinada não oferecia cargo-nextest 0.9.151.
+A correção conferiu o manifesto da tag nova; EVD-054 registra o run verde
+seguinte. Não houve fallback silencioso.
+
+Run 44578097661: ENOSPC ao restaurar aproximadamente 1,88 GiB de cache com
+target/. O cache passou a conter somente downloads do registry Cargo, com chave
+nova. A proteção de disco não foi reduzida.
+
+Run 44579359575: os gates anteriores passaram e o E2E falhou fechado porque
+restavam 965 MiB, abaixo da guarda configurada de 1 GiB. O workflow passou a
+medir o espaço, executar cargo clean no runner efêmero e medir novamente antes
+de reconstruir app/engine para o E2E. DFIR_MIN_FREE_DISK_BYTES e
+DFIR_ENGINE_SANDBOX=required não foram enfraquecidos.
+
+3. Resultado independente do run 44582760249
+
+Log completo em scratch:
+/home/jose/.jcode/scratch/ci-run-44582760249.log
+Linhas: 7308
+SHA-256: 2b620480792cb5cdfa24fd703b985cf1c20d866be71f200293e3f7c52f03cdd3
+
+Diagnósticos e pós-condições extraídos do log:
+- doctor: 0 erros e 0 warnings; toolchain exigida conferida;
+- nextest: 536 tests run, 536 passed, 1 skipped; doc-tests executados pelo gate;
+- cargo-deny: 1550 advisory-db entries, 613 crates, advisories/bans/licenses/sources OK;
+- cargo audit: sem vulnerabilidades no mesmo run;
+- documentation gate: PASS;
+- antes do cargo clean: 5,8 G disponíveis;
+- cargo clean: 9559 arquivos e 7,8 GiB removidos do target temporário;
+- depois da limpeza: 14 G disponíveis;
+- E2E: 110/110 etapas passaram com sandbox required.
+
+O log não contém segredo nem nome de evidência real. A fixture sanitizada
+permanece a única entrada do E2E de CI.
+
+4. Consolidação das instruções e remoção do prompt
+
+Escopo verificado separadamente na árvore de trabalho baseada no commit acima,
+antes do commit documental final. Não se atribui ao commit bcd9c4c uma alteração
+que ainda estava na árvore de trabalho.
+
+Conteúdo útil não redundante mesclado em CONVENTIONS.md:
+- leitura documental por tarefa;
+- preservação de correções concorrentes e edições locais;
+- limites de Linux x86_64, Windows, Linux aarch64 e incidente real.
+
+AGENTS.md, especificação canônica e cópia raiz, DOCUMENT_AUTHORITY.md,
+SESSION_IMPROVEMENT.md e validadores deixaram de exigir o prompt. O Apêndice F.5
+passou a exigir instruções consolidadas e preservação do conteúdo útil antes da
+remoção de fontes redundantes. PROMPT_NOVA_CONVERSA.md foi removido; referências
+em arquivos históricos foram preservadas.
+
+Controle positivo, 2026-11-19T18:29:43Z..18:29:44Z:
+- just doc-gate -> exit 0;
+- Fase 0 static checks: 0 error(s), 0 warning(s);
+- documentation gate: PASS;
+- cmp das duas especificações -> exit 0;
+- python3 -m py_compile nos dois validadores -> exit 0;
+- git diff --check -> exit 0.
+
+Controle negativo em cópia isolada:
+Raiz: /home/jose/.jcode/scratch/prompt-recreation.yr3Ri4
+A cópia reproduziu os arquivos de trabalho sem o prompt e recebeu um arquivo
+PROMPT_NOVA_CONVERSA.md vazio somente para o teste.
+python3 scripts/validate_fase0.py -> exit 1 esperado.
+Diagnóstico:
+PROMPT_NOVA_CONVERSA.md must stay removed; agent instructions belong in AGENTS.md and CONVENTIONS.md
+Fase 0 static checks: 1 error(s), 0 warning(s).
+O repositório real não foi alterado pelo controle negativo.
+
+5. Limites
+
+O CI prova Linux x86_64 hospedado, não Windows nem Linux aarch64. O E2E usa
+fixture DEMO sanitizada, não incidente real. A GUI segue com os limites de
+EVD-050. A consolidação prova ausência/ligação documental e rejeição da
+recriação do prompt, não conduta futura de agentes. Nenhum item externo foi
+promovido a ACCEPTED por esta evidência.

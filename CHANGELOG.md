@@ -1,6 +1,13 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - integração contínua e consolidação das instruções (`EVD-054`/`EVD-055`)
+
+- Criado o repositório privado `Jose-012/projeto-dfir-nist` pelo MCP GitHub, preservando o histórico local, e adicionado `.github/workflows/ci.yml` com toolchain pinada, actions por SHA completo, checksum e `fallback: none`. O run `44582760249` passou com 536 testes/1 skipped, supply chain, documentação e E2E 110/110 com sandbox obrigatório.
+- Falhas de setup e disco foram preservadas: manifesto incompatível da `install-action`, ENOSPC no cache com `target/` e guarda de 1 GiB rejeitando 965 MiB. O cache passou a conter somente downloads do registry; `cargo clean` e `df -h` antecedem o E2E no runner efêmero, sem reduzir `DFIR_MIN_FREE_DISK_BYTES`. `F1-14` está `VERIFIED`; `WVR-003` foi encerrado.
+- O conteúdo útil de `PROMPT_NOVA_CONVERSA.md` foi mesclado em `CONVENTIONS.md`; o prompt redundante foi removido. `AGENTS.md`, as duas cópias da especificação, autoridade, loop de sessão e validadores foram atualizados. O `doc-gate` positivo passou e uma cópia isolada com o prompt recriado foi rejeitada com diagnóstico específico.
+- Não houve mudança de runtime, dependências, RBAC ou escopo da demanda. Windows, Linux aarch64, GUI e incidente real continuam exigindo evidência própria.
+
 ## Unreleased - 2026-11-19 - loop de autoaprimoramento entre sessões
 
 - A retrospectiva da verificação residual identificou nove erros, riscos herdados e limitações: evidências antecipadas, investigação gráfica sem timebox, exits X11 sem pós-condição, staleness de supply chain, vínculo HEAD/binário, busca vazia implausível, IDs de coordenação, perda acidental de texto da RTM e silêncio de builds.

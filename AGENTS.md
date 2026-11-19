@@ -169,7 +169,7 @@ Atualize somente os documentos afetados pela mudança:
 - uso/operação: `README.md`, `docs/OPERATION.md`, `docs/DEMO.md`, `docs/TOOLCHAINS.md`, `docs/SUPPLY_CHAIN.md`;
 - contratos específicos: `docs/NATIVE_UI_ARCHITECTURE.md`, `docs/DETECTION_RULES.md`, `docs/API.md`;
 - histórico: `docs/FASE1_STATUS.md` ou `CHANGELOG.md`, sem copiar matriz de estado nem repetir toda a narrativa;
-- regras de agente: `AGENTS.md`, `CONVENTIONS.md`, `PROMPT_NOVA_CONVERSA.md`, `docs/DOCUMENT_AUTHORITY.md`, `docs/SESSION_IMPROVEMENT.md` e `docs/SESSION_LEARNINGS.md`.
+- regras de agente: `AGENTS.md`, `CONVENTIONS.md`, `docs/DOCUMENT_AUTHORITY.md`, `docs/SESSION_IMPROVEMENT.md` e `docs/SESSION_LEARNINGS.md`.
 
 `docs/FASE0_STATUS.md`, `docs/DEFINITION_OF_READY.md` e `RELATORIO_ALTERACOES_*` são históricos; só mudam para correção factual ou atualização do histórico. O Git log registra as rodadas novas. Não crie um relatório permanente para cada alteração de rotina.
 

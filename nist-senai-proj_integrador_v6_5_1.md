@@ -4595,9 +4595,9 @@ A ausência de um elo deve ser registrada como lacuna, e não preenchida por inf
 </llm-consumption-contract>
 ```
 
-## F.5. Prompt de continuidade
+## F.5. Instruções operacionais para LLMs
 
-O arquivo `PROMPT_NOVA_CONVERSA.md` deve permanecer curto o suficiente para ser usado como prompt operacional, mas deve apontar para esta especificação e para os artefatos de estado. Ele pode usar pequenos blocos XML para declarar autoridade, regras e gates, sem exigir a duplicação da especificação completa.
+As instruções operacionais para LLMs ficam consolidadas em `AGENTS.md`, com convenções complementares em `CONVENTIONS.md` e o loop de sessão ligado por `CLAUDE.md`, `docs/SESSION_IMPROVEMENT.md` e `docs/SESSION_LEARNINGS.md`. Esses arquivos devem apontar para esta especificação e para os artefatos de estado, sem duplicar matrizes, narrativas ou a especificação completa. Instruções úteis de prompts anteriores devem ser mescladas antes da remoção das fontes redundantes; o histórico permanece no Git. Consolidação decidida pelo operador em 2026-11-19.
 
 ## F.6. Regra de manutenção
 
@@ -4607,7 +4607,7 @@ Quando uma seção normativa, decisão, requisito ou gate for criado, removido o
 2. o índice XML;
 3. o RTM, quando aplicável;
 4. o status/changelog;
-5. o prompt de continuidade, quando a mudança afetar o comportamento esperado da LLM.
+5. as instruções operacionais para LLMs, quando a mudança afetar o comportamento esperado da LLM.
 
 O índice é, portanto, um **artefato regenerável**, enquanto o corpo normativo permanece a fonte primária.
 
@@ -4642,7 +4642,7 @@ Para evitar conflitos entre arquivos que descrevem o mesmo projeto, a autoridade
   </domain>
   <domain name="llm-operational-rules">
     <authority>AGENTS.md + seção 45 + Apêndice F</authority>
-    <secondary>PROMPT_NOVA_CONVERSA.md</secondary>
+    <secondary>CONVENTIONS.md + docs/SESSION_IMPROVEMENT.md + docs/SESSION_LEARNINGS.md</secondary>
   </domain>
 </document-authority>
 ```
