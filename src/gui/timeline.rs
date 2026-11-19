@@ -570,6 +570,78 @@ mod ui_tests {
     }
 
     #[test]
+    fn wheel_reaches_the_last_virtual_row_and_requests_its_page() {
+        let (backend, mut commands) = Backend::for_test();
+        let last_offset = PAGE_SIZE * 2;
+        let total = last_offset + 50;
+        let mut view = TimelineView::for_job("job-1");
+        view.on_page(
+            "",
+            0,
+            Ok(Some(TimelinePage::for_test(
+                "job-1",
+                Some(total as u64),
+                0,
+                events(PAGE_SIZE),
+                vec![],
+            ))),
+        );
+        let viewport = egui::vec2(900.0, 500.0);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(viewport)
+            .build_ui_state(
+                |ui, (view, backend): &mut State| view.show(ui, "ev_1", backend),
+                (view, backend),
+            );
+        harness.run();
+        assert!(harness.query_by_label("evento-449").is_none());
+
+        harness.get_by_label("evento-0").hover();
+        harness.input_mut().events.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -10_000.0),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Unknown,
+            modifiers: egui::Modifiers::default(),
+        });
+        harness.run_steps(8);
+
+        let requested: Vec<u64> = drain(&mut commands)
+            .into_iter()
+            .filter_map(|command| match command {
+                Command::TimelinePage { offset, .. } => Some(offset),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            requested.contains(&(last_offset as u64)),
+            "a rolagem até o fim deve pedir a última página: {requested:?}"
+        );
+
+        let last_events = (last_offset..total)
+            .map(|index| TimelineEvent::for_test(&format!("evento-{index}"), None))
+            .collect();
+        harness.state_mut().0.on_page(
+            "",
+            last_offset as u64,
+            Ok(Some(TimelinePage::for_test(
+                "job-1",
+                None,
+                last_offset as u64,
+                last_events,
+                vec![],
+            ))),
+        );
+        harness.run_steps(8);
+
+        let last = harness.get_by_label("evento-449").rect();
+        assert!(
+            last.min.y >= 0.0 && last.max.y <= viewport.y,
+            "a última linha não ficou visível após a rolagem: {last:?}"
+        );
+    }
+
+    #[test]
     fn an_invalid_filter_shows_an_error_beside_the_box_and_keeps_the_timeline() {
         let (backend, mut commands) = Backend::for_test();
         let mut view = TimelineView::for_job("job-1");
