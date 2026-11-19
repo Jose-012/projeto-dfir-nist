@@ -19,7 +19,12 @@ const EACCES: i64 = 13;
 const EPERM: i64 = 1;
 
 fn engine() -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_dfir-engine"));
+    // O nextest informa o binário real em runtime e remapeia esse caminho ao
+    // reutilizar builds. O `env!` é fallback para o `cargo test`.
+    let executable = std::env::var_os("NEXTEST_BIN_EXE_dfir_engine")
+        .or_else(|| std::env::var_os("CARGO_BIN_EXE_dfir-engine"))
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_dfir-engine").into());
+    let mut command = Command::new(executable);
     // Ambiente limpo: o resultado não depende do shell de quem roda o teste.
     command.env_clear();
     command
