@@ -1,7 +1,7 @@
 <!-- doc-type: reference | status: current -->
 # Regras de detecção do engine (F1-28)
 
-Gerado de `dfir-engine --list-rules` (conjunto de regras **2026.10.1**). ADR-0025. Um teste do engine confere que este arquivo cita todas as regras e a versão do conjunto; ao criar, remover ou alterar o limiar de uma regra, mude `RULE_SET_VERSION` em `engine/src/detect.rs` e regenere esta tabela.
+Gerado de `dfir-engine --list-rules` (conjunto de regras **2026.11.1**). ADR-0025. Um teste do engine confere que este arquivo cita todas as regras e a versão do conjunto; ao criar, remover ou alterar o limiar de uma regra, mude `RULE_SET_VERSION` em `engine/src/detect.rs` e regenere esta tabela.
 
 **Regra de ouro:** uma regra só produz **candidato**. Nada vira achado, mapeamento ATT&CK ou IOC sem a confirmação do analista. **A ausência de candidato não prova ausência de ataque**: a regra só enxerga o que o log registrou. A confiança de uma regra automática nunca passa de MEDIUM.
 
@@ -22,7 +22,7 @@ Gerado de `dfir-engine --list-rules` (conjunto de regras **2026.10.1**). ADR-002
 | `R-EVAS-001` v1 — Log de eventos apagado | DEFENSE_EVASION · T1070 (T1070.001) | HIGH | MEDIUM | Limpeza do log Security (1102) ou System (104). |
 | `R-EVAS-002` v1 — Política de auditoria alterada | DEFENSE_EVASION · T1562 (T1562.002) | MEDIUM | LOW | Alteração da política de auditoria do sistema (evento 4719). |
 | `R-EXEC-001` v1 — PowerShell com comando codificado ou download | EXECUTION · T1059 (T1059.001) | MEDIUM | LOW | Linha de comando ou bloco de script do PowerShell com comando codificado em Base64, download de conteúdo ou execução dinâmica. |
-| `R-CRED-001` v1 — Indicador de extração de credenciais | CREDENTIAL_ACCESS · T1003 | HIGH | MEDIUM | Linha de comando com termos típicos de extração de credenciais (mimikatz, sekurlsa, lsadump, cópia de SAM/NTDS, dump de lsass). |
+| `R-CRED-001` v2 — Indicador de extração de credenciais | CREDENTIAL_ACCESS · T1003 | HIGH | MEDIUM | Linha de comando ou bloco de script com termos típicos de extração de credenciais (mimikatz, sekurlsa, lsadump, cópia de SAM/NTDS, dump de lsass e MiniDumpWriteDump de LSASS). |
 | `R-EXFIL-001` v1 — Ferramenta de envio de dados por linha de comando | EXFILTRATION · T1567 | MEDIUM | LOW | Linha de comando com ferramenta ou opção típica de envio de dados para fora (rclone, mega, curl/Invoke-WebRequest com envio, WinSCP, azcopy, aws s3). |
 | `R-EXFIL-002` v1 — Conexão de saída de ferramenta de linha de comando para IP público | EXFILTRATION · T1041 | MEDIUM | LOW | Conexão de saída permitida (5156 ou Sysmon 3) para IP público iniciada por PowerShell, cmd, curl, certutil, bitsadmin ou similar. |
 | `R-COLL-001` v1 — Compactação de dados por linha de comando | COLLECTION · T1560 (T1560.001) | LOW | LOW | Linha de comando que compacta arquivos (Compress-Archive, 7z, rar, zip), etapa comum antes de enviar dados para fora. |

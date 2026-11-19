@@ -36,7 +36,7 @@ use std::{
 
 /// Versão do conjunto de regras. Muda quando uma regra é criada, removida ou
 /// tem o limiar alterado; fica registrada em cada candidato.
-pub const RULE_SET_VERSION: &str = "2026.10.1";
+pub const RULE_SET_VERSION: &str = "2026.11.1";
 
 /// Falhas de logon na janela para a regra de rajada.
 const BURST_THRESHOLD: usize = 10;
@@ -250,9 +250,9 @@ const R_EXEC_001: Rule = Rule {
 };
 const R_CRED_001: Rule = Rule {
     id: "R-CRED-001",
-    version: "1",
+    version: "2",
     title: "Indicador de extração de credenciais",
-    description: "Linha de comando com termos típicos de extração de credenciais (mimikatz, sekurlsa, lsadump, cópia de SAM/NTDS, dump de lsass).",
+    description: "Linha de comando ou bloco de script com termos típicos de extração de credenciais (mimikatz, sekurlsa, lsadump, cópia de SAM/NTDS, dump de lsass e MiniDumpWriteDump de LSASS).",
     tactic: "CREDENTIAL_ACCESS",
     technique: "T1003",
     sub_technique: None,
@@ -1323,6 +1323,7 @@ fn credential_dumping(lower: &str) -> bool {
             "invoke-mimikatz",
         ],
     ) || (lower.contains("procdump") && lower.contains("lsass"))
+        || (lower.contains("minidumpwritedump") && lower.contains("lsass"))
         || (lower.contains("comsvcs") && lower.contains("minidump"))
         || (lower.contains("ntdsutil") && (lower.contains("ifm") || lower.contains("ntds")))
         || (lower.contains("reg")
@@ -1982,6 +1983,34 @@ mod tests {
         let hits = by_rule(&candidates, "R-EXEC-001");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].count, 1);
+    }
+
+    #[test]
+    fn powershell_minidumpwritedump_of_lsass_is_a_credential_candidate() {
+        let mut feed = Feed::new();
+        feed.push(
+            &ts(9, 15),
+            record(
+                4104,
+                "Microsoft-Windows-PowerShell",
+                "WS01",
+                json!({"ScriptBlockText": "$h = Get-Process lsass; MiniDumpWriteDump $h", "UserId": "bob"}),
+            ),
+        );
+        feed.push(
+            &ts(9, 16),
+            record(
+                4104,
+                "Microsoft-Windows-PowerShell",
+                "WS01",
+                json!({"ScriptBlockText": "MiniDumpWriteDump $process", "UserId": "bob"}),
+            ),
+        );
+        let candidates = feed.finish();
+        let hits = by_rule(&candidates, "R-CRED-001");
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].count, 1, "LSASS é obrigatório: {hits:?}");
+        assert_eq!(hits[0].severity, "HIGH");
     }
 
     #[test]

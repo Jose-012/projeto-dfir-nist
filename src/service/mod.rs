@@ -2010,10 +2010,15 @@ fn timeline_event_from_item(item: &serde_json::Value) -> Option<TimelineEvent> {
     let record_id = normalized.event_record_id.to_string();
     let data = &normalized.data;
 
-    let event_id = data
-        .pointer("/Event/System/EventID")
-        .map(value_to_string)
-        .filter(|v| !v.is_empty());
+    let event_id = normalized
+        .event_id
+        .clone()
+        .or_else(|| dfir_protocol::normalize::event_id(data).map(|value| value.to_string()))
+        .or_else(|| {
+            data.pointer("/Event/System/EventID")
+                .map(value_to_string)
+                .filter(|v| !v.is_empty())
+        });
     let provider = data
         .pointer("/Event/System/Provider/Name")
         .or_else(|| data.pointer("/Event/System/Provider/#attributes/Name"))
@@ -2665,6 +2670,23 @@ mod tests {
         )
         .into_item()
         .expect("serializable event")
+    }
+
+    #[test]
+    fn timeline_display_uses_the_numeric_id_from_a_qualified_event_id() {
+        let item = dfir_protocol::NormalizedEvent::new(
+            1,
+            "2026-01-01T00:00:00Z",
+            serde_json::json!({"Event": {"System": {
+                "EventID": {"#attributes": {"Qualifiers": 16384}, "#text": 7045}
+            }}}),
+            "ev_t",
+        )
+        .into_item()
+        .expect("serializable event");
+        let event = timeline_event_from_item(&item).expect("timeline event");
+        assert_eq!(event.event_id.as_deref(), Some("7045"));
+        assert_eq!(event.title, "Event ID 7045");
     }
 
     /// Escreve um `results.jsonl` no formato do engine (lotes de 128 itens por
