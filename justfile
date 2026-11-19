@@ -42,8 +42,8 @@ clippy:
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
 audit:
-    # `.cargo/audit.toml` espelha a exceção já justificada no deny.toml; sem ele
-    # o cargo audit falharia em RUSTSEC-2026-0459 sem análise de alcance.
+    # `.cargo/audit.toml` espelha as exceções informativas justificadas no deny.toml.
+    # Uma exceção removida do grafo deve sair dos dois arquivos na mesma mudança.
     cargo audit --no-yanked
 
 # --workspace is required: the root manifest is a package, so without it

@@ -5,13 +5,12 @@
 # root package (dfir-app) is checked and the engine's dependency graph
 # (evtx, yara-x, wasmtime) is silently skipped.
 ignore = [
-  { id = "RUSTSEC-2026-0459", reason = "SQLite < 3.54.0 bundled by libsqlite3-sys 0.37.0 can return uninitialized page-cache memory when it opens a database together with a sibling -wal whose page size differs (CVE-2026-119375). The fix needs libsqlite3-sys >= 0.39.0, but sqlx 0.9.0 (latest published) requires >=0.30.1,<0.38.0; `cargo update -p libsqlite3-sys --precise 0.39.0` fails and no sqlx release admits 0.39. Reachability: only the local database under DFIR_DATA_ROOT, created and owned by the app, in WAL mode on a protected volume; an attacker who can plant a crafted -wal there can already modify the evidence and the database. No database/wal from an untrusted source is opened. Compensating controls: protected data volume (docs/OPERATION.md §2), single local operator (ADR-0007), no remote input. Formalizado como WVR-004 em docs/EVIDENCE_REGISTER.md (aprovado pelo operador em 2026-11-14T22:00:30Z). Re-evaluate when sqlx/sqlx-sqlite admits libsqlite3-sys >= 0.39.0; review by 2026-12-31." },
   # 2026-11-14: RUSTSEC-2026-0370/0371/0372 (zvariant/zbus_names/zvariant_derive) e
   # RUSTSEC-2026-0192 (ttf-parser) saíram do grafo: eframe 0.37.0 com a feature
   # `accesskit` desligada remove zbus/atspi/accesskit_unix, e sctk-adwaita/ttf-parser
   # sumiram com a atualização do winit. Exceções removidas porque
   # "advisory-not-detected" é warning no deny 0.20. Ver docs/SUPPLY_CHAIN.md.
-  { id = "RUSTSEC-2025-0141", reason = "bincode 2.0.1 is a mandatory (non-optional) dependency of yara-x 1.20.0. The advisory is informational ('unmaintained': the maintainers ceased development), not a vulnerability. yara-x uses bincode for Rules::serialize/deserialize, which this project never calls, and to decode its own in-memory compiled-rules data; the ruleset is embedded in the binary and compiled at runtime, so no serialized rules from outside are ever loaded. Re-evaluate on every yara-x upgrade." },
+  { id = "RUSTSEC-2025-0141", reason = "bincode 2.0.1 is a mandatory (non-optional) dependency of yara-x 1.22.1. The advisory is informational ('unmaintained': the maintainers ceased development), not a vulnerability. yara-x uses bincode for Rules::serialize/deserialize, which this project never calls, and to decode its own in-memory compiled-rules data; the ruleset is embedded in the binary and compiled at runtime, so no serialized rules from outside are ever loaded. Re-evaluate on every yara-x upgrade." },
   # 2026-11-18: RUSTSEC-2026-0543 (chrono 0.4.45 'unmaintained', informational, sem CVE)
   # apareceu no deny após o pin subir para 1.100.0. Uso no projeto: só timestamps
   # locais (Utc::now) e parsing RFC 3339 de dados internos (timeline do próprio

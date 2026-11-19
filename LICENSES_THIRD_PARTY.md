@@ -7,6 +7,8 @@ As dependências devem ser inventariadas a partir do `Cargo.lock` e do inventár
 
 > **Atualização 2026-11-18 (escopo de `proptest`):** a dev-dependency saiu de `dfir-app` e passou a `dfir-protocol`, sem adicionar, remover ou atualizar pacotes. O lock continua com 612 pacotes e o inventário de licenças permanece válido; novo SHA-256 do `Cargo.lock`: `07dafb055295648969544e7fd5fd84b37e8830a565314e4175afc9696572fa95`.
 
+> **Atualização 2026-11-19 (segurança):** inventário regenerado por `cargo metadata --locked --format-version 1` com cargo/rustc 1.100.0: 613 pacotes, 3 do workspace e 610 de terceiros; SHA-256 do `Cargo.lock` `bf5c5f5fef7c83af6846085681b5ee9587285df68f280e7a29d75d9fd1be4a14`. Atualizações mínimas: `sqlx 0.9.1`, `libsqlite3-sys 0.40.0`, `wasmtime 48.0.9` e a família Cranelift 0.135.9; entrou `objc2-system-configuration 0.3.2`. SBOM permanece fora do escopo (ADR-0028).
+
 ## Ferramentas explicitamente rejeitadas como componentes do produto
 
 **Hayabusa** e **Chainsaw** não fazem parte do produto e não devem ser adicionados a `Cargo.toml`, inventário de componentes, fixtures ou pacotes distribuídos sem uma nova decisão arquitetural e revisão jurídica aplicável ao modelo efetivo de distribuição.
@@ -41,7 +43,7 @@ Nenhum pacote declara apenas uma licença copyleft (GPL, LGPL, AGPL, MPL, EPL, C
 | Apache-2.0 | 18 |
 | Unicode-3.0 | 18 |
 | Unlicense OR MIT | 13 |
-| Zlib OR Apache-2.0 OR MIT | 12 |
+| Zlib OR Apache-2.0 OR MIT | 13 |
 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | 12 |
 | MIT OR Apache-2.0 OR Zlib | 6 |
 | Zlib | 4 |
@@ -69,7 +71,7 @@ Nenhum pacote declara apenas uma licença copyleft (GPL, LGPL, AGPL, MPL, EPL, C
 | Apache-2.0 OR GPL-2.0-only | 1 |
 | Apache-2.0 OR BSL-1.0 OR MIT | 1 |
 
-## Inventário do `Cargo.lock` (612 pacotes)
+## Inventário do `Cargo.lock` (613 pacotes)
 
 Crate, versão, licença declarada e origem, ordenados por nome.
 
@@ -159,19 +161,19 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | cpp_demangle | 0.5.1 | MIT OR Apache-2.0 | crates.io |
 | cpufeatures | 0.2.17 | MIT OR Apache-2.0 | crates.io |
 | cpufeatures | 0.3.1 | MIT OR Apache-2.0 | crates.io |
-| cranelift-assembler-x64 | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-assembler-x64-meta | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-bforest | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-bitset | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-codegen | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-codegen-meta | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-codegen-shared | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-control | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-entity | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-frontend | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-isle | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-native | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| cranelift-srcgen | 0.135.8 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-assembler-x64 | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-assembler-x64-meta | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-bforest | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-bitset | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-codegen | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-codegen-meta | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-codegen-shared | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-control | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-entity | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-frontend | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-isle | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-native | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| cranelift-srcgen | 0.135.9 | Apache-2.0 WITH LLVM-exception | crates.io |
 | crc | 3.4.0 | MIT OR Apache-2.0 | crates.io |
 | crc-catalog | 2.5.0 | MIT OR Apache-2.0 | crates.io |
 | crc32fast | 1.5.3 | MIT OR Apache-2.0 | crates.io |
@@ -329,7 +331,7 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | libloading | 0.8.9 | ISC | crates.io |
 | libm | 0.2.16 | MIT | crates.io |
 | libredox | 0.1.25 | MIT | crates.io |
-| libsqlite3-sys | 0.37.0 | MIT | crates.io |
+| libsqlite3-sys | 0.40.0 | MIT | crates.io |
 | linebender_resource_handle | 0.1.1 | Apache-2.0 OR MIT | crates.io |
 | linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | crates.io |
 | linux-raw-sys | 0.4.15 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | crates.io |
@@ -391,6 +393,7 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | objc2-quartz-core | 0.2.2 | MIT | crates.io |
 | objc2-quartz-core | 0.3.2 | Zlib OR Apache-2.0 OR MIT | crates.io |
 | objc2-symbols | 0.2.2 | MIT | crates.io |
+| objc2-system-configuration | 0.3.2 | Zlib OR Apache-2.0 OR MIT | crates.io |
 | objc2-ui-kit | 0.2.2 | MIT | crates.io |
 | objc2-ui-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT | crates.io |
 | objc2-uniform-type-identifiers | 0.2.2 | MIT | crates.io |
@@ -434,8 +437,8 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | protobuf-support | 3.7.2 | MIT | crates.io |
 | ptr_meta | 0.3.2 | MIT | crates.io |
 | ptr_meta_derive | 0.3.2 | MIT | crates.io |
-| pulley-interpreter | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| pulley-macros | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
+| pulley-interpreter | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| pulley-macros | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
 | pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 | crates.io |
 | quick-error | 1.2.3 | MIT/Apache-2.0 | crates.io |
 | quick-error | 2.0.1 | MIT/Apache-2.0 | crates.io |
@@ -514,13 +517,13 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | sonic-simd | 0.1.4 | Apache-2.0 | crates.io |
 | spin | 0.9.9 | MIT | crates.io |
 | spirv | 0.4.0+sdk-1.4.341.0 | Apache-2.0 | crates.io |
-| sqlx | 0.9.0 | MIT OR Apache-2.0 | crates.io |
-| sqlx-core | 0.9.0 | MIT OR Apache-2.0 | crates.io |
-| sqlx-macros | 0.9.0 | MIT OR Apache-2.0 | crates.io |
-| sqlx-macros-core | 0.9.0 | MIT OR Apache-2.0 | crates.io |
-| sqlx-mysql | 0.9.0 | MIT OR Apache-2.0 | crates.io |
-| sqlx-postgres | 0.9.0 | MIT OR Apache-2.0 | crates.io |
-| sqlx-sqlite | 0.9.0 | MIT OR Apache-2.0 | crates.io |
+| sqlx | 0.9.1 | MIT OR Apache-2.0 | crates.io |
+| sqlx-core | 0.9.1 | MIT OR Apache-2.0 | crates.io |
+| sqlx-macros | 0.9.1 | MIT OR Apache-2.0 | crates.io |
+| sqlx-macros-core | 0.9.1 | MIT OR Apache-2.0 | crates.io |
+| sqlx-mysql | 0.9.1 | MIT OR Apache-2.0 | crates.io |
+| sqlx-postgres | 0.9.1 | MIT OR Apache-2.0 | crates.io |
+| sqlx-sqlite | 0.9.1 | MIT OR Apache-2.0 | crates.io |
 | stable_deref_trait | 1.2.1 | MIT OR Apache-2.0 | crates.io |
 | static_assertions | 1.1.0 | MIT OR Apache-2.0 | crates.io |
 | stringprep | 0.1.5 | MIT/Apache-2.0 | crates.io |
@@ -598,16 +601,16 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | wasmparser | 0.245.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | crates.io |
 | wasmparser | 0.254.2 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | crates.io |
 | wasmprinter | 0.254.2 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | crates.io |
-| wasmtime | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| wasmtime-environ | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| wasmtime-internal-component-util | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| wasmtime-internal-core | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| wasmtime-internal-cranelift | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| wasmtime-internal-fiber | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| wasmtime-internal-jit-debug | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| wasmtime-internal-jit-icache-coherence | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| wasmtime-internal-unwinder | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
-| wasmtime-internal-versioned-export-macros | 48.0.8 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime-environ | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime-internal-component-util | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime-internal-core | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime-internal-cranelift | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime-internal-fiber | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime-internal-jit-debug | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime-internal-jit-icache-coherence | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime-internal-unwinder | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
+| wasmtime-internal-versioned-export-macros | 48.0.9 | Apache-2.0 WITH LLVM-exception | crates.io |
 | wayland-backend | 0.3.17 | MIT | crates.io |
 | wayland-client | 0.31.15 | MIT | crates.io |
 | wayland-csd-frame | 0.3.0 | MIT | crates.io |
