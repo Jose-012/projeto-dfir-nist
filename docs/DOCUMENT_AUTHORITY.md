@@ -14,7 +14,7 @@ Este arquivo define a autoridade por domínio e as fronteiras entre documentaç�
 | Estado | `docs/rtm.md` (única matriz de estado de ticket e requisito) | `docs/FASE1_STATUS.md` (somente resumo cronológico; log completo até 2026-10-29 em `docs/archive/FASE1_STATUS_historico_2026-10.md`), `docs/FASE0_STATUS.md` (matriz de capacidades da Fase 0, histórico), prompt, changelog |
 | Rastreabilidade | `docs/rtm.md` | testes, código, ADRs |
 | Gates | `docs/RELEASE_GATE.md` + `docs/EVIDENCE_REGISTER.md` | `justfile`, CI quando existir |
-| Regras LLM | `AGENTS.md` + seção 45 + Apêndice F; escolha de harness de agente: ADR-0027 | `CONVENTIONS.md`, `docs/SESSION_IMPROVEMENT.md`, `docs/SESSION_LEARNINGS.md` |
+| Regras LLM | `AGENTS.md` + seção 45 + Apêndice F; escolha de harness de agente: ADR-0027 | `CONVENTIONS.md`, `docs/SESSION_IMPROVEMENT.md`, `docs/SESSION_LEARNINGS.md`, `.jcode/skills/` |
 | Toolchain declarada | `toolchains.toml` + `rust-toolchain.toml` | docs de tooling |
 | Toolchain real | evidência `rustc`, `cargo`, `python3` | manifests de referência |
 

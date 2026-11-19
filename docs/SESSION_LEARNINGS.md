@@ -95,6 +95,14 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** o workflow não cacheia `target/`, mede espaço antes/depois de `cargo clean` e mantém `DFIR_MIN_FREE_DISK_BYTES` e `DFIR_ENGINE_SANDBOX=required`; `docs/TOOLCHAINS.md` registra a regra.
 - **Confirmação:** pendente.
 
+### 12. Worker automático combinado com spawn explícito
+
+- **Classe:** erro de execução.
+- **Fato:** em 2026-11-19, uma lane com `lane_owner = "worker"` iniciou um worker automático e um `swarm spawn` explícito iniciou outro para a mesma entrega. Os dois chegaram a progresso 1/2 sobre o mesmo alvo antes da duplicidade ser detectada. O worker automático concluiu; o duplicado foi parado por ID completo e a entrega foi revisada.
+- **Risco:** escritas concorrentes, resultado ambíguo e consumo duplicado de contexto/recursos.
+- **Prevenção:** `AGENTS.md` §17 exige escolher um único mecanismo de início por lane, com dono exclusivo de escrita e confirmação de progresso/parada; `CONVENTIONS.md` e `CLAUDE.md` ligam a regra, e o `doc_gate` verifica sua presença.
+- **Confirmação:** pendente para a próxima lane com worker.
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.

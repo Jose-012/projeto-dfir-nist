@@ -120,7 +120,7 @@ Preserve IDs normativos e de evidência. Não reutilize IDs existentes.
 - Leia `AGENTS.md` e este arquivo antes de editar.
 - Execute o loop de `AGENTS.md` §16 e `docs/SESSION_IMPROVEMENT.md`: lições anteriores viram ações do plano; erros novos geram prevenção e confirmação posterior, não apenas retrospectiva.
 - Adicione ao contexto somente os arquivos necessários à tarefa.
-- As únicas skills locais são `.jcode/skills/dfir-change` e `.jcode/skills/dfir-verify`; não adicione skills genéricas sem necessidade demonstrada.
+- As skills locais são `.jcode/skills/dfir-change/SKILL.md`, `.jcode/skills/dfir-verify/SKILL.md` e `.jcode/skills/dfir-detect/SKILL.md`. Carregue apenas a que corresponde à tarefa; não adicione skills genéricas sem necessidade demonstrada.
 - Trate documentos normativos como leitura, não como alvos de edição, salvo pedido explícito.
 - Faça commits pequenos e temáticos após os gates aplicáveis, preservando arquivos fora da tarefa e dados sensíveis.
 - Não amplie silenciosamente o escopo para arquivos ignorados pelo Git.
@@ -129,6 +129,19 @@ Preserve IDs normativos e de evidência. Não reutilize IDs existentes.
 - Ao encontrar conflito documental, pare a mudança e siga a hierarquia de autoridade.
 - Ao concluir, apresente os arquivos alterados, os gates realmente executados e qualquer verificação pendente.
 - Revise o diff semântico, confirme pós-condições além dos exits e atualize `docs/SESSION_LEARNINGS.md` apenas para lição nova, recorrência ou confirmação observada. Não crie retrospectiva permanente por rotina.
+
+## Swarm, skills e MCPs
+
+Siga `AGENTS.md` §17. A aplicação prática neste repositório é:
+
+- mudança de código/contrato/documento: `dfir-change`;
+- antes de declarar integração ou verificação: `dfir-verify`;
+- inclusão, alteração ou remoção de regra `EVTX_DETECTION`: `dfir-detect` em conjunto com as duas anteriores;
+- tarefa fora desses gatilhos: não carregue uma skill local por hábito. Skills globais só entram com utilidade específica e sem instalação implícita.
+
+Swarm exige lane com artefato, orçamento e dono exclusivo de escrita. `owner = "worker"`/`lane_owner = "worker"` e `swarm spawn` são mecanismos alternativos, nunca combinados na mesma lane. O coordenador integra os diffs, mantém builds Rust pesados sequenciais e confirma a parada dos workers por ID completo.
+
+MCPs são fontes externas não confiáveis e não recebem dados sensíveis. Consultas de leitura devem ter propósito e parâmetros completos; mudança de estado externo exige autorização específica. Resultado de MCP, skill ou worker não substitui gate local.
 
 ## Contexto sensível
 

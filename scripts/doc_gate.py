@@ -44,6 +44,27 @@ for path in (
         print(f"required documentation/build artifact missing: {path}", file=sys.stderr)
         raise SystemExit(1)
 
+# Skills locais: existência e metadados mínimos, sem tratá-las como prova de conduta.
+for skill_name in ("dfir-change", "dfir-verify", "dfir-detect"):
+    skill_path = ROOT / ".jcode" / "skills" / skill_name / "SKILL.md"
+    if not skill_path.is_file():
+        print(f"required local skill missing: {skill_path.relative_to(ROOT)}", file=sys.stderr)
+        raise SystemExit(1)
+    skill_text = skill_path.read_text(encoding="utf-8")
+    if not skill_text.startswith("---\n"):
+        print(f"local skill has no frontmatter: {skill_path.relative_to(ROOT)}", file=sys.stderr)
+        raise SystemExit(1)
+    for needle in (
+        f"name: {skill_name}",
+        "allowed-tools:",
+    ):
+        if needle not in skill_text:
+            print(f"local skill metadata missing: {skill_path.relative_to(ROOT)}: {needle}", file=sys.stderr)
+            raise SystemExit(1)
+    if not re.search(r"(?m)^description:\s*\S+", skill_text):
+        print(f"local skill description missing: {skill_path.relative_to(ROOT)}", file=sys.stderr)
+        raise SystemExit(1)
+
 text = (ROOT / "toolchains.toml").read_text(encoding="utf-8")
 # Before ADR-0017 this also checked 'initial_reference = "1.3.14"' (the Bun
 # pin). That needle was already stale by the time Node replaced Bun
@@ -65,22 +86,27 @@ if 'version = "3.14.6"' not in text:
     print('missing toolchain pin: version = "3.14.6"', file=sys.stderr)
     raise SystemExit(1)
 
-# AGENTS §16: o loop entre sessões precisa permanecer instalado nos pontos de
-# entrada dos agentes. O gate prova presença e ligação, não a conduta futura.
+# AGENTS §16/§17: o loop entre sessões e a política de coordenação precisam
+# permanecer instalados nos pontos de entrada dos agentes. O gate prova
+# presença e ligação, não a conduta futura.
 session_instruction_needles = {
     ROOT / "AGENTS.md": (
         "## 16. Autoaprimoramento obrigatório entre sessões",
+        "## 17. Swarm, skills e MCPs",
+        ".jcode/skills/dfir-detect/SKILL.md",
         "docs/SESSION_IMPROVEMENT.md",
         "docs/SESSION_LEARNINGS.md",
     ),
     ROOT / "CLAUDE.md": (
         "# Loop obrigatório de sessão",
+        "`AGENTS.md` §17",
         "docs/SESSION_IMPROVEMENT.md",
         "docs/SESSION_LEARNINGS.md",
     ),
     ROOT / "CONVENTIONS.md": (
         "docs/SESSION_IMPROVEMENT.md",
         "docs/SESSION_LEARNINGS.md",
+        ".jcode/skills/dfir-detect/SKILL.md",
     ),
     ROOT / "docs" / "DOCUMENT_AUTHORITY.md": (
         "docs/SESSION_IMPROVEMENT.md",
