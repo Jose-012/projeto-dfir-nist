@@ -100,9 +100,9 @@ Ao revisar um item, a checagem de ciclos exige que `depends_on` presente nos ite
 | `async current_gap_analysis` | `incident_id: &str` | `AppResult<Vec<AnalyticalResultResponse>>` | Gaps NIST atualmente vigentes (não superseded, e sem `status: "CLOSED"` no payload — ver `nist_profiles::run_gap_analysis`) de um incidente. |
 | `async function_view` | `incident_id: &str` | `AppResult<NistFunctionView>` | Agrega os profiles Current e Target vigentes e os gaps vigentes por Function. |
 
-`current_gap_analysis` exclui primeiro gaps `CLOSED` e valida os demais antes de retornar: `subcategory_id` deve ter forma/Function válidas e `priority` deve ser HIGH, MEDIUM ou LOW. Valor desconhecido, ausente ou não textual falha com o ID da lacuna e o campo, impedindo que um gap listado desapareça da cobertura por Function ou dos entregáveis. `CLOSED` não exige prioridade; gaps abertos legados sem `status` continuam válidos (`EVD-042`).
+`current_gap_analysis` exclui primeiro gaps `CLOSED` e valida os demais antes de retornar: `subcategory_id` deve ter forma/Function válidas e corresponder exatamente à correlation key, e `priority` deve ser HIGH, MEDIUM ou LOW. Valor desconhecido, ausente, não textual ou divergente da identidade falha com o ID da lacuna e o campo, impedindo que um gap listado desapareça da cobertura ou seja atribuído à Function errada (`EVD-042`/`EVD-044`).
 
-`run_gap_analysis` rejeita payload inválido de um `NIST_GAP` vigente antes de abrir a transação. Além de JSON malformado (`EVD-024`), `subcategory_id` e `priority` de gaps abertos seguem a mesma validação da leitura; o erro identifica ID/campo e nenhuma sucessora é escrita (`EVD-043`). `CLOSED` sem prioridade continua recalculável e o legado aberto sem `status` permanece válido quando os campos obrigatórios são válidos.
+`run_gap_analysis` rejeita payload inválido de um `NIST_GAP` vigente antes de abrir a transação. Além de JSON malformado (`EVD-024`), `subcategory_id` e `priority` de gaps abertos seguem a mesma validação da leitura, incluindo identidade com a correlation key; o erro identifica ID/campo e nenhuma sucessora é escrita (`EVD-043`/`EVD-044`). `CLOSED` sem prioridade continua recalculável e o legado aberto sem `status` permanece válido quando os campos obrigatórios são válidos.
 
 ### `src/service/timeline_filter.rs` — Filtro estruturado da timeline
 

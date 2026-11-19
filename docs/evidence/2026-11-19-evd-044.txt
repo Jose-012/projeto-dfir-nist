@@ -1,0 +1,60 @@
+EVD-044 - identidade de NIST_GAP entre payload e correlation key
+================================================================
+
+Commit testado: 43cd6a671d9f04569af3552d1339d6efec510087
+Tree testada: c7c2a21aa43eb4e9ffbdf52da2304bd8a0863c2f
+Período dos gates Rust/e2e: 2026-11-19T05:36:50Z..2026-11-19T05:47:15Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+As validações de EVD-042/043 verificavam a forma de `subcategory_id`, mas não
+sua igualdade com a `correlation_key`. Uma subcategoria válida de outra Function
+podia mudar a classificação da lacuna sem mudar sua identidade persistida.
+
+Regressão antes da correção:
+`cargo nextest run --locked -p dfir-app malformed_open_nist_gap`
+Resultado: exit 100, com as duas regressões falhando como prova do defeito. Uma
+lacuna cuja correlation key era `nist-gap:<incident>:PR.AA-03` recebeu payload
+`subcategory_id = "DE.CM-01"`:
+- leitura: `open_gaps = 1`, PR high=0 e **DE high=1**;
+- recompute: `new_ids = 1`, com `analytical_results` de 2 para 3 linhas.
+
+Depois
+------
+`current_gap_analysis` constrói a chave esperada com incidente e subcategoria do
+payload e exige igualdade com a correlation key vigente.
+`previously_open_gaps` compara a subcategoria válida do payload com o sufixo da
+correlation key antes de `BEGIN IMMEDIATE`.
+
+Divergência retorna erro com ID da lacuna e `subcategory_id`; o recompute não
+altera a contagem de linhas. As seis formas anteriores de vocabulário inválido e
+os controles de `CLOSED`/legado sem `status` permanecem cobertos pelos mesmos
+testes.
+
+Comando focado: `cargo nextest run --locked -p dfir-app nist`
+Resultado: 38/38 testes passaram. Cada uma das duas regressões agora cobre sete
+casos, incluindo a subcategoria válida divergente da identidade.
+
+Gate Rust e ponta a ponta
+-------------------------
+Comando: `just verify`
+Resultado: exit 0; 515 tests run, 515 passed, 1 skipped; validate-fase0, fmt,
+check, doctests e clippy `-D warnings` verdes.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: 110/110 etapas passaram. O Entregável 3 manteve dez lacunas NIST
+vigentes, incluindo PR.AA-03 e DE.CM-03; cinco documentos, hashes, determinismo,
+auditoria/custódia e descarte também passaram.
+
+Gate documental
+---------------
+Executado em 2026-11-19T05:51:14Z: `just doc-gate` PASS, Fase 0 com 0 erros/0
+avisos; especificação canônica e cópia raiz idênticas; `git diff --check` limpo.
+
+Limites
+-------
+Não houve mudança de dependências, schema ou reparo direto de histórico antigo.
+Supply chain não foi repetido e permanece em EVD-041. GUI real, Windows,
+aarch64, incidente real e CI não foram promovidos por esta evidência.

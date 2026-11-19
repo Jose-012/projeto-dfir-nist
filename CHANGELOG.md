@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - identidade de NIST_GAP entre payload e correlation key (`EVD-044`)
+
+- Uma lacuna com correlation key PR.AA-03 e payload DE.CM-01 era listada como `open_gaps=1`, contada em DE e recalculada com uma nova linha, sem erro de identidade.
+- Leitura e recompute agora exigem que a subcategoria válida do payload seja o sufixo da correlation key. Divergência falha com ID/`subcategory_id`; recompute não altera a contagem.
+- `EVD-044`: 38 testes NIST, `just verify` com 515 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-041`.
+
 ## Unreleased - 2026-11-19 - gap NIST inválido não é normalizado pelo recálculo (`EVD-043`)
 
 - Antes, `run_gap_analysis` aceitava `priority = URGENT`, retornava um novo ID e aumentava `analytical_results` de 2 para 3 linhas, substituindo a revisão malformada sem diagnóstico.
