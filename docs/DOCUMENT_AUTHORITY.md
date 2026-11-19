@@ -27,6 +27,7 @@ Documentos que apoiam a mudança somente quando são afetados (`AGENTS.md` §11)
 | Documento | Papel | Autoridade que o governa |
 |---|---|---|
 | `docs/FASE1_STATUS.md` | log cronológico da Fase 1 | Estado: `docs/rtm.md` |
+| `docs/MVP_IMPROVEMENT_PLAN.md` | propostas priorizadas de melhoria, sem estado ou requisito próprio | Demanda, especificação, ADRs e RTM; ativação exige decisão explícita |
 | `CONVENTIONS.md` | convenções de desenvolvimento para agentes LLM | Regras LLM: `AGENTS.md` |
 | `docs/SESSION_IMPROVEMENT.md` | procedimento obrigatório de aprendizado entre sessões | Regras LLM: `AGENTS.md` §16 |
 | `docs/SESSION_LEARNINGS.md` | registro vivo e sanitizado de lições operacionais, sem estado de release | `AGENTS.md` §16 + `docs/SESSION_IMPROVEMENT.md` |
