@@ -1,0 +1,81 @@
+EVD-048 - campos e identidade de ATTACK_MAPPING vigente
+=======================================================
+
+Commit testado: 4d1a96a56aa088514310282d9a545b76f6320293
+Tree testada: 518f90cb139eebc7237f4a9795dd0c23c773c6e5
+Período dos gates Rust/e2e: 2026-11-19T08:49:16Z..2026-11-19T08:55:40Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+A criação de ATTACK_MAPPING valida tática, forma da técnica/sub-técnica,
+base/confiança, evidence_status e a identidade
+`attack-mapping:<incident>:<evidence-or-none>:<technique>`. A listagem e a
+composição da view de achados retornavam o vigente sem revalidar esses campos;
+`deliverables::collect` consome a mesma listagem.
+
+Regressão antes da correção:
+`cargo test stored_attack_mapping_rejects_invalid_technique_in_current_successor -- --nocapture`
+Resultado: FAILED, 0 passed/1 failed. Uma sucessora com
+`technique_id=not-a-technique` foi aceita pela listagem e pelos entregáveis:
+`list=Ok(["bad-attack-mapping-invalid-technique"])` e
+`deliverables=Ok(["bad-attack-mapping-invalid-technique"])`. Log:
+`validation/task-012-before.txt` no run overnight.
+
+Depois
+------
+`list_attack_mappings` exige tática canônica, técnica válida, sub-técnica
+ausente/nula ou válida, base textual e confiança vigente presente/canônica.
+Reutiliza `require_evidence_for_high_confidence`: base vazia só é aceita com
+LOW/MEDIUM e falha em HIGH/CONFIRMED com o campo `basis`. `evidence_status`
+deve ser exatamente GAP para base vazia e DOCUMENTED para base preenchida. A
+correlation key deve corresponder a incidente, evidência (ou `none`) e técnica.
+Erros são `AppError::Config` com ID e campo. `findings_view` passou a consumir a
+mesma listagem, fechando o caminho da UI; `deliverables::collect` já a consumia.
+
+Dezessete formas alcançáveis foram cobertas: tática desconhecida/ausente/não
+textual; técnica inválida/ausente/não textual; sub-técnica inválida/não textual;
+base ausente/não textual; confiança NULL; HIGH sem base; evidence_status
+ausente/não textual/divergente; e duas divergências de identidade. DOCUMENTED
+com sub-técnica ausente e GAP/LOW com base vazia e sub-técnica nula permanecem
+válidos nas três rotas. Não houve mudança de criação, persistência, schema,
+caminho crítico, GUI ou rule_or_model_id.
+
+Uma primeira execução focada passou 7/8: o caso `CERTAIN` foi rejeitado pelo
+CHECK de confidence do SQLite durante o setup, antes da leitura. Esse caso
+inalcançável foi removido da matriz de serviço e NULL foi mantido. O log inicial
+está preservado em `validation/task-012-focused-initial.txt`; o CHECK existente
+não foi apresentado como comportamento novo.
+
+Comandos focados:
+- worker: `cargo test stored_attack_mapping -- --nocapture`
+- coordinator: `cargo nextest run --locked -p dfir-app stored_attack_mapping`
+Resultado: 8/8 testes passaram em ambos. Logs:
+`validation/task-012-focused.txt` e
+`validation/task-012-focused-coordinator.txt`.
+
+Gate Rust e ponta a ponta
+-------------------------
+Comando: `just verify`
+Resultado: `JUST_VERIFY_EXIT=0`; 534 tests run, 534 passed, 1 skipped;
+validate-fase0, fmt, workspace check, doctests e clippy `-D warnings` verdes.
+Período: 2026-11-19T08:49:16Z..08:53:20Z.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: `JUST_E2E_EXIT=0`; 110/110 etapas passaram. Documentos, hashes,
+determinismo, auditoria/custódia, resultados e descarte permaneceram verdes.
+Período: 2026-11-19T08:53:41Z..08:55:40Z.
+
+Gate documental
+---------------
+Comando: `just doc-gate`
+Resultado: PASS, com Fase 0 sem erros/avisos, especificação canônica e cópia
+raiz idênticas e `git diff --check` limpo. Log:
+`validation/task-012-doc-gate.txt` no run overnight.
+
+Limites
+-------
+Não houve mudança de dependências. Supply chain não foi repetido e permanece
+em EVD-041. GUI real, Windows, aarch64, incidente real e CI não foram promovidos
+por esta evidência.

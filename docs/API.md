@@ -66,6 +66,8 @@ Ao indexar ou reindexar `results.jsonl`, JSON inválido ou profundidade acima de
 | `async create_root_cause` | `incident_id: &str, input: &RootCauseInput` | `AppResult<String>` | — |
 | `async findings_view` | `incident_id: &str` | `AppResult<FindingsView>` | Falha com ID/campo se um Finding vigente tiver severity inválida/`NONE` ou confidence inválida/ausente, em vez de omiti-lo da matriz (`EVD-031`). |
 
+`list_attack_mappings`, `findings_view` e `deliverables::collect` exigem que ATTACK_MAPPING vigente tenha tática canônica, técnica/sub-técnica válida, base textual, confiança presente, relação base/confiança válida, `evidence_status` coerente e correlation key correspondente. Dezessete formas alcançáveis falham com ID/campo; DOCUMENTED e LOW/GAP continuam válidos, inclusive com sub-técnica ausente/nula (`EVD-048`).
+
 `current_impact_assessment` exige que `availability_impact`, `confidentiality_impact` e `integrity_impact` sejam níveis canônicos (`NONE` incluso) e que a confiança vigente esteja presente e seja reconhecida. Nível desconhecido, ausente ou não textual, ou confiança inválida/ausente, falha com ID/campo antes da UI ou `deliverables::collect`; impacto financeiro ausente permanece válido (`EVD-046`).
 
 `list_iocs` e `export_incident_findings` validam todo IOC vigente antes de retornar: `ioc_type` deve ser canônico, `normalized_value` deve ter forma válida e já estar normalizado, e a correlation key deve corresponder exatamente a incidente/tipo/valor. Nove formas inválidas falham com ID/campo; IOC legado sem `sighting_count` continua válido (`EVD-047`).

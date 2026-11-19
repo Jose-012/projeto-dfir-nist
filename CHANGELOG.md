@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - ATTACK_MAPPING vigente exige campos e identidade válidos (`EVD-048`)
+
+- Uma sucessora com `technique_id=not-a-technique` era aceita pela listagem e pelos entregáveis; a view de achados também lia o vigente sem revalidação.
+- Listagem, `findings_view` e entregáveis agora validam tática, técnica/sub-técnica, base/confiança, `evidence_status` e correlation identity. Dezessete formas alcançáveis falham com ID/campo; DOCUMENTED e LOW/GAP permanecem válidos.
+- `EVD-048`: 8 testes focados no worker e no coordinator, `just verify` com 534 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-041`.
+
 ## Unreleased - 2026-11-19 - identidade entre IOC vigente e correlation key (`EVD-047`)
 
 - Uma sucessora com correlation key de IP e payload `DOMAIN/evil.example` era aceita tanto por `list_iocs` quanto por `export_incident_findings`.
