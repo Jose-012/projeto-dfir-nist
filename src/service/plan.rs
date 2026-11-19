@@ -122,7 +122,15 @@ fn payload_str<'a>(item: &'a AnalyticalResultResponse, key: &str) -> Option<&'a 
     item.payload.get(key).and_then(|value| value.as_str())
 }
 
-fn validate_plan_arrays(item: &AnalyticalResultResponse) -> AppResult<()> {
+fn validate_plan_payload(item: &AnalyticalResultResponse) -> AppResult<()> {
+    let invalid =
+        |field| AppError::Config(format!("stored plan item {} has invalid {field}", item.id));
+    payload_str(item, "domain")
+        .and_then(plan_model::PlanDomain::from_str)
+        .ok_or_else(|| invalid("domain"))?;
+    payload_str(item, "priority")
+        .and_then(plan_model::PlanPriority::from_str)
+        .ok_or_else(|| invalid("priority"))?;
     for key in ["finding_ids", "nist_subcategories", "depends_on"] {
         let Some(value) = item.payload.get(key) else {
             continue;
@@ -143,7 +151,7 @@ pub async fn plan_view(services: &AppServices, incident_id: &str) -> AppResult<P
     incident_exists(&services.db, incident_id).await?;
     let mut items = current_results_for_incident(&services.db, incident_id, "PLAN_ITEM").await?;
     for item in &items {
-        validate_plan_arrays(item)?;
+        validate_plan_payload(item)?;
     }
     // Estável: dentro do mesmo domínio e prioridade, mantém a ordem recebida.
     items.sort_by_key(|item| {
@@ -189,6 +197,72 @@ mod tests {
             phase: "SHORT_TERM".into(),
             verification: "checagem objetiva".into(),
             ..PlanItemInput::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn malformed_stored_plan_domain_and_priority_fail_closed() {
+        let cases = [
+            ("unknown domain", "domain", serde_json::json!("DATABASE")),
+            ("missing domain", "domain", serde_json::Value::Null),
+            ("numeric domain", "domain", serde_json::json!(1)),
+            ("unknown priority", "priority", serde_json::json!("P9")),
+            ("missing priority", "priority", serde_json::Value::Null),
+            ("numeric priority", "priority", serde_json::json!(1)),
+        ];
+        for (name, field, replacement) in cases {
+            let fx = fixture().await;
+            let incident = crate::service::create_incident(&fx.services, name)
+                .await
+                .expect("incident");
+            let item = create_plan_item(
+                &fx.services,
+                &incident.id,
+                &plan_input("OS_HARDENING", "baseline", "P1"),
+            )
+            .await
+            .expect("valid plan item");
+            let record = crate::persistence::analytical_results::get(&fx.services.db, &item)
+                .await
+                .expect("get plan item")
+                .expect("plan item exists");
+            let mut payload: serde_json::Value =
+                serde_json::from_str(&record.payload).expect("valid payload");
+            if replacement.is_null() {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove(field);
+            } else {
+                payload[field] = replacement;
+            }
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('bad-plan-vocabulary','analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+                .bind(&record.correlation_key)
+                .bind(&incident.id)
+                .bind(payload.to_string())
+                .bind(record.provenance.to_string())
+                .bind(&item)
+                .execute(&fx.services.db)
+                .await
+                .expect("malformed current plan item");
+
+            match plan_view(&fx.services, &incident.id).await {
+                Ok(view) => panic!(
+                    "{name} was accepted by plan_view: coverage={:?}, priorities={:?}",
+                    view.coverage,
+                    view.items
+                        .iter()
+                        .filter_map(|item| item.payload.get("priority"))
+                        .collect::<Vec<_>>()
+                ),
+                Err(error) => {
+                    assert!(
+                        error.to_string().contains("bad-plan-vocabulary"),
+                        "{name}: {error}"
+                    );
+                    assert!(error.to_string().contains(field), "{name}: {error}");
+                }
+            }
         }
     }
 
