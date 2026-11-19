@@ -100,6 +100,12 @@ jobs:
         run: just doc-gate
 
       - name: Run headless end-to-end gate with real engine
-        run: just e2e tests/fixtures/senai-demo.evtx
+        run: |
+          df -h "$GITHUB_WORKSPACE"
+          # Libera artefatos temporários de teste sem reduzir DFIR_MIN_FREE_DISK_BYTES.
+          # O E2E reconstrói dfir-app e dfir-engine a partir deste checkout.
+          cargo clean
+          df -h "$GITHUB_WORKSPACE"
+          just e2e tests/fixtures/senai-demo.evtx
         env:
           DFIR_ENGINE_SANDBOX: required
