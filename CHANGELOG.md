@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - IMPACT_ASSESSMENT vigente exige níveis e confiança (`EVD-046`)
+
+- Uma sucessora sem `availability_impact` era retornada normalmente; níveis obrigatórios podiam ficar vazios no relatório e confiança ausente virava “não informada”.
+- `current_impact_assessment` agora valida disponibilidade, confidencialidade, integridade e confiança antes da UI/entregáveis. Dez formas inválidas falham com ID/campo; `NONE` e impacto financeiro ausente continuam válidos.
+- `EVD-046`: 3 testes focados no worker e no coordinator, `just verify` com 521 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-041`.
+
 ## Unreleased - 2026-11-19 - SOURCE_GAP vigente inválido falha antes da listagem (`EVD-045`)
 
 - Uma sucessora vigente sem `expected_source` era aceita e ordenada primeiro com chave vazia; motivo, período e nota obrigatória para `OTHER` também podiam chegar malformados à UI e aos entregáveis.

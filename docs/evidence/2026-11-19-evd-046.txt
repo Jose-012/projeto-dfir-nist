@@ -1,0 +1,60 @@
+EVD-046 - níveis e confiança de IMPACT_ASSESSMENT vigente
+=========================================================
+
+Commit testado: 4c9dadfbae922b6db1d0b2b3653bdb2fc9684d71
+Tree testada: 775aead23cc53a7458dc73fdd52e6b50dc7437a9
+Período dos gates Rust/e2e: 2026-11-19T07:18:17Z..2026-11-19T07:24:18Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+A criação de IMPACT_ASSESSMENT valida três níveis de impacto e a confiança,
+mas `current_impact_assessment` retornava o primeiro resultado vigente sem
+validar esses campos. UI e Entregável 1 usam essa mesma leitura.
+
+Regressão antes da correção:
+`cargo test -p dfir-app current_impact_assessment_rejects_missing_availability_impact -- --nocapture`
+Resultado: FAILED, 0 passed/1 failed. Uma sucessora sem `availability_impact`
+foi retornada como `Ok(Some(...))`, com confidence HIGH e os demais campos
+válidos. O log está em `validation/task-010-before.txt` no run overnight.
+
+Depois
+------
+`current_impact_assessment` exige que `availability_impact`,
+`confidentiality_impact` e `integrity_impact` sejam strings aceitas por
+`ImpactLevel::from_str`; `NONE` continua válido. A confiança vigente deve estar
+presente e ser aceita por `Confidence::from_str`.
+
+Valor desconhecido, ausente ou não textual em qualquer nível, ou confiança
+inválida/ausente, retorna `AppError::Config` com ID da avaliação e campo. Como
+`deliverables::collect` usa a mesma função, o erro também impede a renderização.
+Não houve mudança de criação, schema, campos financeiros ou histórico antigo.
+
+Comando focado verificado pelo coordinator:
+`cargo nextest run --locked -p dfir-app stored_impact_assessment`.
+Resultado: 3/3 testes passaram; a execução anterior do worker também registrou
+3/3 em `validation/task-010-focused.txt`. A cobertura inclui nove formas
+inválidas de níveis, confiança NULL, propagação do erro aos entregáveis e
+controle válido com níveis NONE e impacto financeiro nulo.
+
+Gate Rust e ponta a ponta
+-------------------------
+Comando: `just verify`
+Resultado: exit 0; 521 tests run, 521 passed, 1 skipped; validate-fase0, fmt,
+check, doctests e clippy `-D warnings` verdes.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: 110/110 etapas passaram. Os documentos, hashes, determinismo,
+auditoria/custódia, resultados e descarte permaneceram verdes.
+
+Gate documental
+---------------
+Executado em 2026-11-19T07:28:46Z: `just doc-gate` PASS, Fase 0 com 0 erros/0
+avisos; especificação canônica e cópia raiz idênticas; `git diff --check` limpo.
+
+Limites
+-------
+Não houve mudança de dependências. Supply chain não foi repetido e permanece
+em EVD-041. GUI real, Windows, aarch64, incidente real e CI não foram
+promovidos por esta evidência.
