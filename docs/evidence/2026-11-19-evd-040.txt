@@ -1,0 +1,60 @@
+EVD-040 - vocabulário inválido de plano falha antes da cobertura
+================================================================
+
+Commit testado: cf72d6d6657129aaa5c5b063d4098172d0b3ac88
+Tree testada: 5bf7d51db3d2f96c60481694c5f5645d82665f4d
+Período dos gates Rust/e2e: 2026-11-19T04:09:37Z..2026-11-19T04:22:44Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+`plan_view` ordenava domínio/prioridade desconhecidos depois dos valores válidos
+e usava `filter_map` na cobertura. Um item vigente com domínio inválido podia
+continuar na lista sem aparecer em nenhum dos oito domínios de cobertura.
+
+Regressão antes da correção:
+`cargo nextest run --locked -p dfir-app malformed_stored_plan_domain_and_priority_fail_closed`
+Resultado: exit 100, como prova do defeito. O item com `domain = "DATABASE"`
+foi aceito por `plan_view`; a cobertura dos oito domínios ficou com zero itens.
+A prioridade P1 continuou visível no payload, demonstrando que o item não foi
+simplesmente removido da consulta.
+
+Cada caso usa uma revisão vigente de um item originalmente válido, preservando
+correlation key, proveniência e histórico. O teste cobre domínio/prioridade
+desconhecidos, ausentes e numéricos.
+
+Depois
+------
+`validate_plan_payload` usa os parsers canônicos de `PlanDomain` e
+`PlanPriority` antes de ordenar ou calcular cobertura. Valor desconhecido,
+ausente ou não textual retorna `AppError::Config` com ID do item e campo; não há
+reparo silencioso de histórico antigo. A validação anterior dos três arrays e o
+comportamento legado de arrays ausentes foram preservados.
+
+Comandos focados:
+- `cargo nextest run --locked -p dfir-app malformed_stored_plan_domain_and_priority_fail_closed`: 1/1 PASS, seis casos inválidos;
+- `cargo nextest run --locked -p dfir-app service::plan::`: 5/5 PASS, incluindo ordenação/cobertura válida e arrays legados ausentes.
+
+Gate Rust e ponta a ponta
+-------------------------
+Comando: `just verify`
+Resultado: exit 0; 512 tests run, 512 passed, 1 skipped; validate-fase0, fmt,
+check, doctests e clippy `-D warnings` verdes.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: 110/110 etapas passaram. O cenário de demonstração gerou 13 itens de
+plano e os cinco documentos; E4 manteve cinco grupos/9 itens e E5 três
+dimensões/4 itens. Hashes, determinismo, auditoria/custódia e descarte também
+passaram.
+
+Gate documental
+---------------
+Executado em 2026-11-19T04:25:44Z: `just doc-gate` PASS, Fase 0 com 0 erros/0
+avisos; especificação canônica e cópia raiz idênticas; `git diff --check` limpo.
+
+Limites
+-------
+Não houve mudança de dependências, schema ou reparo de dados antigos. Supply
+chain não foi repetido e permanece em EVD-036. GUI real, Windows, aarch64,
+incidente real e CI não foram promovidos por esta evidência.

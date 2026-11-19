@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - vocabulário inválido de plano falha antes da cobertura (`EVD-040`)
+
+- Um `PLAN_ITEM` vigente com domínio desconhecido era listado, mas omitido da cobertura dos oito domínios; prioridade inválida recebia ordenação default. A reprodução com `DATABASE` obteve cobertura zerada sem erro.
+- `plan_view` agora valida domínio e prioridade com os parsers canônicos antes de ordenar/calcular cobertura, retornando ID e campo. Valores desconhecidos, ausentes e não textuais falham; arrays legados ausentes e dados válidos continuam cobertos.
+- `EVD-040`: regressão e 5 testes de `service::plan`, `just verify` com 512 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-036`.
+
 ## Unreleased - 2026-11-19 - categoria inválida de recomendação falha fechado (`EVD-039`)
 
 - Recomendações vigentes com categoria desconhecida, ausente ou não textual apareciam sem filtro, desapareciam do filtro e eram exportadas como estratégicas por default. A reprodução obteve unfiltered=1, filtered=0 e strategic=1 para `URGENT`.
