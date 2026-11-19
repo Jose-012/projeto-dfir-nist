@@ -286,27 +286,43 @@ pub async fn create_recommendation(
     Ok(id)
 }
 
+fn stored_recommendation_category(
+    record: &AnalyticalResultResponse,
+) -> AppResult<ioc_recommendations::RecommendationCategory> {
+    record
+        .payload
+        .get("category")
+        .and_then(serde_json::Value::as_str)
+        .and_then(ioc_recommendations::RecommendationCategory::from_str)
+        .ok_or_else(|| {
+            AppError::Config(format!(
+                "stored recommendation {} has invalid category",
+                record.id
+            ))
+        })
+}
+
 pub async fn list_recommendations(
     services: &AppServices,
     incident_id: &str,
     category: Option<&str>,
 ) -> AppResult<Vec<AnalyticalResultResponse>> {
     incident_exists(&services.db, incident_id).await?;
-    let mut recommendations =
+    let recommendations =
         current_results_for_incident(&services.db, incident_id, "RECOMMENDATION").await?;
+    let mut categorized = recommendations
+        .into_iter()
+        .map(|record| {
+            let category = stored_recommendation_category(&record)?;
+            Ok((record, category))
+        })
+        .collect::<AppResult<Vec<_>>>()?;
     if let Some(category) = category {
         let category = ioc_recommendations::RecommendationCategory::from_str(category)
-            .ok_or_else(|| AppError::Config("category must be IMMEDIATE or STRATEGIC".into()))?
-            .as_str();
-        recommendations.retain(|record| {
-            record
-                .payload
-                .get("category")
-                .and_then(serde_json::Value::as_str)
-                == Some(category)
-        });
+            .ok_or_else(|| AppError::Config("category must be IMMEDIATE or STRATEGIC".into()))?;
+        categorized.retain(|(_, current)| *current == category);
     }
-    Ok(recommendations)
+    Ok(categorized.into_iter().map(|(record, _)| record).collect())
 }
 
 // ---------------------------------------------------------------------
@@ -334,14 +350,14 @@ pub async fn export_incident_findings(
     let iocs = current_results_for_incident(&services.db, incident_id, "IOC").await?;
     let recommendations =
         current_results_for_incident(&services.db, incident_id, "RECOMMENDATION").await?;
-    let (immediate, strategic): (Vec<_>, Vec<_>) =
-        recommendations.into_iter().partition(|record| {
-            record
-                .payload
-                .get("category")
-                .and_then(serde_json::Value::as_str)
-                == Some("IMMEDIATE")
-        });
+    let mut immediate = Vec::new();
+    let mut strategic = Vec::new();
+    for record in recommendations {
+        match stored_recommendation_category(&record)? {
+            ioc_recommendations::RecommendationCategory::Immediate => immediate.push(record),
+            ioc_recommendations::RecommendationCategory::Strategic => strategic.push(record),
+        }
+    }
     Ok(ExportBundle {
         incident_id: incident_id.to_string(),
         iocs,
@@ -689,6 +705,127 @@ mod tests {
         assert_eq!(graph.edges.len(), 1);
         assert_eq!(graph.edges[0].from, a0);
         assert_eq!(graph.edges[0].to, a1);
+    }
+
+    #[tokio::test]
+    async fn malformed_stored_recommendation_categories_fail_before_listing_or_export() {
+        let fx = fixture().await;
+        for (label, category) in [
+            ("unknown", serde_json::json!("URGENT")),
+            ("missing", serde_json::Value::Null),
+            ("non-string", serde_json::json!(7)),
+        ] {
+            let incident = crate::service::create_incident(&fx.services, label)
+                .await
+                .expect("incident");
+            let bad_id = format!("bad-recommendation-category-{label}");
+            let mut payload = serde_json::json!({
+                "kind": "RECOMMENDATION",
+                "category": "IMMEDIATE",
+                "title": "Ação com categoria inválida",
+                "description": "fixture de dado persistido inválido",
+            });
+            if label == "missing" {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove("category");
+            } else {
+                payload["category"] = category;
+            }
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,created_at) VALUES(?,'analytical-result-v1','RECOMMENDATION',?,?,?,?,'2026-11-19T00:00:00Z')")
+                .bind(&bad_id)
+                .bind(format!("recommendation:{}:{label}", incident.id))
+                .bind(&incident.id)
+                .bind(payload.to_string())
+                .bind("{}")
+                .execute(&fx.services.db)
+                .await
+                .expect("malformed current recommendation");
+
+            let unfiltered = list_recommendations(&fx.services, &incident.id, None).await;
+            let filtered =
+                list_recommendations(&fx.services, &incident.id, Some("IMMEDIATE")).await;
+            let exported = export_incident_findings(&fx.services, &incident.id).await;
+            let unfiltered_shape = match &unfiltered {
+                Ok(rows) => format!("Ok({})", rows.len()),
+                Err(error) => format!("Err({error})"),
+            };
+            let filtered_shape = match &filtered {
+                Ok(rows) => format!("Ok({})", rows.len()),
+                Err(error) => format!("Err({error})"),
+            };
+            let export_shape = match &exported {
+                Ok(bundle) => format!(
+                    "Ok(immediate={}, strategic={})",
+                    bundle.recommendations_immediate.len(),
+                    bundle.recommendations_strategic.len()
+                ),
+                Err(error) => format!("Err({error})"),
+            };
+            let (Err(unfiltered_error), Err(filtered_error), Err(export_error)) =
+                (unfiltered, filtered, exported)
+            else {
+                panic!(
+                    "malformed category accepted for {label}: unfiltered={unfiltered_shape} filtered={filtered_shape} export={export_shape}"
+                );
+            };
+            for error in [unfiltered_error, filtered_error, export_error] {
+                assert!(
+                    matches!(&error, AppError::Config(message) if message.contains("category") && message.contains(&bad_id)),
+                    "unexpected error for {label}: {error:?}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn valid_recommendations_keep_their_filter_and_export_partition() {
+        let fx = fixture().await;
+        let incident = crate::service::create_incident(&fx.services, "categorias válidas")
+            .await
+            .expect("incident");
+        let finding = create_finding(
+            &fx.services,
+            &incident.id,
+            &finding_input("RDP sem MFA", "HIGH", "MEDIUM"),
+        )
+        .await
+        .expect("finding");
+        for (category, title) in [("IMMEDIATE", "Isolar host"), ("STRATEGIC", "Implantar EDR")] {
+            create_recommendation(
+                &fx.services,
+                &incident.id,
+                category,
+                title,
+                "ação motivada pelo achado",
+                Some("MEDIUM"),
+                std::slice::from_ref(&finding),
+                None,
+            )
+            .await
+            .expect("valid recommendation");
+        }
+
+        assert_eq!(
+            list_recommendations(&fx.services, &incident.id, Some("IMMEDIATE"))
+                .await
+                .expect("immediate filter")
+                .len(),
+            1
+        );
+        assert_eq!(
+            list_recommendations(&fx.services, &incident.id, Some("STRATEGIC"))
+                .await
+                .expect("strategic filter")
+                .len(),
+            1
+        );
+        let exported = export_incident_findings(&fx.services, &incident.id)
+            .await
+            .expect("valid export");
+        assert_eq!(exported.recommendations_immediate.len(), 1);
+        assert_eq!(exported.recommendations_strategic.len(), 1);
     }
 
     #[tokio::test]
