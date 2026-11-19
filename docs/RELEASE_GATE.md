@@ -69,7 +69,7 @@ O release é fechado somente com evidência executada.
 
 ## Gate documental
 
-Estado: `PASS` em 2026-11-19 (`EVD-052`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-036`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`/`EVD-049`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-19 (`EVD-053`; anteriores `EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-036`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`/`EVD-049`/`EVD-052`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0

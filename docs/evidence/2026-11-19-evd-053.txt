@@ -1,0 +1,64 @@
+EVD-053 - instalação e teste do loop de autoaprimoramento
+===========================================================
+
+Status: PASS para presença, ligação e comportamento do gate
+Commit testado: 9bcc0375e362fea32d5ae1afe21d121b41cd304f
+Tree testada: 5c751e6421d9ff9bfc7cabc314064d8967047806
+Período: 2026-11-19T15:42:05Z..15:47:25Z
+Ambiente: Linux x86_64, Debian 13, CPython 3.14.6 em scratch.
+Escopo: Engineering/QA Tooling e instruções de agente; nenhum runtime de produção.
+
+Implementação verificada
+------------------------
+- `AGENTS.md` §16 torna o loop obrigatório em toda sessão.
+- `docs/SESSION_IMPROVEMENT.md` define início, execução, parada, fechamento e
+  confirmação posterior, sem relatório permanente de rotina.
+- `docs/SESSION_LEARNINGS.md` registra nove erros/riscos/limitações reais e suas
+  prevenções, com confirmação futura pendente.
+- `CLAUDE.md`, `CONVENTIONS.md`, `PROMPT_NOVA_CONVERSA.md` e
+  `docs/DOCUMENT_AUTHORITY.md` apontam para o mesmo procedimento.
+- `scripts/doc_gate.py` exige os dois arquivos vivos e suas ligações nos pontos
+  de entrada. Não afirma verificar a conduta futura dos agentes.
+
+Caminho positivo
+----------------
+Antes do commit, com CPython 3.14.6:
+`just doc-gate` -> exit 0 em 2026-11-19T15:42:05Z..15:42:12Z.
+- Fase 0: 0 erros/0 avisos;
+- `documentation gate: PASS`;
+- `git diff --check`: exit 0.
+
+Depois do commit `9bcc037`, com árvore previamente limpa:
+`just doc-gate` -> exit 0 em 2026-11-19T15:47:24Z..15:47:25Z.
+- Fase 0: 0 erros/0 avisos;
+- `documentation gate: PASS`;
+- `git diff --check`: exit 0;
+- `clean_tree=1`.
+
+Logs: `logs/session-improvement-doc-gate.txt` e
+`logs/session-improvement-post-commit.txt` no scratch da rodada.
+
+Teste negativo isolado
+----------------------
+Foi criada uma raiz sintética em scratch, com symlinks para os artefatos válidos
+e cópias somente de `AGENTS.md` e `scripts/doc_gate.py`. Na cópia de AGENTS,
+o cabeçalho `## 16. Autoaprimoramento obrigatório entre sessões` foi alterado
+para simular remoção da ligação. Nenhum arquivo do repositório foi modificado
+por esse teste.
+
+Comando: CPython 3.14.6 na cópia `session-improvement-negative/scripts/doc_gate.py`.
+Resultado esperado e observado: exit 1.
+Diagnóstico:
+`missing session-improvement instruction: AGENTS.md: ## 16. Autoaprimoramento obrigatório entre sessões`.
+
+O wrapper considera sucesso do teste somente quando o gate rejeita com exit 1;
+o wrapper terminou exit 0. Log: `logs/session-improvement-negative.txt`.
+
+Limites
+-------
+Não houve mudança de Rust, dependências, engine, GUI ou formatos de evidência;
+por isso `just verify`, supply-chain e e2e não foram repetidos nesta lane.
+O gate verifica instalação e rejeição por remoção de ligação, não aprendizado
+futuro. As confirmações das lições permanecem pendentes de ações observadas nas
+próximas sessões. `EVD-050` continua BLOCKED para o fluxo nativo e nenhum aceite
+de release, Windows, aarch64 ou incidente real é declarado.
