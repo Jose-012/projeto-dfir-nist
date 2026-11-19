@@ -610,11 +610,14 @@ async fn previously_open_gaps(
                 current.id
             ))
         };
-        payload
+        let payload_subcategory = payload
             .get("subcategory_id")
             .and_then(serde_json::Value::as_str)
             .filter(|value| is_valid_subcategory_id(value))
             .ok_or_else(|| invalid("subcategory_id"))?;
+        if payload_subcategory != subcategory_id {
+            return Err(invalid("subcategory_id"));
+        }
         if !matches!(
             payload.get("priority").and_then(serde_json::Value::as_str),
             Some("HIGH" | "MEDIUM" | "LOW")

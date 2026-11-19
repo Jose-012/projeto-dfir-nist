@@ -164,12 +164,16 @@ pub async fn current_gap_analysis(
         }
         let invalid =
             |field| AppError::Config(format!("stored NIST gap {} has invalid {field}", result.id));
-        result
+        let subcategory_id = result
             .payload
             .get("subcategory_id")
             .and_then(|value| value.as_str())
             .filter(|value| nist_profiles::is_valid_subcategory_id(value))
             .ok_or_else(|| invalid("subcategory_id"))?;
+        let expected_key = format!("nist-gap:{incident_id}:{subcategory_id}");
+        if result.correlation_key != expected_key {
+            return Err(invalid("subcategory_id"));
+        }
         if !matches!(
             result
                 .payload
@@ -471,6 +475,11 @@ mod tests {
                 serde_json::json!("XX.YY-01"),
             ),
             (
+                "mismatched subcategory",
+                "subcategory_id",
+                serde_json::json!("DE.CM-01"),
+            ),
+            (
                 "missing subcategory",
                 "subcategory_id",
                 serde_json::Value::Null,
@@ -514,9 +523,10 @@ mod tests {
                         .await
                         .expect("malformed gap is currently omitted from coverage");
                     panic!(
-                        "{name} was accepted: open_gaps={}, PR coverage={:?}",
+                        "{name} was accepted: open_gaps={}, PR coverage={:?}, DE coverage={:?}",
                         open.len(),
-                        view.functions[2].gaps
+                        view.functions[2].gaps,
+                        view.functions[3].gaps
                     );
                 }
                 Err(error) => {
@@ -540,6 +550,11 @@ mod tests {
                 "unknown subcategory",
                 "subcategory_id",
                 serde_json::json!("XX.YY-01"),
+            ),
+            (
+                "mismatched subcategory",
+                "subcategory_id",
+                serde_json::json!("DE.CM-01"),
             ),
             (
                 "missing subcategory",
