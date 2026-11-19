@@ -33,7 +33,13 @@ if spec.read_bytes() != root_spec.read_bytes():
 # ADR-0017: no more frontend/dist artifact to check — the native UI (src/gui/)
 # is part of the dfir-app binary itself, verified by cargo check/test, not by
 # a build artifact on disk.
-for path in (ROOT / "docs" / "DOCUMENT_AUTHORITY.md", ROOT / "docs" / "DEFINITION_OF_READY.md", ROOT / "toolchains.toml"):
+for path in (
+    ROOT / "docs" / "DOCUMENT_AUTHORITY.md",
+    ROOT / "docs" / "DEFINITION_OF_READY.md",
+    ROOT / "docs" / "SESSION_IMPROVEMENT.md",
+    ROOT / "docs" / "SESSION_LEARNINGS.md",
+    ROOT / "toolchains.toml",
+):
     if not path.is_file():
         print(f"required documentation/build artifact missing: {path}", file=sys.stderr)
         raise SystemExit(1)
@@ -58,5 +64,39 @@ if manifest_pin.group(1) != file_pin.group(1):
 if 'version = "3.14.6"' not in text:
     print('missing toolchain pin: version = "3.14.6"', file=sys.stderr)
     raise SystemExit(1)
+
+# AGENTS §16: o loop entre sessões precisa permanecer instalado nos pontos de
+# entrada dos agentes. O gate prova presença e ligação, não a conduta futura.
+session_instruction_needles = {
+    ROOT / "AGENTS.md": (
+        "## 16. Autoaprimoramento obrigatório entre sessões",
+        "docs/SESSION_IMPROVEMENT.md",
+        "docs/SESSION_LEARNINGS.md",
+    ),
+    ROOT / "PROMPT_NOVA_CONVERSA.md": (
+        "## 7. Loop obrigatório de sessão",
+        "docs/SESSION_IMPROVEMENT.md",
+        "docs/SESSION_LEARNINGS.md",
+    ),
+    ROOT / "CLAUDE.md": (
+        "# Loop obrigatório de sessão",
+        "docs/SESSION_IMPROVEMENT.md",
+        "docs/SESSION_LEARNINGS.md",
+    ),
+    ROOT / "CONVENTIONS.md": (
+        "docs/SESSION_IMPROVEMENT.md",
+        "docs/SESSION_LEARNINGS.md",
+    ),
+    ROOT / "docs" / "DOCUMENT_AUTHORITY.md": (
+        "docs/SESSION_IMPROVEMENT.md",
+        "docs/SESSION_LEARNINGS.md",
+    ),
+}
+for path, needles in session_instruction_needles.items():
+    instruction_text = path.read_text(encoding="utf-8")
+    for needle in needles:
+        if needle not in instruction_text:
+            print(f"missing session-improvement instruction: {path.relative_to(ROOT)}: {needle}", file=sys.stderr)
+            raise SystemExit(1)
 
 print("documentation gate: PASS")

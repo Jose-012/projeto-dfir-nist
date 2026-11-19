@@ -101,6 +101,7 @@ Preserve IDs normativos e de evidência. Não reutilize IDs existentes.
 ## Como o agente deve trabalhar
 
 - Leia `AGENTS.md` e este arquivo antes de editar.
+- Execute o loop de `AGENTS.md` §16 e `docs/SESSION_IMPROVEMENT.md`: lições anteriores viram ações do plano; erros novos geram prevenção e confirmação posterior, não apenas retrospectiva.
 - Adicione ao contexto somente os arquivos necessários à tarefa.
 - As únicas skills locais são `.jcode/skills/dfir-change` e `.jcode/skills/dfir-verify`; não adicione skills genéricas sem necessidade demonstrada.
 - Trate documentos normativos como leitura, não como alvos de edição, salvo pedido explícito.
@@ -110,6 +111,7 @@ Preserve IDs normativos e de evidência. Não reutilize IDs existentes.
 - Não remova controles de segurança apenas para simplificar uma implementação.
 - Ao encontrar conflito documental, pare a mudança e siga a hierarquia de autoridade.
 - Ao concluir, apresente os arquivos alterados, os gates realmente executados e qualquer verificação pendente.
+- Revise o diff semântico, confirme pós-condições além dos exits e atualize `docs/SESSION_LEARNINGS.md` apenas para lição nova, recorrência ou confirmação observada. Não crie retrospectiva permanente por rotina.
 
 ## Contexto sensível
 

@@ -9,6 +9,10 @@ command as `rtk proxy <cmd>` only when its result is unusable: empty when
 output was clearly expected, contradicting its exit code, or garbled.
 <!-- /rtk-instructions -->
 
+# Loop obrigatório de sessão
+
+Leia `AGENTS.md` §16, `docs/SESSION_IMPROVEMENT.md` e as lições aplicáveis em `docs/SESSION_LEARNINGS.md` no início. Converta as lições em ações do plano e, no fechamento, registre somente lição nova, recorrência ou confirmação observada. Não antecipe evidências nem use exit 0 como substituto de pós-condição.
+
 # Ferramentas preferidas do agente (ver AGENTS.md §15)
 
 - Busque código com a ferramenta `agentgrep` (grep/find/outline/trace), nunca

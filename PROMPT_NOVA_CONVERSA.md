@@ -11,6 +11,7 @@ Comece por `AGENTS.md` e `docs/DOCUMENT_AUTHORITY.md`. Depois leia apenas o que 
 - estado atual: `docs/rtm.md`, nunca uma narrativa duplicada;
 - trabalho restante: `docs/FASE1_BACKLOG.md` e tickets afetados;
 - gates/evidências: `docs/RELEASE_GATE.md` e `docs/EVIDENCE_REGISTER.md`;
+- autoaprimoramento: `docs/SESSION_IMPROVEMENT.md` e as lições aplicáveis em `docs/SESSION_LEARNINGS.md`;
 - operação/toolchain: `docs/OPERATION.md`, `docs/TOOLCHAINS.md`, `docs/SUPPLY_CHAIN.md` e manifests afetados.
 
 O histórico completo não é contexto automático. Use `docs/archive/` e o histórico Git somente quando houver necessidade.
@@ -73,5 +74,14 @@ Estados de implementação: `PLANNED → IMPLEMENTED → INTEGRATED → VERIFIED
 Gates: `PASS / WAIVED / PENDING / BLOCKED / STALE`.
 
 Ao responder, informe arquivos alterados, comandos e resultados, evidências e pendências. Não declare conclusão apenas porque o código parece correto e não crie `EVD-*` sem execução registrada.
+
+## 7. Loop obrigatório de sessão
+
+1. **Antes de trabalhar:** registre HEAD/status, leia `AGENTS.md` §16 e as lições aplicáveis, e transforme cada uma em ação do plano ou justificativa de não aplicabilidade. Defina pós-condições e orçamento de investigação.
+2. **Durante:** reserve futuros `EVD-*` apenas em scratch; confirme pós-condição e diagnósticos além do exit; trate busca vazia inesperada com controle positivo; após duas tentativas sem informação nova, mude o método ou consolide o bloqueio. Use IDs completos de background/swarm e não cancele build silencioso sem inspecionar progresso.
+3. **Antes de responder:** revise diff semântico, comandos/exits, status e processos próprios. Atualize `docs/SESSION_LEARNINGS.md` somente para lição reutilizável nova, recorrência ou confirmação observada; não crie relatório de rotina.
+4. **Na sessão seguinte:** verifique a prevenção aplicada. Recorrência exige promover a instrução para teste, lint ou gate quando houver controle executável barato.
+
+O procedimento completo e os limites padrão de investigação estão em `docs/SESSION_IMPROVEMENT.md`.
 
 Toolchains de referência: `toolchains.toml`.

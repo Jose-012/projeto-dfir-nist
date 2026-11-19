@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - loop de autoaprimoramento entre sessões
+
+- A retrospectiva da verificação residual identificou nove erros, riscos herdados e limitações: evidências antecipadas, investigação gráfica sem timebox, exits X11 sem pós-condição, staleness de supply chain, vínculo HEAD/binário, busca vazia implausível, IDs de coordenação, perda acidental de texto da RTM e silêncio de builds.
+- `AGENTS.md` §16 e `docs/SESSION_IMPROVEMENT.md` agora exigem início com lições aplicáveis, critérios de parada, verificação independente de pós-condições e fechamento com prevenção. `docs/SESSION_LEARNINGS.md` guarda somente lições reutilizáveis e sua confirmação futura.
+- O loop foi ligado a `CLAUDE.md`, `CONVENTIONS.md`, `PROMPT_NOVA_CONVERSA.md` e `docs/DOCUMENT_AUTHORITY.md`. `scripts/doc_gate.py` verifica a presença e a ligação desses pontos, sem alegar provar a conduta futura. Não houve mudança de runtime, arquitetura, requisito de produto, ADR ou aceite de release.
+
 ## Unreleased - 2026-11-19 - QA, supply chain e EVTX públicos (`EVD-049`..`EVD-052`)
 
 - CPython 3.14.6 foi instalado somente em scratch com hashes verificados; os gates Python e o e2e identificado passaram (`EVD-049`). O host continua em 3.13.5.

@@ -140,7 +140,8 @@ Se Cargo/Python não estiver disponível, não declarar a respectiva execução 
 8. invalidar evidências `PASS` que ficaram `STALE`;
 9. registrar fatos como `REPO-FACT`, `EXTERNAL-FACT`, `ASSUMPTION`, `INFERENCE` ou `PENDING-HUMAN` quando apropriado;
 10. relatar exatamente o que foi executado;
-11. separar commits pequenos por mudança coerente, sem dados de caso, artefatos operacionais ou arquivos fora da tarefa.
+11. separar commits pequenos por mudança coerente, sem dados de caso, artefatos operacionais ou arquivos fora da tarefa;
+12. executar o fechamento e o loop de autoaprimoramento do §16, sem criar relatório permanente de rotina.
 
 ## 10. Estados
 
@@ -168,7 +169,7 @@ Atualize somente os documentos afetados pela mudança:
 - uso/operação: `README.md`, `docs/OPERATION.md`, `docs/DEMO.md`, `docs/TOOLCHAINS.md`, `docs/SUPPLY_CHAIN.md`;
 - contratos específicos: `docs/NATIVE_UI_ARCHITECTURE.md`, `docs/DETECTION_RULES.md`, `docs/API.md`;
 - histórico: `docs/FASE1_STATUS.md` ou `CHANGELOG.md`, sem copiar matriz de estado nem repetir toda a narrativa;
-- regras de agente: `AGENTS.md`, `CONVENTIONS.md`, `PROMPT_NOVA_CONVERSA.md`, `docs/DOCUMENT_AUTHORITY.md`.
+- regras de agente: `AGENTS.md`, `CONVENTIONS.md`, `PROMPT_NOVA_CONVERSA.md`, `docs/DOCUMENT_AUTHORITY.md`, `docs/SESSION_IMPROVEMENT.md` e `docs/SESSION_LEARNINGS.md`.
 
 `docs/FASE0_STATUS.md`, `docs/DEFINITION_OF_READY.md` e `RELATORIO_ALTERACOES_*` são históricos; só mudam para correção factual ou atualização do histórico. O Git log registra as rodadas novas. Não crie um relatório permanente para cada alteração de rotina.
 
@@ -208,4 +209,16 @@ Atualizado em 2026-11-18 (verificado no host: `rtk 0.49.0`, `rg`, `ast-grep 0.51
 - Navegação: `zoxide` (`z <dir>`) em vez de `cd` com caminhos longos; arquivos grandes legíveis com `bat --paging=never` (ou `bat -p`) em vez de `cat` quando precisar paginar; diffs com `git diff`. Não presuma que o pager `delta` esteja instalado: `/usr/bin/git-delta` pode ser o comando homônimo do git-extras.
 - Arquivos temporários de trabalho vão em `$JCODE_SCRATCH_DIR`, nunca em `/tmp`.
 - Nunca use shell intermediário para subprocessos de produção nem registre secrets; as regras de segurança do §6 prevalecem sobre qualquer preferência de ferramenta.
+
+## 16. Autoaprimoramento obrigatório entre sessões
+
+Toda sessão executa o loop de `docs/SESSION_IMPROVEMENT.md` e consulta as lições aplicáveis em `docs/SESSION_LEARNINGS.md`. O loop não altera escopo nem cria narrativa obrigatória por rotina.
+
+- **Início:** registre HEAD/status, transforme lições anteriores em ações do plano, defina pós-condições e orçamento de investigação. IDs futuros de evidência ficam em scratch até que arquivo e registro existam.
+- **Execução:** exit 0 não substitui pós-condição e diagnóstico; busca vazia inesperada exige controle positivo ou método alternativo; duas tentativas sem informação nova mudam o método ou encerram a investigação. Os limites padrão são 15 minutos por método improdutivo e 30 por lane exploratória, seguidos de consolidação ou decisão explícita.
+- **Coordenação:** copie IDs completos de background/swarm, confirme progresso antes de cancelar builds silenciosos e verifique o resultado ao parar workers. Trabalho Rust pesado permanece sequencial.
+- **Fechamento:** revise diff semântico, comandos/exits, status e processos próprios. Para cada lição reutilizável nova, implemente instrução, checklist, teste, lint ou gate; registre-a de forma sanitizada no arquivo vivo. Se não houver lição nova, não edite o registro.
+- **Próxima sessão:** confirme a prevenção por ação observada. Recorrência exige promover a prevenção ao controle executável mais barato, não apenas acrescentar texto.
+
+Não antecipe `PASS`/`VERIFIED`, não reescreva erros históricos e não transforme lições operacionais em requisitos de produto sem o processo de autoridade correspondente.
 
