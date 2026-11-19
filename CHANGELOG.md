@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-19 - SOURCE_GAP vigente inválido falha antes da listagem (`EVD-045`)
+
+- Uma sucessora vigente sem `expected_source` era aceita e ordenada primeiro com chave vazia; motivo, período e nota obrigatória para `OTHER` também podiam chegar malformados à UI e aos entregáveis.
+- `list_source_gaps` agora valida fonte não vazia, limites de período opcionais e ordenados, motivo conhecido e nota de `OTHER` antes de ordenar ou coletar documentos. Erros identificam ID/campo; períodos ausentes/nulos continuam válidos.
+- `EVD-045`: 5 testes focados com 14 formas inválidas, `just verify` com 518 passed/1 skipped, e2e 110/110 e doc-gate PASS. Supply chain permanece em `EVD-041`.
+
 ## Unreleased - 2026-11-19 - identidade de NIST_GAP entre payload e correlation key (`EVD-044`)
 
 - Uma lacuna com correlation key PR.AA-03 e payload DE.CM-01 era listada como `open_gaps=1`, contada em DE e recalculada com uma nova linha, sem erro de identidade.

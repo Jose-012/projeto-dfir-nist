@@ -1,0 +1,59 @@
+EVD-045 - validação de SOURCE_GAP vigente antes da listagem/entregáveis
+=======================================================================
+
+Commit testado: f94a50026a14f23e86bab1e77a06362de4293517
+Tree testada: f77ad22afea6676a2807c1154ea57731c7a6efe1
+Período dos gates Rust/e2e: 2026-11-19T06:37:28Z..2026-11-19T06:43:25Z
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151
+Dados: SQLite descartável e fixtures sintéticas/versionadas.
+
+Antes
+-----
+A criação de SOURCE_GAP exige fonte esperada não vazia, motivo conhecido,
+período opcional válido/ordenado e nota explicativa para OTHER. A leitura,
+porém, convertia campos ausentes ou não textuais em strings vazias para
+ordenar e retornava o payload vigente malformado.
+
+Regressão antes da correção:
+`cargo test -p dfir-app service::gaps::tests::malformed_current_source_gap_missing_expected_source_fails_closed -- --exact --nocapture`
+Resultado: exit 101. Uma sucessora sem `expected_source` foi aceita e apareceu
+antes da lacuna válida, com `None` na fonte e a chave de ordenação vazia.
+O log está em `validation/task-009-before.txt` no run overnight.
+
+Depois
+------
+`list_source_gaps` valida todas as linhas vigentes antes de ordenar:
+- `expected_source` deve ser texto não vazio;
+- `period_from`/`period_to` ausentes ou nulos continuam válidos; valores
+  presentes devem ser data AAAA-MM-DD ou instante RFC 3339, com início <= fim;
+- `reason` deve pertencer ao vocabulário canônico;
+- `OTHER` exige nota textual não vazia.
+
+O erro identifica o ID da lacuna e o campo. Como `deliverables::collect` usa a
+mesma função, o dado inválido também falha antes da renderização de relatórios.
+Não houve mudança de criação, schema ou reparo direto de histórico antigo.
+
+Comando focado: `cargo nextest run --locked -p dfir-app service::gaps::`
+Resultado: 5/5 testes passaram. As três regressões novas cobrem 14 formas
+inválidas e os controles de períodos ausentes/nulos e OTHER válido.
+
+Gate Rust e ponta a ponta
+-------------------------
+Comando: `just verify`
+Resultado: exit 0; 518 tests run, 518 passed, 1 skipped; validate-fase0, fmt,
+check, doctests e clippy `-D warnings` verdes.
+
+Comando: `just e2e tests/fixtures/senai-demo.evtx`
+Resultado: 110/110 etapas passaram. Os documentos, hashes, determinismo,
+auditoria/custódia, resultados e descarte permaneceram verdes.
+
+Gate documental
+---------------
+Executado em 2026-11-19T06:51:12Z: `just doc-gate` PASS, Fase 0 com 0 erros/0
+avisos; especificação canônica e cópia raiz idênticas; `git diff --check` limpo.
+
+Limites
+-------
+Não houve mudança de dependências. Supply chain não foi repetido e permanece
+em EVD-041. GUI real, Windows, aarch64, incidente real e CI não foram
+promovidos por esta evidência.

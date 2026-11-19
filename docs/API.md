@@ -90,6 +90,8 @@ Ao revisar um item, a checagem de ciclos exige que `depends_on` presente nos ite
 | `async create_source_gap` | `incident_id: &str, input: &SourceGapInput` | `AppResult<String>` | — |
 | `async list_source_gaps` | `incident_id: &str` | `AppResult<Vec<AnalyticalResultResponse>>` | Lacunas vigentes do incidente, da fonte esperada e do período mais antigos para os mais recentes (ordem estável: o id desempata). |
 
+`list_source_gaps` valida todas as lacunas vigentes antes de ordenar ou permitir `deliverables::collect`: `expected_source` deve ser texto não vazio; `period_from`/`period_to` ausentes ou nulos continuam válidos, mas valores presentes devem ser data/RFC 3339 e o início não pode superar o fim; `reason` deve pertencer ao vocabulário canônico e `OTHER` exige nota textual não vazia. Payload inválido falha com ID/campo em vez de receber chave de ordenação vazia ou chegar aos relatórios (`EVD-045`).
+
 ### `src/service/nist.rs` — NIST CSF 2.0
 
 | Função | Parâmetros relevantes | Retorno | Descrição |
