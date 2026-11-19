@@ -604,6 +604,23 @@ async fn previously_open_gaps(
         if is_closed {
             continue;
         }
+        let invalid = |field| {
+            validation_error(format!(
+                "stored NIST gap {} has invalid {field}",
+                current.id
+            ))
+        };
+        payload
+            .get("subcategory_id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|value| is_valid_subcategory_id(value))
+            .ok_or_else(|| invalid("subcategory_id"))?;
+        if !matches!(
+            payload.get("priority").and_then(serde_json::Value::as_str),
+            Some("HIGH" | "MEDIUM" | "LOW")
+        ) {
+            return Err(invalid("priority"));
+        }
         let subcategory_label = payload
             .get("subcategory_label")
             .and_then(serde_json::Value::as_str)

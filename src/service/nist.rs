@@ -531,6 +531,94 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn malformed_open_nist_gap_blocks_recompute_without_new_rows() {
+        let cases = [
+            ("unknown priority", "priority", serde_json::json!("URGENT")),
+            ("missing priority", "priority", serde_json::Value::Null),
+            ("numeric priority", "priority", serde_json::json!(1)),
+            (
+                "unknown subcategory",
+                "subcategory_id",
+                serde_json::json!("XX.YY-01"),
+            ),
+            (
+                "missing subcategory",
+                "subcategory_id",
+                serde_json::Value::Null,
+            ),
+            (
+                "numeric subcategory",
+                "subcategory_id",
+                serde_json::json!(1),
+            ),
+        ];
+        for (name, field, replacement) in cases {
+            let fx = fixture().await;
+            let (incident_id, gap) = create_one_pr_gap(&fx).await;
+            let record = crate::persistence::analytical_results::get(&fx.services.db, &gap.id)
+                .await
+                .expect("get gap")
+                .expect("gap exists");
+            let mut payload: serde_json::Value =
+                serde_json::from_str(&record.payload).expect("valid payload");
+            if replacement.is_null() {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove(field);
+            } else {
+                payload[field] = replacement;
+            }
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('bad-gap-recompute','analytical-result-v1','NIST_GAP',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+                .bind(&record.correlation_key)
+                .bind(&incident_id)
+                .bind(payload.to_string())
+                .bind(record.provenance.to_string())
+                .bind(&gap.id)
+                .execute(&fx.services.db)
+                .await
+                .expect("malformed current gap");
+            let before: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM analytical_results WHERE incident_id = ?")
+                    .bind(&incident_id)
+                    .fetch_one(&fx.services.db)
+                    .await
+                    .expect("row count before recompute");
+
+            match run_gap_analysis(&fx.services, &incident_id).await {
+                Ok(ids) => {
+                    let after: i64 = sqlx::query_scalar(
+                        "SELECT COUNT(*) FROM analytical_results WHERE incident_id = ?",
+                    )
+                    .bind(&incident_id)
+                    .fetch_one(&fx.services.db)
+                    .await
+                    .expect("row count after accepted recompute");
+                    panic!(
+                        "{name} was recomputed: new_ids={}, rows {before} -> {after}",
+                        ids.len()
+                    );
+                }
+                Err(error) => {
+                    assert!(
+                        error.to_string().contains("bad-gap-recompute"),
+                        "{name}: {error}"
+                    );
+                    assert!(error.to_string().contains(field), "{name}: {error}");
+                    let after: i64 = sqlx::query_scalar(
+                        "SELECT COUNT(*) FROM analytical_results WHERE incident_id = ?",
+                    )
+                    .bind(&incident_id)
+                    .fetch_one(&fx.services.db)
+                    .await
+                    .expect("row count after rejected recompute");
+                    assert_eq!(after, before, "{name} wrote a new analytical row");
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn closed_nist_gap_does_not_require_open_priority() {
         let fx = fixture().await;
         let (incident_id, gap) = create_one_pr_gap(&fx).await;
@@ -562,5 +650,14 @@ mod tests {
             .await
             .expect("closed gap does not enter Function coverage");
         assert_eq!(view.functions[2].gaps, nist_functions::GapCounts::default());
+
+        run_gap_analysis(&fx.services, &incident_id)
+            .await
+            .expect("CLOSED without priority remains recomputable");
+        let reopened = current_gap_analysis(&fx.services, &incident_id)
+            .await
+            .expect("valid recomputed gap");
+        assert_eq!(reopened.len(), 1);
+        assert_eq!(reopened[0].payload["priority"], "HIGH");
     }
 }
