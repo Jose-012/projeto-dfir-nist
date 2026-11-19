@@ -265,12 +265,53 @@ pub async fn create_ioc(
     Ok(id)
 }
 
+fn validate_stored_ioc(record: &AnalyticalResultResponse) -> AppResult<()> {
+    let invalid = |field| AppError::Config(format!("stored IOC {} has invalid {field}", record.id));
+    let ioc_type = record
+        .payload
+        .get("ioc_type")
+        .and_then(serde_json::Value::as_str)
+        .and_then(ioc_recommendations::IocType::from_str)
+        .ok_or_else(|| invalid("ioc_type"))?;
+    let normalized_value = record
+        .payload
+        .get("normalized_value")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| invalid("normalized_value"))?;
+    let normalized = ioc_recommendations::normalize_ioc_value(ioc_type, normalized_value)
+        .map_err(|_| invalid("normalized_value"))?;
+    if normalized != normalized_value {
+        return Err(invalid("normalized_value"));
+    }
+    let expected_key = format!(
+        "ioc:{}:{}:{}",
+        record.incident_id.as_deref().unwrap_or_default(),
+        ioc_type.as_str(),
+        normalized
+    );
+    if record.correlation_key != expected_key {
+        return Err(invalid("correlation_key"));
+    }
+    Ok(())
+}
+
+async fn current_iocs(
+    services: &AppServices,
+    incident_id: &str,
+) -> AppResult<Vec<AnalyticalResultResponse>> {
+    let records = current_results_for_incident(&services.db, incident_id, "IOC").await?;
+    for record in &records {
+        validate_stored_ioc(record)?;
+    }
+    Ok(records)
+}
+
 pub async fn list_iocs(
     services: &AppServices,
     incident_id: &str,
 ) -> AppResult<Vec<AnalyticalResultResponse>> {
     incident_exists(&services.db, incident_id).await?;
-    current_results_for_incident(&services.db, incident_id, "IOC").await
+    current_iocs(services, incident_id).await
 }
 
 // ---------------------------------------------------------------------
@@ -379,7 +420,7 @@ pub async fn export_incident_findings(
     incident_id: &str,
 ) -> AppResult<ExportBundle> {
     incident_exists(&services.db, incident_id).await?;
-    let iocs = current_results_for_incident(&services.db, incident_id, "IOC").await?;
+    let iocs = current_iocs(services, incident_id).await?;
     let recommendations =
         current_results_for_incident(&services.db, incident_id, "RECOMMENDATION").await?;
     let mut immediate = Vec::new();
@@ -776,6 +817,36 @@ mod tests {
         (incident.id, bad_id)
     }
 
+    fn valid_stored_ioc_payload() -> serde_json::Value {
+        serde_json::json!({
+            "kind": "IOC",
+            "ioc_type": "IP",
+            "normalized_value": "203.0.113.5",
+        })
+    }
+
+    async fn assert_stored_ioc_rejected(
+        services: &AppServices,
+        incident_id: &str,
+        bad_id: &str,
+        field: &str,
+    ) {
+        let errors = [
+            list_iocs(services, incident_id)
+                .await
+                .expect_err("list accepted malformed IOC"),
+            export_incident_findings(services, incident_id)
+                .await
+                .expect_err("export accepted malformed IOC"),
+        ];
+        for error in errors {
+            assert!(
+                matches!(&error, AppError::Config(message) if message.contains(bad_id) && message.contains(field)),
+                "unexpected error for {field} on {bad_id}: {error:?}"
+            );
+        }
+    }
+
     fn assert_stored_impact_error(error: &AppError, id: &str, field: &str) {
         assert!(
             matches!(error, AppError::Config(message) if message.contains(id) && message.contains(field)),
@@ -894,6 +965,192 @@ mod tests {
             .await
             .expect("valid deliverables");
         assert_eq!(delivered.impact.expect("deliverable impact").id, current.id);
+    }
+
+    async fn insert_current_ioc_successor(
+        services: &AppServices,
+        label: &str,
+        payload: serde_json::Value,
+        correlation_key: Option<&str>,
+    ) -> (String, String) {
+        let incident = crate::service::create_incident(services, label)
+            .await
+            .expect("incident");
+        let evidence_id = format!("evidence-ioc-{label}");
+        sqlx::query("INSERT INTO evidence(id,original_filename,storage_reference,format,size_bytes,blake3,sha256,imported_at,status) VALUES(?,?,?,?,?,?,?,?,?)")
+            .bind(&evidence_id)
+            .bind("test.bin")
+            .bind(format!("evidence/{evidence_id}.bin"))
+            .bind("bin")
+            .bind(1_i64)
+            .bind("b3")
+            .bind("sha")
+            .bind("2026-11-19T00:00:00Z")
+            .bind("FORENSIC")
+            .execute(&services.db)
+            .await
+            .expect("evidence");
+        let original = create_ioc(
+            services,
+            &incident.id,
+            &evidence_id,
+            "IP",
+            "203.0.113.5",
+            None,
+            "HIGH",
+            Some("2026-11-19T00:00:00Z"),
+        )
+        .await
+        .expect("original IOC");
+        let bad_id = format!("bad-ioc-{label}");
+        let correlation_key = correlation_key
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("ioc:{}:IP:203.0.113.5", incident.id));
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,evidence_id,incident_id,confidence,payload,provenance,supersedes,created_at) VALUES(?,'analytical-result-v1','IOC',?,?,?,?,?,'{}',?,'2026-11-19T00:00:00Z')")
+            .bind(&bad_id)
+            .bind(correlation_key)
+            .bind(&evidence_id)
+            .bind(&incident.id)
+            .bind("HIGH")
+            .bind(payload.to_string())
+            .bind(&original)
+            .execute(&services.db)
+            .await
+            .expect("malformed current IOC");
+        (incident.id, bad_id)
+    }
+
+    #[tokio::test]
+    async fn stored_ioc_rejects_divergent_payload_identity() {
+        let fx = fixture().await;
+        let (incident_id, bad_id) = insert_current_ioc_successor(
+            &fx.services,
+            "divergent-identity",
+            serde_json::json!({
+                "kind": "IOC",
+                "ioc_type": "DOMAIN",
+                "normalized_value": "evil.example",
+            }),
+            None,
+        )
+        .await;
+
+        let listed = list_iocs(&fx.services, &incident_id).await;
+        let exported = export_incident_findings(&fx.services, &incident_id).await;
+        let listed_shape = match &listed {
+            Ok(rows) => format!(
+                "Ok({:?})",
+                rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>()
+            ),
+            Err(error) => format!("Err({error})"),
+        };
+        let export_shape = match &exported {
+            Ok(bundle) => format!(
+                "Ok({:?})",
+                bundle
+                    .iocs
+                    .iter()
+                    .map(|row| row.id.as_str())
+                    .collect::<Vec<_>>()
+            ),
+            Err(error) => format!("Err({error})"),
+        };
+        let (Err(list_error), Err(export_error)) = (listed, exported) else {
+            panic!("divergent IOC identity accepted: list={listed_shape} export={export_shape}");
+        };
+        for error in [list_error, export_error] {
+            assert!(
+                matches!(&error, AppError::Config(message) if message.contains(&bad_id) && message.contains("correlation_key")),
+                "unexpected divergent identity error: {error:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_ioc_rejects_invalid_ioc_type() {
+        let fx = fixture().await;
+        for (label, value) in [
+            ("unknown", serde_json::json!("ASN")),
+            ("missing", serde_json::Value::Null),
+            ("non-string", serde_json::json!(7)),
+        ] {
+            let mut payload = valid_stored_ioc_payload();
+            if label == "missing" {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove("ioc_type");
+            } else {
+                payload["ioc_type"] = value;
+            }
+            let (incident_id, bad_id) =
+                insert_current_ioc_successor(&fx.services, label, payload, None).await;
+            assert_stored_ioc_rejected(&fx.services, &incident_id, &bad_id, "ioc_type").await;
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_ioc_rejects_invalid_normalized_value() {
+        let fx = fixture().await;
+        for (label, value) in [
+            ("missing", serde_json::Value::Null),
+            ("non-string", serde_json::json!(7)),
+            ("structural", serde_json::json!("not-an-ip")),
+            ("non-normalized", serde_json::json!(" 203.0.113.5 ")),
+        ] {
+            let mut payload = valid_stored_ioc_payload();
+            if label == "missing" {
+                payload
+                    .as_object_mut()
+                    .expect("payload object")
+                    .remove("normalized_value");
+            } else {
+                payload["normalized_value"] = value;
+            }
+            let bad_label = format!("normalized-{label}");
+            let (incident_id, bad_id) =
+                insert_current_ioc_successor(&fx.services, &bad_label, payload, None).await;
+            assert_stored_ioc_rejected(&fx.services, &incident_id, &bad_id, "normalized_value")
+                .await;
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_ioc_rejects_mismatched_correlation_key() {
+        let fx = fixture().await;
+        let (incident_id, bad_id) = insert_current_ioc_successor(
+            &fx.services,
+            "wrong-key",
+            valid_stored_ioc_payload(),
+            Some("ioc:wrong:IP:203.0.113.5"),
+        )
+        .await;
+        assert_stored_ioc_rejected(&fx.services, &incident_id, &bad_id, "correlation_key").await;
+    }
+
+    #[tokio::test]
+    async fn stored_ioc_accepts_valid_legacy_payload() {
+        let fx = fixture().await;
+        let (incident_id, current_id) = insert_current_ioc_successor(
+            &fx.services,
+            "valid-legacy",
+            valid_stored_ioc_payload(),
+            None,
+        )
+        .await;
+
+        let listed = list_iocs(&fx.services, &incident_id)
+            .await
+            .expect("valid legacy IOC list");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, current_id);
+        assert!(listed[0].payload.get("sighting_count").is_none());
+        let exported = export_incident_findings(&fx.services, &incident_id)
+            .await
+            .expect("valid legacy IOC export");
+        assert_eq!(exported.iocs.len(), 1);
+        assert_eq!(exported.iocs[0].id, current_id);
+        assert!(exported.iocs[0].payload.get("sighting_count").is_none());
     }
 
     #[tokio::test]
