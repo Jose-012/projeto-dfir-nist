@@ -192,7 +192,39 @@ pub async fn current_impact_assessment(
     incident_exists(&services.db, incident_id).await?;
     let results =
         current_results_for_incident(&services.db, incident_id, "IMPACT_ASSESSMENT").await?;
-    Ok(results.into_iter().next())
+    let current = results.into_iter().next();
+    if let Some(record) = &current {
+        for field in [
+            "availability_impact",
+            "confidentiality_impact",
+            "integrity_impact",
+        ] {
+            if record
+                .payload
+                .get(field)
+                .and_then(serde_json::Value::as_str)
+                .and_then(attack_impact::ImpactLevel::from_str)
+                .is_none()
+            {
+                return Err(AppError::Config(format!(
+                    "stored impact assessment {} has invalid {field}",
+                    record.id
+                )));
+            }
+        }
+        if record
+            .confidence
+            .as_deref()
+            .and_then(analytical_results::Confidence::from_str)
+            .is_none()
+        {
+            return Err(AppError::Config(format!(
+                "stored impact assessment {} has invalid confidence",
+                record.id
+            )));
+        }
+    }
+    Ok(current)
 }
 
 // ---------------------------------------------------------------------
@@ -705,6 +737,163 @@ mod tests {
         assert_eq!(graph.edges.len(), 1);
         assert_eq!(graph.edges[0].from, a0);
         assert_eq!(graph.edges[0].to, a1);
+    }
+
+    async fn insert_current_impact_successor(
+        services: &AppServices,
+        label: &str,
+        payload: serde_json::Value,
+        confidence: Option<&str>,
+    ) -> (String, String) {
+        let incident = crate::service::create_incident(services, label)
+            .await
+            .expect("incident");
+        let original = create_impact_assessment(
+            services,
+            &incident.id,
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "assets",
+            "data",
+            "disruption",
+            None,
+            "HIGH",
+        )
+        .await
+        .expect("original impact assessment");
+        let bad_id = format!("bad-impact-{label}");
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,confidence,payload,provenance,supersedes,created_at) VALUES(?,'analytical-result-v1','IMPACT_ASSESSMENT',?,?,?,?,'{}',?,'2026-11-19T00:00:00Z')")
+            .bind(&bad_id)
+            .bind(format!("impact-assessment:{}", incident.id))
+            .bind(&incident.id)
+            .bind(confidence)
+            .bind(payload.to_string())
+            .bind(&original)
+            .execute(&services.db)
+            .await
+            .expect("malformed current impact assessment");
+        (incident.id, bad_id)
+    }
+
+    fn assert_stored_impact_error(error: &AppError, id: &str, field: &str) {
+        assert!(
+            matches!(error, AppError::Config(message) if message.contains(id) && message.contains(field)),
+            "unexpected error for {field} on {id}: {error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn stored_impact_assessment_rejects_invalid_levels() {
+        let fx = fixture().await;
+        for field in [
+            "availability_impact",
+            "confidentiality_impact",
+            "integrity_impact",
+        ] {
+            for (form, value) in [
+                ("unknown", serde_json::json!("SEVERE")),
+                ("missing", serde_json::Value::Null),
+                ("non-string", serde_json::json!(7)),
+            ] {
+                let label = format!("{}-{form}", field.replace('_', "-"));
+                let mut payload = serde_json::json!({
+                    "kind": "IMPACT_ASSESSMENT",
+                    "availability_impact": "LOW",
+                    "confidentiality_impact": "MEDIUM",
+                    "integrity_impact": "HIGH",
+                    "affected_assets": "assets",
+                    "affected_data": "data",
+                    "operational_disruption": "disruption",
+                    "financial_impact": null,
+                    "financial_impact_known": false,
+                });
+                if form == "missing" {
+                    payload
+                        .as_object_mut()
+                        .expect("payload object")
+                        .remove(field);
+                } else {
+                    payload[field] = value;
+                }
+                let (incident_id, bad_id) =
+                    insert_current_impact_successor(&fx.services, &label, payload, Some("HIGH"))
+                        .await;
+
+                let result = current_impact_assessment(&fx.services, &incident_id).await;
+                let Err(error) = result else {
+                    panic!("{form} {field} was returned by the reader: {result:?}");
+                };
+                assert_stored_impact_error(&error, &bad_id, field);
+                let delivered =
+                    crate::service::deliverables::collect(&fx.services, &incident_id).await;
+                let Err(error) = delivered else {
+                    panic!("{form} {field} reached deliverables");
+                };
+                assert_stored_impact_error(&error, &bad_id, field);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn stored_impact_assessment_requires_confidence() {
+        let fx = fixture().await;
+        let payload = serde_json::json!({
+            "kind": "IMPACT_ASSESSMENT",
+            "availability_impact": "LOW",
+            "confidentiality_impact": "MEDIUM",
+            "integrity_impact": "HIGH",
+        });
+        let (incident_id, bad_id) =
+            insert_current_impact_successor(&fx.services, "missing-confidence", payload, None)
+                .await;
+
+        let result = current_impact_assessment(&fx.services, &incident_id).await;
+        let Err(error) = result else {
+            panic!("missing confidence was returned by the reader: {result:?}");
+        };
+        assert_stored_impact_error(&error, &bad_id, "confidence");
+    }
+
+    #[tokio::test]
+    async fn stored_impact_assessment_accepts_none_levels_and_null_financial_impact() {
+        let fx = fixture().await;
+        let incident = crate::service::create_incident(&fx.services, "valid NONE control")
+            .await
+            .expect("incident");
+        create_impact_assessment(
+            &fx.services,
+            &incident.id,
+            "NONE",
+            "NONE",
+            "NONE",
+            "assets",
+            "data",
+            "disruption",
+            None,
+            "CONFIRMED",
+        )
+        .await
+        .expect("valid impact assessment");
+
+        let current = current_impact_assessment(&fx.services, &incident.id)
+            .await
+            .expect("valid current impact assessment")
+            .expect("impact assessment exists");
+        for field in [
+            "availability_impact",
+            "confidentiality_impact",
+            "integrity_impact",
+        ] {
+            assert_eq!(current.payload[field], "NONE");
+        }
+        assert_eq!(current.confidence.as_deref(), Some("CONFIRMED"));
+        assert!(current.payload["financial_impact"].is_null());
+        assert_eq!(current.payload["financial_impact_known"], false);
+        let delivered = crate::service::deliverables::collect(&fx.services, &incident.id)
+            .await
+            .expect("valid deliverables");
+        assert_eq!(delivered.impact.expect("deliverable impact").id, current.id);
     }
 
     #[tokio::test]
