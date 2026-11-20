@@ -237,6 +237,7 @@ Estas regras coordenam ferramentas de agente. Elas não alteram escopo, arquitet
 - Cada worker tem escopo exclusivo de escrita, lê as instruções aplicáveis e entrega mudança, teste ou decisão útil. Não crie lanes apenas de leitura/revisão sem artefato. Builds e testes Rust pesados permanecem sequenciais e coordenados pelo root.
 - Não compartilhe com workers dados de caso, secrets ou arquivos sensíveis fora da necessidade autorizada. Não delegue ações destrutivas, pagamentos, envios ou mudanças externas irreversíveis.
 - Copie IDs completos, acompanhe o progresso e confirme o resultado antes de parar um worker. Antes de assumir a escrita de um worker parado, confirme seu estado terminal e releia o artefato imediatamente antes de editar; uma escrita atrasada é uma nova entrega concorrente a revisar. Ao integrar, revise diff e pós-condições, aguarde os membros necessários e verifique `swarm list`/`bg list` para não deixar tarefas próprias ativas.
+- No prompt de spawn, inclua o caminho absoluto do checkout e exija que o worker confirme `git rev-parse --show-toplevel` e o HEAD antes de editar. O parâmetro `working_dir` não é evidência de que a sessão abriu no repositório; se estiver no diretório errado, corrija a sessão existente por DM em vez de criar worker duplicado.
 
 ### Skills
 

@@ -32,7 +32,7 @@ Cada lane precisa produzir um artefato concreto e ter escopo exclusivo de escrit
 
 1. Leia `AGENTS.md`, `CONVENTIONS.md`, `docs/DOCUMENT_AUTHORITY.md`, `docs/SESSION_IMPROVEMENT.md` e as lições aplicáveis em `docs/SESSION_LEARNINGS.md`. Acrescente somente os documentos exigidos pela missão.
 2. Respeite esta precedência: demanda original; corpo normativo da especificação; decisões, ADRs, RTM, status e contratos; documentos derivados, índices e prompts; hipóteses, exemplos e sugestões. Não transforme inferência ou sugestão em requisito.
-3. Registre HEAD, branch e `git status --short` no início, sem fixar esses valores neste template. Preserve mudanças preexistentes e arquivos fora da tarefa.
+3. Registre HEAD, branch e `git status --short` no início, sem fixar esses valores neste template. Preserve mudanças preexistentes e arquivos fora da tarefa. Inclua no prompt de cada worker o caminho absoluto do checkout; `working_dir`, sozinho, não comprova o diretório efetivo da sessão.
 4. Converta lições aplicáveis em ações observáveis do todo. Defina entrega, dono, escopo, pós-condições, orçamento e critérios de parada antes de workers ou comandos longos.
 5. Mudanças em requisitos, RTM ou ADRs só podem ocorrer quando fizerem parte da missão e seguirem o processo de autoridade. Este prompt, por si só, não promove essas mudanças nem cria aceite.
 6. Preserve a interface nativa, o engine separado com stdin/stdout + JSONL, as fronteiras de segurança e as classes de runtime. Não introduza dependência, serviço, transporte ou arquitetura nova sem a decisão e a validação exigidas.
@@ -49,7 +49,7 @@ Cada lane precisa produzir um artefato concreto e ter escopo exclusivo de escrit
 
 Cada worker deve:
 
-1. Ler as instruções e skills aplicáveis e trabalhar somente na lane recebida.
+1. Ler as instruções e skills aplicáveis e trabalhar somente na lane recebida. Antes de editar, executar `git rev-parse --show-toplevel` e `git rev-parse HEAD` no checkout absoluto informado pelo coordenador; se o diretório não corresponder, pedir correção por DM sem procurar ou criar outra cópia e sem duplicar worker.
 2. Escrever exclusivamente nos arquivos ou fronteiras da tabela. Não editar arquivos do coordenador, de outra lane ou fora da tarefa. Solicitar redivisão ao coordenador se a entrega exigir ultrapassar esse limite.
 3. Atualizar o todo da própria lane, preservar mudanças alheias e fazer a menor alteração suficiente.
 4. Não iniciar trabalho Rust pesado sem a vez concedida pelo coordenador e não executar ações externas sem autorização específica.

@@ -109,7 +109,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** em 2026-11-19, várias chamadas de `todo update` mantiveram os itens em `in_progress`, embora a intenção fosse concluí-los. A divergência ficou visível nos estados retornados, mas a mesma forma de chamada foi repetida antes da mudança de método.
 - **Risco:** churn de coordenação, falsa expectativa de fechamento e perda de tempo sem nova evidência.
 - **Prevenção:** `.jcode/skills/dfir-improve/SKILL.md` exige ler o estado retornado após mutações de todo/swarm/background e aplicar o limite de duas tentativas sem informação nova antes de mudar de método.
-- **Confirmação:** pendente para a próxima transição de coordenação observada.
+- **Confirmação:** confirmada em 2026-11-20: transições de timeline, NIST e RTK para `completed` e das novas lanes para `in_progress` foram lidas no estado retornado, sem repetição da chamada ineficaz histórica.
 
 ### 14. Escrita atrasada após parada do worker
 
@@ -117,7 +117,15 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** em 2026-11-19, uma versão do prompt escrita pelo root foi substituída posteriormente por uma entrega atrasada do worker que já havia sido parado. Um needle de `await_members` falhou no gate e o controle positivo direto revelou a mudança de conteúdo antes do commit.
 - **Risco:** perder uma entrega válida, sobrescrever correções ou commitar uma versão cuja autoria e conteúdo não foram revisados.
 - **Prevenção:** `AGENTS.md` §17, `docs/SESSION_IMPROVEMENT.md`, `dfir-improve` e `swarm-prompt` exigem confirmar estado terminal e reler o artefato antes de assumir sua escrita; o `doc_gate` preserva essa salvaguarda e a distinção de IDs de await.
-- **Confirmação:** pendente para a próxima reatribuição de escrita após parada de worker.
+- **Confirmação:** confirmada em 2026-11-20: após a parada terminal do worker timeline, o root releu `evidence.rs` imediatamente antes de assumir a escrita, revisou a consolidação e integrou a expansão sem sobrescrever o diff anterior.
+
+### 15. Spawn visível abriu fora do checkout informado
+
+- **Classe:** erro de coordenação detectado antes de qualquer escrita dos workers.
+- **Fato:** em 2026-11-20, três lanes visíveis receberam `working_dir`, mas terminaram inicialmente sem relatório/diff; uma delas informou estar em `/home/jose`. Não houve alteração de arquivos. O coordenador corrigiu as mesmas sessões por DM com o checkout absoluto, sem respawn.
+- **Risco:** trabalhar em cópia errada, procurar artefatos descartáveis ou duplicar workers enquanto a lane real está ociosa.
+- **Prevenção:** `AGENTS.md` §17 e `.jcode/swarm-prompt.md` passaram a exigir checkout absoluto no prompt e confirmação de `git rev-parse --show-toplevel`/HEAD antes da primeira edição. Correção de diretório ocorre na sessão existente.
+- **Confirmação:** confirmada em 2026-11-20 nos dois spawns seguintes (`breadcrumbs-native` e `svg-deterministico`): ambos usaram início explícito sem modo automático, retomaram as mesmas sessões por DM após o retorno inicial sem relatório e confirmaram `pwd`, `git rev-parse --show-toplevel` e HEAD no checkout absoluto antes da primeira edição. Não houve respawn nem duplicação.
 
 ## Próxima revisão
 
