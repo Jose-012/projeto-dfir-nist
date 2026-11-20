@@ -246,6 +246,7 @@ Estas regras coordenam ferramentas de agente. Elas não alteram escopo, arquitet
 ### Skills
 
 - Carregue somente skills cuja descrição corresponda à tarefa. As instruções do repositório e a hierarquia de autoridade prevalecem sobre qualquer skill.
+- Em `skill_manage`, declare `action` explicitamente, pois a omissão usa `load`. Skills do projeto ficam num overlay local relido do disco em `list`, `read` e `load`; após editá-las, use `read` ou `load`, não `reload`. `reload` e `reload_all` renovam somente skills globais, embora `reload_all` depois recomponha o overlay efetivo. Leia sempre o texto retornado: `not found` no `reload` local indica escopo, não ausência do arquivo, e ação desconhecida pode vir como texto sem exceção.
 - Skills locais disponíveis: `.jcode/skills/dfir-improve/SKILL.md` para o loop de sessões com mudanças ou gates, `.jcode/skills/dfir-change/SKILL.md` para mudanças controladas, `.jcode/skills/dfir-verify/SKILL.md` para gates e `.jcode/skills/dfir-detect/SKILL.md` para regras `EVTX_DETECTION`. Não duplique esses procedimentos em uma skill nova sem lacuna demonstrada.
 - Skills globais são opcionais e exigem utilidade clara no caso concreto. Não instale skills, pacotes ou catálogos automaticamente; instalação é mudança de tooling/supply chain, não um passo implícito da tarefa.
 - Skill carregada ou executada não é evidência de verificação. O gate real e sua pós-condição continuam obrigatórios.
