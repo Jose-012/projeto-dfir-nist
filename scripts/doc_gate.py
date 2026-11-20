@@ -110,6 +110,10 @@ session_instruction_needles = {
         ".jcode/swarm-prompt.md",
         "docs/SESSION_IMPROVEMENT.md",
         "docs/SESSION_LEARNINGS.md",
+        "get_call_hierarchy",
+        "tools.mcp",
+        "rtk recall",
+        "agent-models.meta",
     ),
     ROOT / "CLAUDE.md": (
         "# Loop obrigatório de sessão",
@@ -152,6 +156,8 @@ for needle in (
     "swarm spawn",
     "await_members",
     "escrita atrasada",
+    "agent-models.meta",
+    "swarm_model_selection",
     "gh",
 ):
     if needle not in swarm_prompt_text:

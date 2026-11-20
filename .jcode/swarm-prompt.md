@@ -14,6 +14,7 @@ Substitua todos os campos `{{...}}` antes de iniciar workers. Remova as orienta�
 - **Orçamento total e horário limite:** {{ORCAMENTO_TOTAL}}
 - **Pós-condições globais:** {{POS_CONDICOES_GLOBAIS}}
 - **Gates e verificações aplicáveis:** {{GATES_E_VERIFICACOES}}
+- **Modelos efetivos por role e escopo da fotografia:** {{COORDENADOR_SWARM_REVIEW_JUDGE_MEMORY_AMBIENT}}
 - **Política de commits desta tarefa:** {{QUEM_COMMITA_E_QUANDO}}
 - **Autorizações externas explícitas, com ação, alvo e escopo:** {{AUTORIZACOES_EXTERNAS_OU_NENHUMA}}
 
@@ -44,6 +45,8 @@ Cada lane precisa produzir um artefato concreto e ter escopo exclusivo de escrit
 3. **Nunca combine `lane_owner = "worker"` ou `owner = "worker"` com `swarm spawn` na mesma lane.** Escolha início automático ou spawn explícito. Se usar spawn explícito, não configure início automático. Confirme o estado retornado para evitar workers duplicados.
 4. Respeite dependências entre lanes. O coordenador mantém a autoridade, a integração e o resultado final, continua trabalhando enquanto houver trabalho próprio e aguarda os membros necessários antes de encerrar.
 5. Copie IDs completos de workers e tarefas. IDs de `await_members` pertencem somente a `todo.waiting_on` e ao acompanhamento de swarm, nunca a `bg wait`. Acompanhe progresso, leia resultados antes de parar workers e confirme o resultado efetivo de cada parada. Não delegue ações destrutivas, irreversíveis ou externas.
+6. Antes do spawn, registre uma fotografia dos modelos por role com `/agents`, `/subagent-model` e `swarm list_models` quando disponíveis. Se o runtime não estiver acessível, leia somente o sidecar `<id>.agent-models.meta` da sessão e as chaves de configuração pertinentes, sem transcript ou credenciais. A precedência é sessão, depois global; o fallback sem pin depende do role. Não confunda default global com override de sessão nem o modelo de review/judge/memory/ambient com o de swarm.
+7. Com `agents.swarm_model_selection=false` ou allowlist vazia, o schema remove `model`: omita esse parâmetro e não contorne a política. Omita também `spawn_mode`, salvo pedido explícito do usuário. Modelos e modos efetivos são dados operacionais da missão, não requisitos nem autorização para trocar provedor.
 
 ### 3. Contrato dos workers
 

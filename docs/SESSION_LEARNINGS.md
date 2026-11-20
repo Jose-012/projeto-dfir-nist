@@ -135,6 +135,30 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** `docs/SESSION_IMPROVEMENT.md` §2 exige fonte bruta, atenção ao limite do canal e `cmp`/hash entre origem e destino antes do gate; conteúdo parcial não pode ser gravado como completo.
 - **Confirmação:** pendente.
 
+### 17. Envelope MCP incompleto repetido sem nova informação
+
+- **Classe:** erro de execução e de aderência ao critério de parada.
+- **Fato:** em 2026-11-20, chamadas diretas ao dispatcher `mcp` foram emitidas sem o objeto `arguments` e repetiram erros de propriedade obrigatória em `order` e `route`. A mudança para `codemode`, com `arguments:{action,args}` ou `arguments:{task}` explícito, executou os mesmos fluxos read-only com sucesso.
+- **Risco:** confundir erro do envelope com indisponibilidade da ferramenta e consumir o orçamento repetindo uma chamada inválida.
+- **Prevenção:** `AGENTS.md` §15 documenta o envelope completo, e `docs/SESSION_IMPROVEMENT.md` §2 exige validar o objeto aninhado antes da chamada e mudar de método quando o erro não trouxer informação nova. O `doc_gate` preserva a referência a `tools.mcp`.
+- **Confirmação:** pendente.
+
+### 18. Guia/help divergente do comportamento da versão instalada
+
+- **Classe:** risco de instrução desatualizada revelado por controles reais.
+- **Fato:** o guia do jcodemunch citava `get_importers`, rejeitado pelo servidor 1.108.469; o `menu` atual expõe `find_importers`, e `get_call_hierarchy` com `depth=1` produziu o controle positivo de 34 callees diretos. No RTK 0.49.0, `rewrite` imprimiu equivalências com `rc=3`, embora o help indicasse `0` para comandos suportados. `/usr/bin/git-delta --version` retornou 129 e usage de `git diff`, confirmando que não era o pager `delta`.
+- **Risco:** institucionalizar nomes, exits ou substitutos de ferramenta que não funcionam no host, mesmo quando a documentação de outra versão os descreve.
+- **Prevenção:** `AGENTS.md` §15 agora registra versões, ações confirmadas no `menu`, recuperação por `rtk recall`, divergência de exit do `rewrite` e a identidade do homônimo `git-delta`. `docs/SESSION_IMPROVEMENT.md` exige versão, stdout, exit e pós-condição para esse tipo de divergência.
+- **Confirmação:** pendente.
+
+### 19. Default global confundido com modelo efetivo por role
+
+- **Classe:** limitação de auditoria resolvida por configuração, sidecar e fonte da versão instalada.
+- **Fato:** em 2026-11-20, o harness 1.0.1 (`10114429c8133994861d6c915a2483d397c0f7c2`) apresentou coordenador `moonshotai/kimi-k3.1-pro`; swarm efetivo `nvidia-nim:mistralai/mistral-large-4-1t-a52b`; review efetivo `openrouter:particle-ai/particle-1:free`, embora seu default global fosse `nvidia-nim:moonshotai/kimi-k3.1-pro`; judge efetivo/global `nvidia-nim:nvidia/nemotron-3.5-super-vl-120b-a12b`; e ambient global `nvidia-nim:nvidia/nemotron-3.5-lightning-30b-a3b`, sem override de sessão. Memory não tinha pin global nem de sessão e usa auto-seleção de backend, não um identificador fixo presumido. Os defaults globais de autoreview, autojudge e ambient estavam `enabled=false`. Swarm tinha `swarm_model_selection=false` e allowlist vazia. As variáveis de ambiente correspondentes aos roles estavam ausentes.
+- **Risco:** documentar o default global como se fosse o worker efetivo, aplicar o modelo de swarm aos demais roles ou tentar passar `model` quando o schema o remove por política.
+- **Prevenção:** a fonte da versão instalada confirmou precedência sessão > global e fallback próprio por role. `AGENTS.md` §17 e `.jcode/swarm-prompt.md` exigem fotografia por `/agents`, `/subagent-model` e `swarm list_models`, com leitura restrita ao sidecar `.agent-models.meta` quando o runtime estiver indisponível. O `doc_gate` verifica as novas salvaguardas.
+- **Confirmação:** pendente.
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.
