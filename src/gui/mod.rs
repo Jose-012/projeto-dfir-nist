@@ -408,6 +408,12 @@ impl DfirApp {
                 self.evidence
                     .on_analyze_completed(&evidence_id, result, &self.backend);
             }
+            Event::AnalysisCancelled {
+                evidence_id,
+                result,
+            } => {
+                self.evidence.on_analysis_cancelled(&evidence_id, result);
+            }
             Event::TimelinePageLoaded {
                 evidence_id,
                 filter,

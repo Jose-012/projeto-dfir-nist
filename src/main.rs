@@ -94,6 +94,10 @@ enum Command {
         #[arg(long)]
         max_items: Option<u64>,
     },
+    /// Cancela a análise PENDING/PROCESSING mais recente da evidência.
+    CancelAnalysis {
+        evidence_id: String,
+    },
     /// Uma página da timeline do job, em ordem cronológica (headless; JSON).
     Results {
         job_id: String,
@@ -274,6 +278,9 @@ fn main() -> Result<(), error::AppError> {
             )
             .await
         }),
+        Some(Command::CancelAnalysis { evidence_id }) => {
+            run_json(async { cli::headless_cancel_analysis(&config, &paths, &evidence_id).await })
+        }
         Some(Command::Results {
             job_id,
             offset,

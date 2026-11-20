@@ -58,6 +58,7 @@ pub struct EvidenceState {
     selected: Option<String>,
     pending_destroy: Option<String>,
     analyzing: HashSet<String>,
+    cancelling: HashSet<String>,
     destroying: HashSet<String>,
     importing: bool,
     import_error: Option<String>,
@@ -70,6 +71,7 @@ pub struct EvidenceState {
     picker: FilePicker,
     provenance: ProvenanceForm,
     last_analysis_error: HashMap<String, String>,
+    analysis_notice: HashMap<String, String>,
     timeline: HashMap<String, TimelineView>,
     /// Expansão transitória pedida pela navegação de um candidato.
     timeline_expand: Option<String>,
@@ -272,9 +274,18 @@ impl EvidenceState {
         backend: &Backend,
     ) {
         self.analyzing.remove(evidence_id);
+        self.cancelling.remove(evidence_id);
         match result {
+            Ok(response) if response.status == "CANCELLED" => {
+                self.last_analysis_error.remove(evidence_id);
+                self.analysis_notice.insert(
+                    evidence_id.to_string(),
+                    "Análise cancelada pelo operador (CANCELLED).".into(),
+                );
+            }
             Ok(response) => {
                 self.last_analysis_error.remove(evidence_id);
+                self.analysis_notice.remove(evidence_id);
                 // AUD-32: só a análise EVTX produz eventos de timeline. Um
                 // scan YARA não pode sobrescrever o painel de timeline da
                 // evidência com um resultado sem eventos.
@@ -295,6 +306,32 @@ impl EvidenceState {
                 backend.send(Command::EvidenceAnalyticalResults(evidence_id.to_string()));
             }
             Err(message) => {
+                self.analysis_notice.remove(evidence_id);
+                self.last_analysis_error
+                    .insert(evidence_id.to_string(), message);
+            }
+        }
+    }
+
+    pub fn on_analysis_cancelled(
+        &mut self,
+        evidence_id: &str,
+        result: Result<crate::service::JobStatusResponse, String>,
+    ) {
+        self.cancelling.remove(evidence_id);
+        match result {
+            Ok(job) => {
+                self.last_analysis_error.remove(evidence_id);
+                if job.status == "CANCELLED" {
+                    self.analyzing.remove(evidence_id);
+                }
+                self.analysis_notice.insert(
+                    evidence_id.to_string(),
+                    format!("Cancelamento processado: estado {}.", job.status),
+                );
+            }
+            Err(message) => {
+                self.analysis_notice.remove(evidence_id);
                 self.last_analysis_error
                     .insert(evidence_id.to_string(), message);
             }
@@ -549,6 +586,9 @@ impl EvidenceState {
             if let Some(item) = list_snapshot.iter().find(|item| item.id == evidence_id) {
                 provenance_summary(ui, item);
             }
+            if let Some(message) = self.analysis_notice.get(&evidence_id) {
+                ui.label(message);
+            }
             if let Some(message) = self.last_analysis_error.get(&evidence_id) {
                 super::error_banner(ui, message);
             }
@@ -693,6 +733,20 @@ impl EvidenceState {
                                     });
                                 }
                                 if analyzing {
+                                    let cancelling = self.cancelling.contains(&item.id);
+                                    if ui
+                                        .add_enabled(
+                                            !cancelling,
+                                            egui::Button::new("Cancelar análise"),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.cancelling.insert(item.id.clone());
+                                        backend.send(Command::CancelAnalysis(item.id.clone()));
+                                    }
+                                    if cancelling {
+                                        ui.label("Cancelando…");
+                                    }
                                     ui.spinner();
                                 }
                                 if self.pending_destroy.as_deref() == Some(item.id.as_str()) {
@@ -1045,7 +1099,7 @@ mod timeline_reload_tests {
             request_id: format!("request-{job_id}"),
             job_id: job_id.into(),
             evidence_id: "ev-1".into(),
-            status: "SUCCEEDED".into(),
+            status: "COMPLETED".into(),
             analysis_kind: kind.into(),
             output_reference: None,
             message_count: 1,
@@ -1176,6 +1230,24 @@ mod timeline_reload_tests {
         let sent = drain(&mut commands);
         assert_eq!(sent.len(), 1, "YARA não recarrega a timeline: {sent:?}");
         assert!(matches!(&sent[0], Command::EvidenceAnalyticalResults(id) if id == "ev-1"));
+    }
+
+    #[test]
+    fn cancelled_jobs_do_not_reload_timeline_or_analytical_results() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = EvidenceState::default();
+        state.analyzing.insert("ev-1".into());
+        state.cancelling.insert("ev-1".into());
+        let mut response = analysis("job-cancelled", dfir_protocol::ANALYSIS_KIND_EVTX_TIMELINE);
+        response.status = "CANCELLED".into();
+        state.on_analyze_completed("ev-1", Ok(response), &backend);
+        assert!(!state.analyzing.contains("ev-1"));
+        assert!(!state.cancelling.contains("ev-1"));
+        assert!(drain(&mut commands).is_empty());
+        assert_eq!(
+            state.analysis_notice.get("ev-1").map(String::as_str),
+            Some("Análise cancelada pelo operador (CANCELLED).")
+        );
     }
 }
 

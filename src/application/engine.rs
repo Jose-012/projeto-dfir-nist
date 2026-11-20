@@ -9,9 +9,13 @@ use futures_util::StreamExt;
 use serde_json::Value;
 
 use std::{
+    collections::HashMap,
     io,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 use thiserror::Error;
@@ -19,7 +23,7 @@ use thiserror::Error;
 use tokio::{
     fs::File,
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
-    sync::Semaphore,
+    sync::{Notify, Semaphore},
     time,
 };
 use tokio_util::codec::{FramedRead, LinesCodec, LinesCodecError};
@@ -63,6 +67,8 @@ pub enum EngineRunError {
     Io(#[from] io::Error),
     #[error("engine execution timed out")]
     Timeout,
+    #[error("analysis cancelled by operator")]
+    Cancelled,
     #[error("engine output limit exceeded")]
     OutputLimitExceeded,
     #[error("analysis stopped: free disk space fell below the configured safety margin")]
@@ -71,6 +77,78 @@ pub enum EngineRunError {
     Protocol(String),
     #[error("engine process failed: {0}")]
     EngineFailed(String),
+}
+
+#[derive(Debug)]
+struct CancellationInner {
+    requested: AtomicBool,
+    notify: Notify,
+}
+
+/// Sinal interno de um único job. A requisição também é persistida no banco;
+/// este sinal apenas acorda imediatamente as esperas do processo atual.
+#[derive(Debug, Clone)]
+pub struct EngineCancellation {
+    inner: Arc<CancellationInner>,
+}
+
+impl EngineCancellation {
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(CancellationInner {
+                requested: AtomicBool::new(false),
+                notify: Notify::new(),
+            }),
+        }
+    }
+
+    pub fn request(&self) {
+        self.inner.requested.store(true, Ordering::Release);
+        self.inner.notify.notify_waiters();
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.inner.requested.load(Ordering::Acquire)
+    }
+
+    pub async fn cancelled(&self) {
+        let notified = self.inner.notify.notified();
+        if self.is_cancelled() {
+            return;
+        }
+        notified.await;
+    }
+}
+
+#[derive(Debug, Default)]
+struct CancellationRegistry {
+    active: Mutex<HashMap<String, EngineCancellation>>,
+}
+
+/// Mantém o registro somente enquanto a análise correspondente existe.
+pub struct CancellationRegistration {
+    job_id: String,
+    registry: Arc<CancellationRegistry>,
+    token: EngineCancellation,
+}
+
+impl CancellationRegistration {
+    pub fn token(&self) -> EngineCancellation {
+        self.token.clone()
+    }
+}
+
+impl Drop for CancellationRegistration {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.registry.active.lock() {
+            let same_registration = active
+                .get(&self.job_id)
+                .is_some_and(|current| Arc::ptr_eq(&current.inner, &self.token.inner));
+            if same_registration {
+                active.remove(&self.job_id);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -86,6 +164,7 @@ pub struct EngineRunnerConfig {
     /// Política do sandbox repassada ao engine (`DFIR_ENGINE_SANDBOX`).
     pub sandbox_policy: Option<String>,
     semaphore: Arc<Semaphore>,
+    cancellations: Arc<CancellationRegistry>,
 }
 
 impl EngineRunnerConfig {
@@ -100,6 +179,40 @@ impl EngineRunnerConfig {
             min_free_disk_bytes: config.min_free_disk_bytes,
             sandbox_policy: config.engine_sandbox.clone(),
             semaphore: Arc::new(Semaphore::new(config.engine_max_concurrent_jobs)),
+            cancellations: Arc::new(CancellationRegistry::default()),
+        }
+    }
+
+    pub fn register_cancellation(&self, job_id: &str) -> CancellationRegistration {
+        let token = EngineCancellation::new();
+        self.cancellations
+            .active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(job_id.to_string(), token.clone());
+        CancellationRegistration {
+            job_id: job_id.to_string(),
+            registry: self.cancellations.clone(),
+            token,
+        }
+    }
+
+    /// Acorda a análise local depois que o cancelamento foi persistido.
+    /// `false` significa que o job pertence a outro processo ou já terminou;
+    /// nesse caso o observador do banco faz a propagação.
+    pub fn cancel_registered_job(&self, job_id: &str) -> bool {
+        let token = self
+            .cancellations
+            .active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(job_id)
+            .cloned();
+        if let Some(token) = token {
+            token.request();
+            true
+        } else {
+            false
         }
     }
 }
@@ -108,12 +221,13 @@ pub fn validate_envelope(value: &Value, max_line_bytes: usize) -> Result<Request
     validate(value, max_line_bytes).map_err(EngineRunError::InvalidRequest)
 }
 
-pub async fn run_engine(
+pub async fn run_engine_cancellable(
     request: Request,
     input_root: &Path,
     input_file: &Path,
     output_dir: &Path,
     config: &EngineRunnerConfig,
+    cancellation: EngineCancellation,
 ) -> Result<EngineRunSummary, EngineRunError> {
     run_engine_with_input(
         request,
@@ -124,6 +238,7 @@ pub async fn run_engine(
         output_dir,
         config,
         ProcessMode::Stdio,
+        cancellation,
     )
     .await
 }
@@ -134,11 +249,15 @@ async fn run_engine_with_input(
     output_dir: &Path,
     config: &EngineRunnerConfig,
     mode: ProcessMode,
+    cancellation: EngineCancellation,
 ) -> Result<EngineRunSummary, EngineRunError> {
-    let _permit =
-        config.semaphore.acquire().await.map_err(|_| {
+    let _permit = tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => return Err(EngineRunError::Cancelled),
+        permit = config.semaphore.acquire() => permit.map_err(|_| {
             EngineRunError::InvalidRequest("engine concurrency limiter closed".into())
-        })?;
+        })?,
+    };
     tracing::debug!(
         max_concurrent_jobs = config.max_concurrent_jobs,
         ?mode,
@@ -198,13 +317,19 @@ async fn run_engine_with_input(
         abort_child(&mut child, stderr_task).await;
         return Err(EngineRunError::Timeout);
     }
-    match time::timeout(remaining, async {
-        stdin.write_all(&encoded).await?;
-        stdin.write_all(b"\n").await?;
-        stdin.shutdown().await
-    })
-    .await
-    {
+    let write_result = tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => {
+            abort_child(&mut child, stderr_task).await;
+            return Err(EngineRunError::Cancelled);
+        }
+        result = time::timeout(remaining, async {
+            stdin.write_all(&encoded).await?;
+            stdin.write_all(b"\n").await?;
+            stdin.shutdown().await
+        }) => result,
+    };
+    match write_result {
         Ok(Ok(())) => {
             // The engine protocol is request-per-process for the current runtime path.
             // Closing the parent's stdin handle is therefore part of the protocol: without
@@ -235,6 +360,10 @@ async fn run_engine_with_input(
     );
 
     loop {
+        if cancellation.is_cancelled() {
+            abort_child(&mut child, stderr_task).await;
+            return Err(EngineRunError::Cancelled);
+        }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             abort_child(&mut child, stderr_task).await;
@@ -254,7 +383,15 @@ async fn run_engine_with_input(
             }
         }
 
-        let line = match time::timeout(remaining, lines.next()).await {
+        let line_result = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => {
+                abort_child(&mut child, stderr_task).await;
+                return Err(EngineRunError::Cancelled);
+            }
+            result = time::timeout(remaining, lines.next()) => result,
+        };
+        let line = match line_result {
             Ok(Some(Ok(line))) => line.into_bytes(),
             Ok(Some(Err(error))) => {
                 abort_child(&mut child, stderr_task).await;
@@ -319,14 +456,18 @@ async fn run_engine_with_input(
                     abort_child(&mut child, stderr_task).await;
                     return Err(EngineRunError::OutputLimitExceeded);
                 }
-                results_file
-                    .write_all(&line)
-                    .await
-                    .map_err(EngineRunError::Io)?;
-                results_file
-                    .write_all(b"\n")
-                    .await
-                    .map_err(EngineRunError::Io)?;
+                if let Err(error) =
+                    write_result_part(&mut results_file, &line, deadline, &cancellation).await
+                {
+                    abort_child(&mut child, stderr_task).await;
+                    return Err(error);
+                }
+                if let Err(error) =
+                    write_result_part(&mut results_file, b"\n", deadline, &cancellation).await
+                {
+                    abort_child(&mut child, stderr_task).await;
+                    return Err(error);
+                }
 
                 match status {
                     "PARTIAL" => {
@@ -387,11 +528,18 @@ async fn run_engine_with_input(
         ));
     }
 
-    let status = match child
-        .wait(deadline.saturating_duration_since(Instant::now()))
-        .await
-    {
+    let wait_result = tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => Err(EngineRunError::Cancelled),
+        result = child.wait(deadline.saturating_duration_since(Instant::now())) => result,
+    };
+    let status = match wait_result {
         Ok(status) => status,
+        Err(EngineRunError::Cancelled) => {
+            child.kill().await;
+            abort_stderr_task(stderr_task).await;
+            return Err(EngineRunError::Cancelled);
+        }
         Err(EngineRunError::Timeout) => {
             child.kill().await;
             abort_stderr_task(stderr_task).await;
@@ -449,6 +597,7 @@ pub async fn run_process_smoke(
         output_dir,
         config,
         ProcessMode::Smoke,
+        EngineCancellation::new(),
     )
     .await
 }
@@ -472,6 +621,27 @@ fn is_fatal_engine_error(code: &str) -> bool {
             | "SERIALIZATION_ERROR"
             | "SANDBOX_UNAVAILABLE"
     )
+}
+
+async fn write_result_part(
+    file: &mut File,
+    bytes: &[u8],
+    deadline: Instant,
+    cancellation: &EngineCancellation,
+) -> Result<(), EngineRunError> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return Err(EngineRunError::Timeout);
+    }
+    tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => Err(EngineRunError::Cancelled),
+        result = time::timeout(remaining, file.write_all(bytes)) => match result {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(error)) => Err(EngineRunError::Io(error)),
+            Err(_) => Err(EngineRunError::Timeout),
+        },
+    }
 }
 
 async fn abort_child(
@@ -552,7 +722,10 @@ pub fn new_request(
 
 #[cfg(test)]
 mod tests {
-    use super::{EngineRunError, PROTOCOL_VERSION, SCHEMA_VERSION, new_request, validate_envelope};
+    use super::{
+        EngineCancellation, EngineRunError, EngineRunnerConfig, PROTOCOL_VERSION, SCHEMA_VERSION,
+        new_request, run_engine_cancellable, validate_envelope,
+    };
     use dfir_protocol::ANALYSIS_KIND_EVTX_TIMELINE;
     use futures_util::StreamExt;
     use serde_json::json;
@@ -615,5 +788,150 @@ mod tests {
             validate_envelope(&bad, 64 * 1024),
             Err(EngineRunError::InvalidRequest(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn cancellation_wakes_a_job_waiting_for_the_semaphore() {
+        let root = tempfile::tempdir().expect("root");
+        let config = test_config(root.path(), &root.path().join("unused-engine"));
+        let _permit = config.semaphore.acquire().await.expect("first permit");
+        let cancellation = EngineCancellation::new();
+        let signal = cancellation.clone();
+        let request = new_request(
+            "evidence/input.evtx".into(),
+            1024,
+            10,
+            ANALYSIS_KIND_EVTX_TIMELINE,
+        );
+        let root_path = root.path().to_path_buf();
+        let input_root = root_path.join("evidence");
+        let input_file = input_root.join("input.evtx");
+        let output = root_path.join("output");
+        let runner_config = config.clone();
+        let task = tokio::spawn(async move {
+            run_engine_cancellable(
+                request,
+                &input_root,
+                &input_file,
+                &output,
+                &runner_config,
+                signal,
+            )
+            .await
+        });
+        cancellation.request();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(1), task)
+            .await
+            .expect("cancellation timeout")
+            .expect("task join");
+        assert!(matches!(result, Err(EngineRunError::Cancelled)));
+    }
+
+    fn test_config(root: &std::path::Path, engine: &std::path::Path) -> EngineRunnerConfig {
+        let config = crate::config::AppConfig {
+            data_root: root.to_path_buf(),
+            engine_path: engine.to_path_buf(),
+            engine_max_line_bytes: 1024 * 1024,
+            engine_timeout: std::time::Duration::from_secs(60),
+            engine_max_concurrent_jobs: 1,
+            engine_max_memory_bytes: 1024 * 1024 * 1024,
+            max_upload_bytes: 1024 * 1024,
+            min_free_disk_bytes: 0,
+            engine_sandbox: Some("best-effort".into()),
+        };
+        EngineRunnerConfig::from_config(&config)
+    }
+
+    #[cfg(unix)]
+    fn write_script(path: &std::path::Path, body: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(path, format!("#!/bin/sh\n{body}\n")).expect("write script");
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    }
+
+    #[cfg(unix)]
+    async fn run_cancellation_scenario(close_stdout: bool) {
+        let root = tempfile::tempdir().expect("root");
+        let root_path = root.path().canonicalize().expect("canonical root");
+        let evidence = root_path.join("evidence");
+        let output = root_path.join("staging/output");
+        std::fs::create_dir_all(&evidence).expect("evidence dir");
+        std::fs::create_dir_all(&output).expect("output dir");
+        let input = evidence.join("input.evtx");
+        std::fs::write(&input, b"synthetic input").expect("input");
+        let script = root_path.join("cancellable-engine.sh");
+        let output_result = if close_stdout {
+            "printf '%s\\n' '{\"protocol_version\":\"1\",\"schema_version\":\"4\",\"request_id\":\"req-wait\",\"job_id\":\"job-wait\",\"message_type\":\"RESULT\",\"status\":\"COMPLETED\",\"items\":[]}'\nexec 1>&-"
+        } else {
+            ""
+        };
+        write_script(
+            &script,
+            &format!(
+                "read _request\necho $$ > \"$DFIR_ENGINE_OUTPUT_ROOT/engine.pid\"\n{output_result}\nexec /bin/sleep 60"
+            ),
+        );
+        let config = test_config(&root_path, &script);
+        let mut request = new_request(
+            "evidence/input.evtx".into(),
+            1024 * 1024,
+            10,
+            ANALYSIS_KIND_EVTX_TIMELINE,
+        );
+        request.request_id = "req-wait".into();
+        request.job_id = "job-wait".into();
+        let cancellation = EngineCancellation::new();
+        let signal = cancellation.clone();
+        let task = tokio::spawn(async move {
+            run_engine_cancellable(request, &evidence, &input, &output, &config, signal).await
+        });
+        let pid_file = root_path.join("staging/output/engine.pid");
+        let mut pid = None;
+        for _ in 0..100 {
+            if let Ok(text) = std::fs::read_to_string(&pid_file) {
+                pid = text.trim().parse::<libc::pid_t>().ok();
+            }
+            if pid.is_some() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let pid = pid.expect("engine pid file");
+        // SAFETY: sinal 0 apenas verifica que o processo sintético existe.
+        assert_eq!(unsafe { libc::kill(pid, 0) }, 0);
+        if close_stdout {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        cancellation.request();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), task)
+            .await
+            .expect("cancellation timeout")
+            .expect("task join");
+        assert!(
+            matches!(result, Err(EngineRunError::Cancelled)),
+            "{result:?}"
+        );
+        let mut gone = false;
+        for _ in 0..100 {
+            // SAFETY: ESRCH confirma que o processo foi encerrado e recolhido.
+            if unsafe { libc::kill(pid, 0) } != 0 {
+                gone = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(gone, "o processo continuou vivo após o cancelamento");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancellation_kills_the_process_during_jsonl_read() {
+        run_cancellation_scenario(false).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancellation_kills_the_process_during_final_wait() {
+        run_cancellation_scenario(true).await;
     }
 }

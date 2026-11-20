@@ -669,6 +669,7 @@ struct JobRow {
     finished_at: Option<String>,
     warning_count: i64,
     warnings: Option<String>,
+    cancellation_requested_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -690,6 +691,7 @@ pub struct JobStatusResponse {
     /// `COMPLETED` com avisos não é uma conclusão limpa (AUD-04/AUD-36).
     pub warning_count: u64,
     pub warnings: Vec<JobWarning>,
+    pub cancellation_requested_at: Option<String>,
 }
 
 impl TryFrom<JobRow> for JobStatusResponse {
@@ -729,7 +731,167 @@ impl TryFrom<JobRow> for JobStatusResponse {
             finished_at: row.finished_at,
             warning_count,
             warnings,
+            cancellation_requested_at: row.cancellation_requested_at,
         })
+    }
+}
+
+/// Cancela um job terminal de forma idempotente ou devolve seu estado atual.
+/// O `UPDATE` condicional e a auditoria compartilham uma única transação: uma
+/// conclusão que já commitou permanece `COMPLETED`; uma resposta tardia não
+/// pode sobrescrever `CANCELLED`.
+pub async fn cancel_job(services: &AppServices, job_id: &str) -> AppResult<JobStatusResponse> {
+    let mut connection = begin_immediate(&services.db).await?;
+    let current: Option<(String, String, String)> =
+        sqlx::query_as("SELECT evidence_id,status,request_id FROM analysis_jobs WHERE id=?")
+            .bind(job_id)
+            .fetch_optional(&mut *connection)
+            .await?;
+    let Some((evidence_id, status, request_id)) = current else {
+        rollback(&mut connection).await;
+        return Err(AppError::NotFound("analysis job not found".into()));
+    };
+
+    match status.as_str() {
+        "PENDING" | "PROCESSING" => {
+            let now = Utc::now().to_rfc3339();
+            let updated = sqlx::query(
+                "UPDATE analysis_jobs SET status='CANCELLED',cancellation_requested_at=?,error_code='CANCELLED',error_message='analysis cancelled by operator',finished_at=?,output_reference=NULL,message_count=0,item_count=0,warning_count=0,warnings=NULL WHERE id=? AND status IN ('PENDING','PROCESSING')",
+            )
+            .bind(&now)
+            .bind(&now)
+            .bind(job_id)
+            .execute(&mut *connection)
+            .await?;
+            if updated.rows_affected() != 1 {
+                rollback(&mut connection).await;
+                return job_status(&services.db, job_id).await;
+            }
+            let metadata = serde_json::json!({
+                "job_id": job_id,
+                "request_id": request_id,
+                "evidence_id": evidence_id,
+                "previous_status": status,
+                "error_code": "CANCELLED",
+            });
+            audit::append_on_connection(
+                &mut connection,
+                None,
+                "ANALYSIS_CANCELLED",
+                "analysis_job",
+                job_id,
+                None,
+                &metadata.to_string(),
+            )
+            .await?;
+            audit::append_custody_on_connection(
+                &mut connection,
+                &evidence_id,
+                "ANALYSIS_CANCELLED",
+                "local-analyst",
+                "analysis cancelled by operator",
+                &metadata.to_string(),
+            )
+            .await?;
+        }
+        "CANCELLED" | "COMPLETED" => {}
+        "FAILED" => {
+            rollback(&mut connection).await;
+            return Err(AppError::Config(
+                "only PENDING or PROCESSING analysis jobs can be cancelled".into(),
+            ));
+        }
+        other => {
+            rollback(&mut connection).await;
+            return Err(AppError::Config(format!(
+                "stored analysis job has an invalid status: {other}"
+            )));
+        }
+    }
+    sqlx::query("COMMIT").execute(&mut *connection).await?;
+    let locally_signalled = services.engine.cancel_registered_job(job_id);
+    tracing::info!(
+        job_id,
+        locally_signalled,
+        status,
+        "analysis cancellation resolved"
+    );
+    job_status(&services.db, job_id).await
+}
+
+/// Resolve a análise vigente da evidência e cancela o job correspondente.
+pub async fn cancel_active_analysis(
+    services: &AppServices,
+    evidence_id: &str,
+) -> AppResult<JobStatusResponse> {
+    let job_id: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM analysis_jobs WHERE evidence_id=? AND status IN ('PENDING','PROCESSING') ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(evidence_id)
+    .fetch_optional(&services.db)
+    .await?;
+    let job_id = job_id.ok_or_else(|| {
+        AppError::Config("no PENDING or PROCESSING analysis job exists for this evidence".into())
+    })?;
+    cancel_job(services, &job_id).await
+}
+
+async fn job_status(db: &SqlitePool, job_id: &str) -> AppResult<JobStatusResponse> {
+    let row = sqlx::query_as::<_, JobRow>("SELECT id,request_id,evidence_id,status,kind,message_count,item_count,output_reference,error_code,error_message,created_at,started_at,finished_at,warning_count,warnings,cancellation_requested_at FROM analysis_jobs WHERE id=?")
+        .bind(job_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| AppError::NotFound("analysis job not found".into()))?;
+    JobStatusResponse::try_from(row)
+}
+
+fn analysis_response_from_job(job: JobStatusResponse) -> AnalyzeResponse {
+    AnalyzeResponse {
+        request_id: job.request_id,
+        job_id: job.job_id,
+        evidence_id: job.evidence_id,
+        status: job.status,
+        analysis_kind: job.kind,
+        output_reference: job.output_reference,
+        message_count: job.message_count as usize,
+        item_count: job.item_count,
+        warnings: job.warnings,
+    }
+}
+
+async fn watch_job_cancellation(
+    pool: SqlitePool,
+    job_id: String,
+    cancellation: engine::EngineCancellation,
+) {
+    loop {
+        if cancellation.is_cancelled() {
+            return;
+        }
+        match sqlx::query_scalar::<_, Option<String>>(
+            "SELECT cancellation_requested_at FROM analysis_jobs WHERE id=?",
+        )
+        .bind(&job_id)
+        .fetch_optional(&pool)
+        .await
+        {
+            Ok(Some(Some(_))) => {
+                cancellation.request();
+                return;
+            }
+            Ok(Some(None)) => {}
+            Ok(None) => {
+                tracing::debug!(job_id, "cancellation watcher stopped: job no longer exists");
+                return;
+            }
+            Err(error) => {
+                tracing::warn!(job_id, %error, "could not poll persisted cancellation");
+            }
+        }
+        tokio::select! {
+            _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
+            _ = cancellation.cancelled() => return,
+        }
     }
 }
 
@@ -746,6 +908,13 @@ pub async fn analyze(
     let result = analyze_inner(services, evidence_id, kind, max_output_bytes, max_items).await;
     let elapsed_ms = started.elapsed().as_millis() as u64;
     match &result {
+        Ok(response) if response.status == "CANCELLED" => tracing::info!(
+            evidence_id,
+            kind,
+            job_id = %response.job_id,
+            elapsed_ms,
+            "analysis cancelled"
+        ),
         Ok(response) => tracing::info!(
             evidence_id,
             kind,
@@ -954,16 +1123,39 @@ async fn analyze_inner(
         return Err(AppError::Database(error));
     }
 
-    let result = engine::run_engine(
+    let cancellation_registration = services.engine.register_cancellation(&job_id);
+    let cancellation = cancellation_registration.token();
+    let cancellation_watcher = tokio::spawn(watch_job_cancellation(
+        services.db.clone(),
+        job_id.clone(),
+        cancellation.clone(),
+    ));
+    let result = engine::run_engine_cancellable(
         request.clone(),
         &services.paths.evidence,
         &input,
         &output_dir,
         &services.engine,
+        cancellation.clone(),
     )
     .await;
+    cancellation_watcher.abort();
+    if let Err(error) = cancellation_watcher.await
+        && !error.is_cancelled()
+    {
+        tracing::warn!(job_id, %error, "cancellation watcher failed");
+    }
     match result {
         Ok(summary) => {
+            let current_status: String =
+                sqlx::query_scalar("SELECT status FROM analysis_jobs WHERE id=?")
+                    .bind(&job_id)
+                    .fetch_one(&services.db)
+                    .await?;
+            if cancellation.is_cancelled() || current_status == "CANCELLED" {
+                let job = cancel_job(services, &job_id).await?;
+                return Ok(analysis_response_from_job(job));
+            }
             let output_reference = format!("staging/analysis/{job_id}/output/results.jsonl");
             let finished_at = Utc::now().to_rfc3339();
             let mut completed_metadata = serde_json::json!({
@@ -1006,8 +1198,8 @@ async fn analyze_inner(
                     .count();
                 completed_metadata["candidates"] = serde_json::json!(candidates);
             }
-            // O índice usa a própria transação de escrita: precisa vir ANTES de
-            // abrir a transação de conclusão (SQLite tem um único escritor).
+            // A timeline é indexada dentro da transação de conclusão: se o
+            // cancelamento vencer a corrida, nenhum resultado parcial é publicado.
             let mut warnings: Vec<JobWarning> = summary
                 .diagnostics
                 .iter()
@@ -1033,28 +1225,6 @@ async fn analyze_inner(
                     sample: "the engine did not report its sandbox state".into(),
                 }),
             }
-            if kind == dfir_protocol::ANALYSIS_KIND_EVTX_TIMELINE {
-                match index_timeline(&services.db, &job_id, &output_dir.join("results.jsonl")).await
-                {
-                    Ok((_, skipped)) if skipped > 0 => warnings.push(JobWarning {
-                        code: "TIMELINE_ITEMS_SKIPPED".into(),
-                        count: skipped,
-                        sample: "items without a valid timestamp are not shown in the timeline"
-                            .into(),
-                    }),
-                    Ok(_) => {}
-                    Err(error) => {
-                        mark_job_failed_loudly(
-                            &services.db,
-                            &job_id,
-                            "PERSISTENCE_ERROR",
-                            &error.to_string(),
-                        )
-                        .await;
-                        return Err(error);
-                    }
-                }
-            }
             let mut connection = match begin_immediate(&services.db).await {
                 Ok(connection) => connection,
                 Err(error) => {
@@ -1069,13 +1239,29 @@ async fn analyze_inner(
                     return Err(AppError::Database(error));
                 }
             };
-            let transaction_result: Result<(), sqlx::Error> = async {
+            let transaction_result: AppResult<bool> = async {
+                if kind == dfir_protocol::ANALYSIS_KIND_EVTX_TIMELINE {
+                    let (_, skipped) = index_timeline_on_connection(
+                        &mut connection,
+                        &job_id,
+                        &output_dir.join("results.jsonl"),
+                    )
+                    .await?;
+                    if skipped > 0 {
+                        warnings.push(JobWarning {
+                            code: "TIMELINE_ITEMS_SKIPPED".into(),
+                            count: skipped,
+                            sample: "items without a valid timestamp are not shown in the timeline"
+                                .into(),
+                        });
+                    }
+                }
                 let warnings_json = serde_json::to_string(&warnings).map_err(|error| {
                     validation_error(format!(
                         "could not encode analysis job warnings as JSON: {error}"
                     ))
                 })?;
-                sqlx::query("UPDATE analysis_jobs SET status='COMPLETED',message_count=?,item_count=?,output_reference=?,finished_at=?,warning_count=?,warnings=? WHERE id=?")
+                let completed = sqlx::query("UPDATE analysis_jobs SET status='COMPLETED',message_count=?,item_count=?,output_reference=?,finished_at=?,warning_count=?,warnings=? WHERE id=? AND status='PROCESSING' AND cancellation_requested_at IS NULL")
                     .bind(summary.message_count as i64)
                     .bind(summary.item_count as i64)
                     .bind(&output_reference)
@@ -1085,6 +1271,9 @@ async fn analyze_inner(
                     .bind(&job_id)
                     .execute(&mut *connection)
                     .await?;
+                if completed.rows_affected() != 1 {
+                    return Ok(false);
+                }
                 audit::append_on_connection(
                     &mut connection,
                     None,
@@ -1174,19 +1363,32 @@ async fn analyze_inner(
                         .await?;
                     }
                 }
-                Ok(())
+                Ok(true)
             }
             .await;
-            if let Err(error) = transaction_result {
+            let applied = match transaction_result {
+                Ok(applied) => applied,
+                Err(error) => {
+                    rollback(&mut connection).await;
+                    mark_job_failed_loudly(
+                        &services.db,
+                        &job_id,
+                        "PERSISTENCE_ERROR",
+                        &error.to_string(),
+                    )
+                    .await;
+                    return Err(error);
+                }
+            };
+            if !applied {
                 rollback(&mut connection).await;
-                mark_job_failed_loudly(
-                    &services.db,
-                    &job_id,
-                    "PERSISTENCE_ERROR",
-                    &error.to_string(),
-                )
-                .await;
-                return Err(AppError::Database(error));
+                let job = job_status(&services.db, &job_id).await?;
+                if matches!(job.status.as_str(), "CANCELLED" | "COMPLETED") {
+                    return Ok(analysis_response_from_job(job));
+                }
+                return Err(AppError::Config(
+                    "analysis completion was not applied because the job changed state".into(),
+                ));
             }
             if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
                 rollback(&mut connection).await;
@@ -1212,6 +1414,10 @@ async fn analyze_inner(
             })
         }
         Err(error) => {
+            if matches!(&error, engine::EngineRunError::Cancelled) {
+                let job = cancel_job(services, &job_id).await?;
+                return Ok(analysis_response_from_job(job));
+            }
             let code = engine_error_code(&error);
             let message = error.to_string();
             let finished_at = Utc::now().to_rfc3339();
@@ -1232,14 +1438,17 @@ async fn analyze_inner(
                     return Err(AppError::Database(db_error));
                 }
             };
-            let transaction_result = async {
-                sqlx::query("UPDATE analysis_jobs SET status='FAILED',error_code=?,error_message=?,finished_at=? WHERE id=?")
+            let transaction_result: Result<bool, sqlx::Error> = async {
+                let failed = sqlx::query("UPDATE analysis_jobs SET status='FAILED',error_code=?,error_message=?,finished_at=? WHERE id=? AND status IN ('PENDING','PROCESSING') AND cancellation_requested_at IS NULL")
                     .bind(code)
                     .bind(&message)
                     .bind(&finished_at)
                     .bind(&job_id)
                     .execute(&mut *connection)
                     .await?;
+                if failed.rows_affected() != 1 {
+                    return Ok(false);
+                }
                 audit::append_on_connection(
                     &mut connection,
                     None,
@@ -1258,19 +1467,31 @@ async fn analyze_inner(
                     &format!("{action_label} failed"),
                     &failed_metadata.to_string(),
                 )
-                .await
+                .await?;
+                Ok(true)
             }
             .await;
-            if let Err(db_error) = transaction_result {
+            let failed = match transaction_result {
+                Ok(failed) => failed,
+                Err(db_error) => {
+                    rollback(&mut connection).await;
+                    mark_job_failed_loudly(
+                        &services.db,
+                        &job_id,
+                        "PERSISTENCE_ERROR",
+                        &db_error.to_string(),
+                    )
+                    .await;
+                    return Err(AppError::Database(db_error));
+                }
+            };
+            if !failed {
                 rollback(&mut connection).await;
-                mark_job_failed_loudly(
-                    &services.db,
-                    &job_id,
-                    "PERSISTENCE_ERROR",
-                    &db_error.to_string(),
-                )
-                .await;
-                return Err(AppError::Database(db_error));
+                let job = job_status(&services.db, &job_id).await?;
+                if job.status == "CANCELLED" {
+                    return Ok(analysis_response_from_job(job));
+                }
+                return Err(AppError::Engine(message));
             }
             if let Err(db_error) = sqlx::query("COMMIT").execute(&mut *connection).await {
                 rollback(&mut connection).await;
@@ -1345,7 +1566,7 @@ async fn mark_job_failed(
     code: &str,
     message: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE analysis_jobs SET status='FAILED',error_code=?,error_message=?,finished_at=? WHERE id=?")
+    sqlx::query("UPDATE analysis_jobs SET status='FAILED',error_code=?,error_message=?,finished_at=? WHERE id=? AND status IN ('PENDING','PROCESSING') AND cancellation_requested_at IS NULL")
         .bind(code)
         .bind(message)
         .bind(Utc::now().to_rfc3339())
@@ -1414,6 +1635,7 @@ pub async fn recover_orphaned_jobs(db: &SqlitePool) -> AppResult<u64> {
 fn engine_error_code(error: &engine::EngineRunError) -> &'static str {
     match error {
         engine::EngineRunError::Timeout => "TIMEOUT",
+        engine::EngineRunError::Cancelled => "CANCELLED",
         engine::EngineRunError::Protocol(_) => "ENGINE_PROTOCOL_ERROR",
         engine::EngineRunError::OutputLimitExceeded => "OUTPUT_LIMIT",
         engine::EngineRunError::DiskSpaceLow => "DISK_SPACE_LOW",
@@ -1525,6 +1747,7 @@ impl TimelinePage {
                 finished_at: None,
                 warning_count: warnings.len() as u64,
                 warnings,
+                cancellation_requested_at: None,
             },
             offset,
             total,
@@ -1661,7 +1884,22 @@ impl From<TimelineRow> for TimelineEvent {
 /// válido, que antes sumiam em silêncio e agora viram aviso do job.
 async fn index_timeline(db: &SqlitePool, job_id: &str, path: &Path) -> AppResult<(u64, u64)> {
     let started = std::time::Instant::now();
-    let result = index_timeline_inner(db, job_id, path).await;
+    let mut connection = begin_immediate(db).await.map_err(AppError::Database)?;
+    let result = index_timeline_on_connection(&mut connection, job_id, path).await;
+    let result = match result {
+        Ok(counts) => {
+            if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
+                rollback(&mut connection).await;
+                Err(AppError::Database(error))
+            } else {
+                Ok(counts)
+            }
+        }
+        Err(error) => {
+            rollback(&mut connection).await;
+            Err(error)
+        }
+    };
     let elapsed_ms = started.elapsed().as_millis() as u64;
     match &result {
         Ok((indexed, skipped)) => {
@@ -1672,12 +1910,15 @@ async fn index_timeline(db: &SqlitePool, job_id: &str, path: &Path) -> AppResult
     result
 }
 
-async fn index_timeline_inner(db: &SqlitePool, job_id: &str, path: &Path) -> AppResult<(u64, u64)> {
+async fn index_timeline_on_connection(
+    connection: &mut sqlx::SqliteConnection,
+    job_id: &str,
+    path: &Path,
+) -> AppResult<(u64, u64)> {
     let file = tokio::fs::File::open(path)
         .await
         .map_err(AppError::Storage)?;
     let mut lines = tokio::io::AsyncBufReadExt::lines(tokio::io::BufReader::new(file));
-    let mut connection = begin_immediate(db).await.map_err(AppError::Database)?;
     let outcome: Result<(u64, u64), AppError> = async {
         sqlx::query("DELETE FROM timeline_events WHERE job_id=?")
             .bind(job_id)
@@ -1762,19 +2003,7 @@ async fn index_timeline_inner(db: &SqlitePool, job_id: &str, path: &Path) -> App
         Ok((indexed, skipped))
     }
     .await;
-    match outcome {
-        Ok(counts) => {
-            if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
-                rollback(&mut connection).await;
-                return Err(AppError::Database(error));
-            }
-            Ok(counts)
-        }
-        Err(error) => {
-            rollback(&mut connection).await;
-            Err(error)
-        }
-    }
+    outcome
 }
 
 /// Escapa `%`, `_` e `\` para uso em `LIKE ... ESCAPE '\'`.
@@ -1850,12 +2079,7 @@ async fn timeline_page_core(
     filter: Option<&str>,
     want_total: bool,
 ) -> AppResult<TimelinePage> {
-    let row = sqlx::query_as::<_, JobRow>("SELECT id,request_id,evidence_id,status,kind,message_count,item_count,output_reference,error_code,error_message,created_at,started_at,finished_at,warning_count,warnings FROM analysis_jobs WHERE id=?")
-        .bind(job_id)
-        .fetch_optional(db)
-        .await?
-        .ok_or_else(|| AppError::NotFound("analysis job not found".into()))?;
-    let job = JobStatusResponse::try_from(row)?;
+    let job = job_status(db, job_id).await?;
     let produces_timeline =
         job.kind == dfir_protocol::ANALYSIS_KIND_EVTX_TIMELINE && job.status == "COMPLETED";
     let Some(reference) = job.output_reference.clone().filter(|_| produces_timeline) else {
@@ -2594,6 +2818,35 @@ mod tests {
             pool,
             paths,
             _root: root,
+        }
+    }
+
+    fn app_services(fx: &Fixture) -> AppServices {
+        app_services_with_engine(fx, &fx.paths.staging.join("unused-test-engine"))
+    }
+
+    fn app_services_with_engine(fx: &Fixture, engine_path: &std::path::Path) -> AppServices {
+        let data_root = fx
+            .paths
+            .evidence
+            .parent()
+            .expect("storage root")
+            .to_path_buf();
+        let config = crate::config::AppConfig {
+            data_root,
+            engine_path: engine_path.to_path_buf(),
+            engine_max_line_bytes: 1024 * 1024,
+            engine_timeout: std::time::Duration::from_secs(5),
+            engine_max_concurrent_jobs: 1,
+            engine_max_memory_bytes: 1024 * 1024 * 1024,
+            max_upload_bytes: 1024 * 1024,
+            min_free_disk_bytes: 0,
+            engine_sandbox: None,
+        };
+        AppServices {
+            db: fx.pool.clone(),
+            paths: fx.paths.clone(),
+            engine: EngineRunnerConfig::from_config(&config),
         }
     }
 
@@ -3856,6 +4109,258 @@ mod tests {
         assert!(!dir.exists());
         super::discard_temp_dir(&dir).await;
         assert!(!dir.exists());
+    }
+
+    #[tokio::test]
+    async fn late_completion_preserves_terminal_job() {
+        let fx = fixture().await;
+        seed_evidence(&fx, "ev_race_before", false).await;
+        sqlx::query(
+            "INSERT INTO analysis_jobs(id,request_id,evidence_id,status,max_output_bytes,max_items,created_at) VALUES('job_race_before','req_race_before','ev_race_before','FAILED',1024,10,'2026-10-02T00:00:00Z')",
+        )
+        .execute(&fx.pool)
+        .await
+        .expect("terminal job fixture");
+
+        let completed = sqlx::query("UPDATE analysis_jobs SET status='COMPLETED',message_count=1,item_count=1,finished_at='2026-10-02T00:01:00Z' WHERE id='job_race_before' AND status='PROCESSING' AND cancellation_requested_at IS NULL")
+            .execute(&fx.pool)
+            .await
+            .expect("guarded completion transition");
+        assert_eq!(completed.rows_affected(), 0);
+        let status: String =
+            sqlx::query_scalar("SELECT status FROM analysis_jobs WHERE id='job_race_before'")
+                .fetch_one(&fx.pool)
+                .await
+                .expect("job status");
+        assert_eq!(
+            status, "FAILED",
+            "uma conclusão tardia não pode sobrescrever um estado terminal"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancellation_is_persisted_audited_and_idempotent() {
+        let fx = fixture().await;
+        seed_evidence(&fx, "ev_cancel", false).await;
+        sqlx::query(
+            "INSERT INTO analysis_jobs(id,request_id,evidence_id,status,max_output_bytes,max_items,created_at) VALUES('job_cancel','req_cancel','ev_cancel','PROCESSING',1024,10,'2026-10-02T00:00:00Z')",
+        )
+        .execute(&fx.pool)
+        .await
+        .expect("processing job fixture");
+        let services = app_services(&fx);
+
+        let first = cancel_active_analysis(&services, "ev_cancel")
+            .await
+            .expect("cancel active job");
+        assert_eq!(first.status, "CANCELLED");
+        assert_eq!(first.error_code.as_deref(), Some("CANCELLED"));
+        assert!(first.cancellation_requested_at.is_some());
+        assert_eq!(first.output_reference, None);
+        assert!(
+            crate::persistence::audit::verify(&fx.pool)
+                .await
+                .expect("audit verify")
+        );
+        assert!(
+            crate::persistence::audit::verify_custody(&fx.pool, "ev_cancel")
+                .await
+                .expect("custody verify")
+        );
+
+        let second = cancel_job(&services, "job_cancel")
+            .await
+            .expect("idempotent cancellation");
+        assert_eq!(second.status, "CANCELLED");
+        assert_eq!(
+            second.cancellation_requested_at,
+            first.cancellation_requested_at
+        );
+        for action in ["ANALYSIS_CANCELLED"] {
+            assert_eq!(audit_count(&fx, action).await, 1, "auditoria duplicada");
+        }
+        let custody: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM chain_of_custody WHERE evidence_id='ev_cancel' AND action='ANALYSIS_CANCELLED'",
+        )
+        .fetch_one(&fx.pool)
+        .await
+        .expect("custody count");
+        assert_eq!(custody, 1);
+    }
+
+    #[tokio::test]
+    async fn cancellation_preserves_completed_job_without_new_audit() {
+        let fx = fixture().await;
+        seed_evidence(&fx, "ev_done", true).await;
+        let services = app_services(&fx);
+        let response = cancel_job(&services, "job_ev_done")
+            .await
+            .expect("completed job remains completed");
+        assert_eq!(response.status, "COMPLETED");
+        assert_eq!(response.cancellation_requested_at, None);
+        assert_eq!(audit_count(&fx, "ANALYSIS_CANCELLED").await, 0);
+    }
+
+    #[tokio::test]
+    async fn cancelled_completion_rolls_back_timeline_index() {
+        let fx = fixture().await;
+        let job_id = seed_timeline_job(&fx, "ev_cancel_index", 2).await;
+        sqlx::query("UPDATE analysis_jobs SET status='PROCESSING' WHERE id=?")
+            .bind(&job_id)
+            .execute(&fx.pool)
+            .await
+            .expect("processing job");
+        let services = app_services(&fx);
+        let cancelled = cancel_job(&services, &job_id).await.expect("cancel job");
+        assert_eq!(cancelled.status, "CANCELLED");
+        let path = fx
+            .paths
+            .logical_path(&format!("staging/analysis/{job_id}/output/results.jsonl"))
+            .expect("result path");
+        let mut connection = begin_immediate(&fx.pool).await.expect("begin completion");
+        let (_, _) = index_timeline_on_connection(&mut connection, &job_id, &path)
+            .await
+            .expect("index inside uncommitted transaction");
+        let completed = sqlx::query("UPDATE analysis_jobs SET status='COMPLETED' WHERE id=? AND status='PROCESSING' AND cancellation_requested_at IS NULL")
+            .bind(&job_id)
+            .execute(&mut *connection)
+            .await
+            .expect("guarded completion");
+        assert_eq!(completed.rows_affected(), 0);
+        rollback(&mut connection).await;
+        let events: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM timeline_events WHERE job_id=?")
+            .bind(&job_id)
+            .fetch_one(&fx.pool)
+            .await
+            .expect("rolled back events");
+        assert_eq!(events, 0, "timeline_events publicou resultado parcial");
+        let index: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM timeline_index WHERE job_id=?")
+            .bind(&job_id)
+            .fetch_one(&fx.pool)
+            .await
+            .expect("rolled back index");
+        assert_eq!(index, 0, "timeline_index publicou resultado parcial");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn persisted_cancellation_between_service_instances_kills_engine_without_indexing() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fx = fixture().await;
+        let input = seed_evidence(&fx, "ev_cancel_live", false).await;
+        let (blake3, sha256) = hash_file(&input).await.expect("hash fixture");
+        sqlx::query(
+            "UPDATE evidence SET format='evtx',blake3=?,sha256=? WHERE id='ev_cancel_live'",
+        )
+        .bind(blake3)
+        .bind(sha256)
+        .execute(&fx.pool)
+        .await
+        .expect("analyzable evidence");
+        let script = fx.paths.staging.join("sleepy-engine.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nread _request\necho $$ > \"$DFIR_ENGINE_OUTPUT_ROOT/engine.pid\"\nexec /bin/sleep 60\n",
+        )
+        .expect("write fake engine");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod fake engine");
+        let services = app_services_with_engine(&fx, &script);
+        let other_services = app_services(&fx);
+        let task_services = services.clone();
+        let task = tokio::spawn(async move {
+            analyze(
+                &task_services,
+                "ev_cancel_live",
+                dfir_protocol::ANALYSIS_KIND_EVTX_TIMELINE,
+                None,
+                None,
+            )
+            .await
+        });
+
+        let mut job_id = None;
+        for _ in 0..100 {
+            job_id = sqlx::query_scalar(
+                "SELECT id FROM analysis_jobs WHERE evidence_id='ev_cancel_live' AND status='PROCESSING'",
+            )
+            .fetch_optional(&fx.pool)
+            .await
+            .expect("processing job lookup");
+            if job_id.is_some() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let job_id: String = job_id.expect("job was created");
+        let pid_file = fx
+            .paths
+            .staging
+            .join("analysis")
+            .join(&job_id)
+            .join("output/engine.pid");
+        let mut pid = None;
+        for _ in 0..100 {
+            if let Ok(text) = std::fs::read_to_string(&pid_file) {
+                pid = text.trim().parse::<libc::pid_t>().ok();
+            }
+            if pid.is_some() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let pid = pid.expect("engine pid");
+        let cancelled = cancel_active_analysis(&other_services, "ev_cancel_live")
+            .await
+            .expect("cancel through another service registry");
+        assert_eq!(cancelled.status, "CANCELLED");
+        let response = tokio::time::timeout(std::time::Duration::from_secs(2), task)
+            .await
+            .expect("analysis did not react to cancellation")
+            .expect("analysis task join")
+            .expect("cancelled analysis response");
+        assert_eq!(response.status, "CANCELLED");
+        assert_eq!(response.job_id, job_id);
+        assert_eq!(response.output_reference, None);
+
+        let mut gone = false;
+        for _ in 0..100 {
+            // SAFETY: ESRCH confirma término e recolhimento do processo.
+            if unsafe { libc::kill(pid, 0) } != 0 {
+                gone = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(gone, "engine continuou vivo após cancelamento persistido");
+        let events: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM timeline_events WHERE job_id=?")
+            .bind(&job_id)
+            .fetch_one(&fx.pool)
+            .await
+            .expect("event count");
+        let indexes: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM timeline_index WHERE job_id=?")
+            .bind(&job_id)
+            .fetch_one(&fx.pool)
+            .await
+            .expect("index count");
+        assert_eq!((events, indexes), (0, 0));
+        let page = timeline_page_core(&fx.pool, &fx.paths, &job_id, 0, 10, None, true)
+            .await
+            .expect("cancelled timeline page");
+        assert!(page.events.is_empty());
+        assert_eq!(page.total, Some(0));
+        assert_eq!(audit_count(&fx, "ANALYSIS_CANCELLED").await, 1);
+        assert!(
+            crate::persistence::audit::verify(&fx.pool)
+                .await
+                .expect("audit")
+        );
+        assert!(
+            crate::persistence::audit::verify_custody(&fx.pool, "ev_cancel_live")
+                .await
+                .expect("custody")
+        );
     }
 
     #[tokio::test]

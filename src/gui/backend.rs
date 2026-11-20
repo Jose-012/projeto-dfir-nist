@@ -17,8 +17,8 @@ use crate::{
     persistence::{db, nist_profiles::ProfileType},
     service::{
         self, AnalyticalResultResponse, AnalyzeResponse, AppServices, EvidenceResponse,
-        IncidentResponse, TimelinePage, deliverables, detection, findings, gaps, nist, plan,
-        provenance,
+        IncidentResponse, JobStatusResponse, TimelinePage, deliverables, detection, findings, gaps,
+        nist, plan, provenance,
     },
 };
 use futures_util::FutureExt;
@@ -40,6 +40,7 @@ pub enum Command {
         evidence_id: String,
         kind: String,
     },
+    CancelAnalysis(String),
     /// Uma página da timeline. `job_id = None` pede o último job EVTX
     /// concluído da evidência.
     TimelinePage {
@@ -222,6 +223,10 @@ impl Command {
                 evidence_id: evidence_id.clone(),
                 result: Err(message()),
             },
+            Self::CancelAnalysis(evidence_id) => Event::AnalysisCancelled {
+                evidence_id: evidence_id.clone(),
+                result: Err(message()),
+            },
             Self::TimelinePage {
                 evidence_id,
                 filter,
@@ -389,6 +394,10 @@ pub enum Event {
     AnalyzeCompleted {
         evidence_id: String,
         result: Result<AnalyzeResponse, String>,
+    },
+    AnalysisCancelled {
+        evidence_id: String,
+        result: Result<JobStatusResponse, String>,
     },
     TimelinePageLoaded {
         evidence_id: String,
@@ -784,6 +793,15 @@ async fn handle_command(services: &AppServices, command: Command) -> Event {
                 .await
                 .map_err(msg);
             Event::AnalyzeCompleted {
+                evidence_id,
+                result,
+            }
+        }
+        Command::CancelAnalysis(evidence_id) => {
+            let result = service::cancel_active_analysis(services, &evidence_id)
+                .await
+                .map_err(msg);
+            Event::AnalysisCancelled {
                 evidence_id,
                 result,
             }

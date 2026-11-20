@@ -774,6 +774,75 @@ mod tests {
         assert!(violations.is_empty());
     }
 
+    /// A 0014 preserva os jobs existentes, aceita CANCELLED somente com a
+    /// requisição persistida e mantém índices/FK da tabela recriada.
+    #[tokio::test]
+    async fn migration_0014_preserves_jobs_and_adds_guarded_cancellation() {
+        let dir = tempfile::tempdir().expect("dir");
+        let pool = file_pool(&dir.path().join("dfir.sqlite")).await;
+        migrate_up_to(&pool, 13).await;
+        seed(&pool).await;
+        sqlx::query(
+            "INSERT INTO analysis_jobs(id,request_id,evidence_id,status,max_output_bytes,max_items,item_count,created_at,kind,warning_count,warnings) VALUES('job-cancel-1','req-cancel-1','ev-1','COMPLETED',100,100,7,'2026-10-01T00:00:00Z','YARA_SCAN',1,'[{\"code\":\"X\"}]'), ('job-cancel-2','req-cancel-2','ev-1','FAILED',100,100,0,'2026-10-02T00:00:00Z','EVTX_TIMELINE',0,NULL)",
+        )
+        .execute(&pool)
+        .await
+        .expect("legacy jobs");
+        let backups = dir.path().join("backups");
+        let outcome = migrate_with_backup(&pool, &MIGRATOR, &backups, 0)
+            .await
+            .expect("migrate 0014");
+        assert!(matches!(outcome, BackupOutcome::Created { .. }));
+
+        let preserved: (String, i64, Option<String>) = sqlx::query_as(
+            "SELECT kind,item_count,warnings FROM analysis_jobs WHERE id='job-cancel-1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("preserved job");
+        assert_eq!(
+            (preserved.0.as_str(), preserved.1, preserved.2.as_deref()),
+            ("YARA_SCAN", 7, Some("[{\"code\":\"X\"}]"))
+        );
+        let cancelled = sqlx::query(
+            "INSERT INTO analysis_jobs(id,request_id,evidence_id,status,max_output_bytes,max_items,created_at,cancellation_requested_at,error_code) VALUES('job-cancel-3','req-cancel-3','ev-1','CANCELLED',1,1,'2026-10-03T00:00:00Z','2026-10-03T00:01:00Z','CANCELLED')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(cancelled.is_ok(), "{cancelled:?}");
+        let unrequested = sqlx::query(
+            "INSERT INTO analysis_jobs(id,request_id,evidence_id,status,max_output_bytes,max_items,created_at) VALUES('job-cancel-4','req-cancel-4','ev-1','CANCELLED',1,1,'2026-10-03T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(unrequested.is_err(), "CANCELLED sem requisição foi aceito");
+        let orphan = sqlx::query(
+            "INSERT INTO analysis_jobs(id,request_id,evidence_id,status,max_output_bytes,max_items,created_at) VALUES('job-cancel-5','req-cancel-5','missing','PENDING',1,1,'2026-10-03T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await;
+        assert!(orphan.is_err(), "FK para evidence não foi preservada");
+        let indexes: Vec<String> = sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='analysis_jobs' AND name LIKE 'idx_%' ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("indexes");
+        assert_eq!(
+            indexes,
+            [
+                "idx_analysis_jobs_evidence",
+                "idx_analysis_jobs_kind",
+                "idx_analysis_jobs_status"
+            ]
+        );
+        let violations = sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&pool)
+            .await
+            .expect("fk check");
+        assert!(violations.is_empty());
+    }
+
     #[test]
     fn pending_versions_lists_only_what_is_missing_in_order() {
         let all: Vec<i64> = MIGRATOR.iter().map(|migration| migration.version).collect();

@@ -164,6 +164,16 @@ pub async fn headless_analyze(
     to_json(&response)
 }
 
+/// Cancela a análise vigente da evidência; o job persistido recebe CANCELLED.
+pub async fn headless_cancel_analysis(
+    config: &AppConfig,
+    paths: &StoragePaths,
+    evidence_id: &str,
+) -> AppResult<String> {
+    let services = build_services(config, paths).await?;
+    to_json(&service::cancel_active_analysis(&services, evidence_id).await?)
+}
+
 /// Roda as regras de detecção e grava os candidatos pendentes.
 pub async fn headless_detect(
     config: &AppConfig,
