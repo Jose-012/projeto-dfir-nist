@@ -1,7 +1,7 @@
 ---
 name: dfir-verify
 description: Seleciona e executa gates DFIR/NIST, registra resultados reais e explicita verificações externas pendentes
-allowed-tools: agentgrep, read, bash, todo
+allowed-tools: agentgrep, read, bash, todo, edit
 ---
 
 # Verificação honesta no DFIR/NIST
@@ -36,3 +36,4 @@ Fluxo com engine real: just e2e tests/fixtures/senai-demo.evtx
 4. Não leia dados de caso para validar uma tarefa que já tem fixture sanitizada adequada.
 5. Rode `git diff --check` e revise `git status --short` para separar arquivos da tarefa de dados operacionais ou mudanças alheias.
 6. Informe exatamente o que passou, o que falhou e o que ficou pendente. Não declare conclusão apenas porque o código parece correto.
+7. Ao criar ou alterar um gate, lint ou teste de presença, execute também um controle negativo em cópia sanitizada do conteúdo rastreado: viole exatamente a condição nova, confirme a falha esperada e leia seu diagnóstico. Um PASS somente no caminho válido não prova detecção da regressão. Use `edit` somente nessa fixture em scratch, nunca para induzir falha no checkout real.

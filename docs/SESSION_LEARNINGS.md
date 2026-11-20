@@ -140,8 +140,8 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Classe:** erro de execução e de aderência ao critério de parada.
 - **Fato:** em 2026-11-20, chamadas diretas ao dispatcher `mcp` foram emitidas sem o objeto `arguments` e repetiram erros de propriedade obrigatória em `order` e `route`. A mudança para `codemode`, com `arguments:{action,args}` ou `arguments:{task}` explícito, executou os mesmos fluxos read-only com sucesso.
 - **Risco:** confundir erro do envelope com indisponibilidade da ferramenta e consumir o orçamento repetindo uma chamada inválida.
-- **Prevenção:** `AGENTS.md` §15 documenta o envelope completo, e `docs/SESSION_IMPROVEMENT.md` §2 exige validar o objeto aninhado antes da chamada e mudar de método quando o erro não trouxer informação nova. O `doc_gate` preserva a referência a `tools.mcp`.
-- **Confirmação:** pendente.
+- **Prevenção:** `AGENTS.md` §15 documenta o envelope completo, e `docs/SESSION_IMPROVEMENT.md` §2 exige validar o objeto aninhado antes da chamada e mudar de método quando o erro não trouxer informação nova. Após a recorrência, `dfir-improve` passou a exigir `action` explícita em `skill_manage`, e o `doc_gate` verifica essa salvaguarda além da referência a `tools.mcp`.
+- **Confirmação:** recorrente em 2026-11-20: chamadas `skill_manage` pretendidas como reload/list omitiram `action`, caindo no default de `load` ou no erro de `name` ausente. A mudança para `codemode` tornou `action` explícita, mas o `reload` retornou `not found` e não foi contado como sucesso. A leitura dos arquivos confirmou sua integridade. A prevenção foi generalizada para actions obrigatórias e promovida a um needle do gate. A fixture do novo needle passou no baseline com exit 0 e, após a remoção da frase, falhou com exit 1 e o diagnóstico específico ``dfir-improve safeguard missing: Em `skill_manage`, declare `action` explicitamente``.
 
 ### 18. Guia/help divergente do comportamento da versão instalada
 
@@ -157,6 +157,14 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** em 2026-11-20, o harness 1.0.1 (`10114429c8133994861d6c915a2483d397c0f7c2`) apresentou coordenador `moonshotai/kimi-k3.1-pro`; swarm efetivo `nvidia-nim:mistralai/mistral-large-4-1t-a52b`; review efetivo `openrouter:particle-ai/particle-1:free`, embora seu default global fosse `nvidia-nim:moonshotai/kimi-k3.1-pro`; judge efetivo/global `nvidia-nim:nvidia/nemotron-3.5-super-vl-120b-a12b`; e ambient global `nvidia-nim:nvidia/nemotron-3.5-lightning-30b-a3b`, sem override de sessão. Memory não tinha pin global nem de sessão e usa auto-seleção de backend, não um identificador fixo presumido. Os defaults globais de autoreview, autojudge e ambient estavam `enabled=false`. Swarm tinha `swarm_model_selection=false` e allowlist vazia. As variáveis de ambiente correspondentes aos roles estavam ausentes.
 - **Risco:** documentar o default global como se fosse o worker efetivo, aplicar o modelo de swarm aos demais roles ou tentar passar `model` quando o schema o remove por política.
 - **Prevenção:** a fonte da versão instalada confirmou precedência sessão > global e fallback próprio por role. `AGENTS.md` §17 e `.jcode/swarm-prompt.md` exigem fotografia por `/agents`, `/subagent-model` e `swarm list_models`, com leitura restrita ao sidecar `.agent-models.meta` quando o runtime estiver indisponível. O `doc_gate` verifica as novas salvaguardas.
+- **Confirmação:** pendente.
+
+### 20. Gate alterado validado somente no caminho positivo
+
+- **Classe:** lacuna de verificação identificada na revisão das skills.
+- **Fato:** os needles de `AGENTS.md` e `swarm-prompt.md` introduzidos no commit `233823d` foram inicialmente verificados somente com o gate positivo. Nesta rodada, uma cópia criada por `git archive` em scratch permitiu violar cada condição isoladamente: remover `get_call_hierarchy` produziu exit 1 e `missing session-improvement instruction: AGENTS.md: get_call_hierarchy`; remover `swarm_model_selection` produziu exit 1 e `missing swarm-prompt requirement: swarm_model_selection`. O checkout real não foi usado para induzir as falhas.
+- **Risco:** um needle ausente, incorreto ou desconectado poderia deixar o gate verde sem demonstrar que a regressão pretendida é detectada.
+- **Prevenção:** `.jcode/skills/dfir-verify/SKILL.md` item 7 exige controle negativo em cópia sanitizada para mudanças de gate/lint/teste de presença e restringe `edit` à fixture em scratch. O diagnóstico e o exit esperado são pós-condições obrigatórias.
 - **Confirmação:** pendente.
 
 ## Próxima revisão

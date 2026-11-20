@@ -70,6 +70,7 @@ for skill_name in ("dfir-improve", "dfir-change", "dfir-verify", "dfir-detect"):
             "Após uma mutação de todo",
             "nunca a `bg wait`",
             "escrita atrasada",
+            "Em `skill_manage`, declare `action` explicitamente",
             ".jcode/swarm-prompt.md",
         ):
             if needle not in skill_text:

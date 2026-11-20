@@ -1,7 +1,7 @@
 ---
 name: dfir-improve
 description: Executa o loop obrigatório em sessões DFIR/NIST que alteram arquivos ou rodam gates, com lições, orçamento, seleção de skills e fechamento verificável
-allowed-tools: agentgrep, read, edit, apply_patch, write, bash, todo, swarm, bg
+allowed-tools: agentgrep, read, edit, apply_patch, write, bash, todo, swarm, bg, codemode, mcp, jcode_docs
 ---
 
 # Loop de autoaprimoramento DFIR/NIST
@@ -31,6 +31,8 @@ Não trate skill global como local, não instale tooling implicitamente e não c
 
 - Registre em scratch comandos, exits, diagnósticos, hashes e pós-condições necessários ao fechamento. Não copie dados de caso, nomes de evidências, eventos ou secrets.
 - Confirme a pós-condição independente, não apenas exit 0. Uma busca vazia inesperada exige controle positivo ou método alternativo.
+- Antes de usar uma ferramenta com `action` ou envelope aninhado, valide o objeto completo contra o schema atual. Em `skill_manage`, declare `action` explicitamente para distinguir `load`, `reload`, `read` e `list`. No dispatcher `mcp`, os parâmetros ficam em `arguments`; no jcodemunch, `order` exige `action` e `args`. Consulte `menu`/help da versão instalada e registre versão, stdout, exit e pós-condição quando guia e runtime divergirem. Não repita rejeição de validação sem informação nova (AGENTS.md §15 e `docs/SESSION_IMPROVEMENT.md` §2).
+- Ao transferir conteúdo entre ferramentas, use fonte bruta e considere numeração, anotações e truncamento. Compare origem e destino com `cmp` ou hash antes do gate; saída de `read` ou bash não deve ser presumida como os bytes completos do arquivo (`docs/SESSION_IMPROVEMENT.md` §2).
 - Aplique os limites de investigação de `docs/SESSION_IMPROVEMENT.md`. Depois de duas tentativas sem informação nova, mude de método ou consolide a pendência, sem repetir a mesma chamada com outro nome.
 - Após uma mutação de todo, swarm ou background, leia o estado retornado e confirme que a transição esperada ocorreu. Use IDs completos e não duplique workers nem builds. IDs de `await_members` pertencem somente a `todo.waiting_on` e ao acompanhamento de swarm, nunca a `bg wait`.
 - Mantenha trabalho Rust pesado sequencial. Não cancele um build silencioso antes de inspecionar progresso e consumo.
