@@ -27,6 +27,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,6 +107,8 @@ DOCUMENTS = [
     "04-hardening.md",
     "05-criptografia.md",
 ]
+SVG_DOCUMENT = "caminho-critico.svg"
+EXPORTED_DOCUMENTS = DOCUMENTS + [SVG_DOCUMENT]
 # Contrato do incidente de demonstração (src/service/demo.rs, versão bec-demo-1).
 DEMO_VERSION = "bec-demo-1"
 DEMO_COUNTS = {
@@ -263,11 +266,11 @@ def demo_and_documents(runner: "Runner", evtx: Path, expected_sha: str, data_roo
     if not record("deliverables: geração mascarada concluiu", ok, detail):
         return
     names = sorted(entry["file_name"] for entry in files)
-    record("deliverables: cinco documentos e manifest.json", names == sorted(DOCUMENTS + ["manifest.json"]), ",".join(names))
+    record("deliverables: cinco Markdown, SVG e manifest.json", names == sorted(EXPORTED_DOCUMENTS + ["manifest.json"]), ",".join(names))
     reported = {entry["file_name"]: entry for entry in files}
     wrong = [
         name
-        for name in DOCUMENTS + ["manifest.json"]
+        for name in EXPORTED_DOCUMENTS + ["manifest.json"]
         if file_digest(masked_dir / name) != reported[name]["sha256"]
         or (masked_dir / name).stat().st_size != reported[name]["bytes"]
     ]
@@ -279,10 +282,21 @@ def demo_and_documents(runner: "Runner", evtx: Path, expected_sha: str, data_roo
     record("manifest: nome do incidente com o rótulo DEMO", str(manifest["incident_name"]).startswith("[DEMO]"))
     record(
         "manifest: hash de cada documento confere",
-        sorted(by_file) == sorted(DOCUMENTS)
-        and all(by_file[name]["sha256"] == file_digest(masked_dir / name) for name in DOCUMENTS),
+        sorted(by_file) == sorted(EXPORTED_DOCUMENTS)
+        and all(by_file[name]["sha256"] == file_digest(masked_dir / name) for name in EXPORTED_DOCUMENTS),
     )
     record("manifest: declara o mascaramento e o escopo EVTX", manifest["redaction"]["masked"] is True and "EVTX" in manifest["scope"])
+
+    masked_svg = (masked_dir / SVG_DOCUMENT).read_text(encoding="utf-8")
+    try:
+        svg_root = ElementTree.fromstring(masked_svg)
+        svg_valid = svg_root.tag == "{http://www.w3.org/2000/svg}svg"
+    except ElementTree.ParseError:
+        svg_valid = False
+    record(
+        "SVG: XML bem formado, alternativa textual e sem script/recurso externo",
+        svg_valid and "<desc " in masked_svg and "<script" not in masked_svg and "href=" not in masked_svg,
+    )
 
     docs = read_documents(masked_dir)
     record(
@@ -323,14 +337,14 @@ def demo_and_documents(runner: "Runner", evtx: Path, expected_sha: str, data_roo
     gap_rows = [line for line in crypto.splitlines() if line.startswith("| Credenciais e segredos")]
     record("E5: a lacuna da matriz de proteção está marcada", len(gap_rows) == 1 and gap_rows[0].count("— (sem item)") == 2)
 
-    masked_text = "\n".join(docs.values())
+    masked_text = "\n".join(docs.values()) + "\n" + masked_svg
     leaked = [value for value in DEMO_SENSITIVE if value in masked_text]
     record("máscara: IP, e-mail e nome fictícios não aparecem", not leaked, ",".join(leaked))
     record("máscara: marcadores no lugar dos valores", "{IP-1}" in masked_text and "{EMAIL-1}" in masked_text and "{PESSOA-1}" in masked_text)
 
     ok, raw_dir, _, detail = generate_documents(runner, incident_id, base / "bruto", "--no-redaction")
     if record("deliverables: geração sem máscara concluiu", ok, detail):
-        raw_text = "\n".join(read_documents(raw_dir).values())
+        raw_text = "\n".join(read_documents(raw_dir).values()) + "\n" + (raw_dir / SVG_DOCUMENT).read_text(encoding="utf-8")
         absent = [value for value in DEMO_SENSITIVE if value not in raw_text]
         record("sem máscara: os valores aparecem", not absent, ",".join(absent))
         raw_manifest = json.loads((raw_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -338,7 +352,7 @@ def demo_and_documents(runner: "Runner", evtx: Path, expected_sha: str, data_roo
 
     ok, again_dir, _, detail = generate_documents(runner, incident_id, base / "repetido")
     if record("determinismo: segunda geração concluiu", ok, detail):
-        differing = [name for name in DOCUMENTS if file_digest(again_dir / name) != file_digest(masked_dir / name)]
+        differing = [name for name in EXPORTED_DOCUMENTS if file_digest(again_dir / name) != file_digest(masked_dir / name)]
         record("determinismo: documentos idênticos byte a byte", not differing, ",".join(differing))
 
     verify = runner.run("audit-verify")
