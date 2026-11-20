@@ -23,6 +23,32 @@ O harness de agente de desenvolvimento usado no projeto é o **Jcode** (declara�
 
 Fora desta seção e da ADR-0027, os documentos não nomeiam o harness.
 
+## RTK: filtros e retenção de saída
+
+RTK 0.49.0 é somente tooling de engenharia/QA. Não o use para importação ou processamento de EVTX, diagnósticos, auditoria, exports, inspeção SQLite ou comandos com dados de caso. Filtro de texto não é sanitização nem controle de confidencialidade.
+
+Para qualquer comando potencialmente sensível, desabilite a retenção por invocação, sem mudar a configuração do usuário:
+
+```bash
+RTK_RECALL=0 rtk <comando>
+```
+
+Com `recall disabled`, não há cópia recuperável pelo `rtk recall`; quando uma saída de engenharia sanitizada precisar ser recuperada, execute novamente `RTK_RECALL=0 rtk proxy <comando>` para obter stdout/stderr sem filtro. Para dados de caso, prefira o comando original sem RTK. Se o operador optar por desabilitar retenção persistentemente, o comando abaixo altera `~/.config/rtk/config.toml`; ele é uma opção documentada, não um requisito nem uma alteração executada pelo projeto:
+
+```bash
+rtk config recall disabled
+```
+
+`.rtk/filters.toml` filtra somente as linhas `PASS` individuais de nextest emitidas por `just verify`. Não há corte por quantidade/comprimento nem mesclagem de stderr; falhas, contagens, advisories e dicas de recuperação permanecem. Revise o arquivo e faça opt-in explícito com `rtk trust` antes de `rtk verify --require-all`; uma edição invalida o trust pelo hash.
+
+A QA não executa o build nem comandos reais de engenharia: usa comandos fake sanitizados, trust/HOME/XDG isolados e temporários sob `$JCODE_SCRATCH_DIR`. Ela cobre filtros positivos/negativos, stderr, exits 0/23, `rtk proxy`, comando próximo fora do match e ausência de registros com `RTK_RECALL=0`:
+
+```bash
+python3 scripts/qa_rtk_filters.py
+```
+
+Nenhum hook global é instalado ou exigido por essa QA.
+
 ## Rust: stable mais recente (1.100.0)
 
 Decisão do operador (2026-11): o projeto usa a versão **stable mais recente** do Rust, não a 1.97.1. Hoje é a **1.100.0** (anunciada em 2026-11-12), fixada em `rust-toolchain.toml` e `toolchains.toml`; `scripts/doc_gate.py` e `scripts/validate_fase0.py` exigem que as duas fixações sejam a mesma versão exata (`X.Y.Z`). `rust-version = "1.100"` nos três `Cargo.toml` (raiz, engine e protocol) é o piso de compatibilidade, igual ao pin. Para trocar de versão, atualize os dois arquivos e os três manifests juntos.
@@ -63,6 +89,6 @@ O parser EVTX do MVP é `evtx 0.15.1` com `default-features = false` (primeira v
 
 - **`egui_kittest` 0.37.0** (dev-dependency): testes de GUI sem janela, pela árvore de acessibilidade. Exige o mesmo rustc do egui 0.37. O harness de teste usa `allow_missing_glyphs()` e nome acessível em cada widget (`labelled_by`/`from_label`), por causa das checagens novas do 0.37 (`src/gui/mod.rs`, `test_harness`).
 - **`cargo-deny` 0.20.2** (binário oficial, fora do `Cargo.lock`): `cargo deny --workspace check`; o banco RustSec é baixado a cada execução.
-- **GitHub Actions:** o workflow usa actions fixadas por SHA completo e ferramentas com versões exatas, checksum e `fallback: none`. Antes de trocar uma action ou versão de ferramenta, confira na tag exata da `install-action` que o manifesto contém a versão e o hash da plataforma; pin de SHA, sozinho, não prova essa disponibilidade (`EVD-054`). O cache contém somente downloads do registry Cargo, sem `target/`; `df -h` e `cargo clean` antecedem o E2E no runner efêmero para preservar a guarda de disco sem reduzi-la (`EVD-055`).
+- **GitHub Actions:** o workflow usa actions fixadas por SHA completo e ferramentas com versões exatas, checksum e `fallback: none`. Antes de trocar uma action ou versão de ferramenta, confira na tag exata da `install-action` que o manifesto contém a versão e o hash da plataforma; pin de SHA, sozinho, não prova essa disponibilidade (`EVD-054`). O cache contém somente downloads do registry Cargo, sem `target/`; `df -h` e `cargo clean` antecedem o E2E no runner efêmero para preservar a guarda de disco sem reduzi-la (`EVD-055`). O supply-chain executa `cargo audit` (incluindo yanked) e `just licenses`; não repete o `cargo audit --no-yanked` do agregador `just supply-chain`, que continua disponível localmente.
 - **Xvfb + `xdotool` + ImageMagick** (apenas verificação manual da GUI em ambiente sem display, **não** é gate): renderiza com software; cliques e rolagem funcionam, o teclado sintético não chega ao egui. Para digitar, usar `egui_kittest`.
 - **Python** (`scripts/e2e_headless.py`): tooling de QA, nunca backend do produto.

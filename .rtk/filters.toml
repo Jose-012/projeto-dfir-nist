@@ -3,11 +3,25 @@
 # Docs: https://github.com/rtk-ai/rtk#custom-filters
 schema_version = 1
 
-# Example: suppress build noise from a custom tool
-# [filters.my-tool]
-# description = "Compact my-tool output"
-# match_command = "^my-tool\\s+build"
-# strip_ansi = true
-# strip_lines_matching = ["^\\s*$", "^Downloading", "^Installing"]
-# max_lines = 30
-# on_empty = "my-tool: ok"
+# Engineering/QA only. Confidence: high for nextest status lines; all other
+# stdout, stderr and the child exit status pass through. No line/count cap and
+# no stderr merge. Use RTK_RECALL=0 for potentially sensitive invocations.
+[filters.dfir-nextest]
+description = "Strip successful per-test nextest lines; preserve failures, counts and diagnostics"
+match_command = "^just\\s+verify(?:\\s|$)"
+strip_lines_matching = ["^\\s*PASS \\[[^\\]]+\\]\\s+\\S.*$"]
+
+[[tests.dfir-nextest]]
+name = "positive: strips successful cases and preserves the summary"
+input = "        PASS [   0.001s] sanitized::alpha\n        PASS [   0.002s] sanitized::beta\n    Summary [   0.003s] 2 tests run: 2 passed, 0 failed\n"
+expected = "    Summary [   0.003s] 2 tests run: 2 passed, 0 failed"
+
+[[tests.dfir-nextest]]
+name = "negative: preserves failures counts errors and token-like diagnostics"
+input = "        PASS [   0.001s] sanitized::alpha\n        FAIL [   0.002s] sanitized::injected_failure\n    Summary [   0.003s] 2 tests run: 1 passed, 1 failed\nerror: sanitized FIXTURE_TOKEN_LIKE_VALUE\nwarning: keep this diagnostic\n"
+expected = "        FAIL [   0.002s] sanitized::injected_failure\n    Summary [   0.003s] 2 tests run: 1 passed, 1 failed\nerror: sanitized FIXTURE_TOKEN_LIKE_VALUE\nwarning: keep this diagnostic"
+
+[[tests.dfir-nextest]]
+name = "negative: preserves advisories recovery hints and non-nextest results"
+input = "RUSTSEC-0000-0001: sanitized advisory\nCrate: fixture-crate 0.0.1\n[full output: rtk recall 0123456789abcdef]\ntest result: FAILED. 1 passed; 1 failed\n"
+expected = "RUSTSEC-0000-0001: sanitized advisory\nCrate: fixture-crate 0.0.1\n[full output: rtk recall 0123456789abcdef]\ntest result: FAILED. 1 passed; 1 failed"
