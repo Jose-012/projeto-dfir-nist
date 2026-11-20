@@ -64,7 +64,7 @@ A feature `accesskit` do `eframe` permanece desativada: a árvore interna usada 
 
 ## Limitações conhecidas do MVP
 
-- Sem tela de histórico/diff entre versões de profile NIST (o dado existe em `ProfileHistoryView`; a UI mostra a versão vigente).
+- NIST tem seletores independentes e somente leitura para percorrer o histórico de Current e Target, mas não há diff lado a lado. A seleção mostra metadados e entradas da versão escolhida, sinaliza quando não é a vigente e não recalcula gaps nem altera a versão usada em novas análises.
 - Resultado de análise só é visível na sessão em que foi disparada (mesma limitação da UI web anterior).
 - Listas menores (IOCs, mapeamentos ATT&CK, recomendações, estágios do caminho crítico) usam `ui.group`/rótulos em vez de `TableBuilder` — ver ADR-0017, "Consequências".
 

@@ -94,6 +94,8 @@ pub struct NistState {
     loaded_for: Option<String>,
     current: Loadable<ProfileHistoryView>,
     target: Loadable<ProfileHistoryView>,
+    current_version: Option<usize>,
+    target_version: Option<usize>,
     gaps: Loadable<Vec<AnalyticalResultResponse>>,
     functions: Loadable<NistFunctionView>,
     form: ProfileForm,
@@ -109,6 +111,8 @@ impl Default for NistState {
             loaded_for: None,
             current: Loadable::Idle,
             target: Loadable::Idle,
+            current_version: None,
+            target_version: None,
             gaps: Loadable::Idle,
             functions: Loadable::Idle,
             form: ProfileForm::default(),
@@ -128,6 +132,8 @@ impl NistState {
         self.loaded_for = Some(incident_id.to_string());
         self.current = Loadable::Loading;
         self.target = Loadable::Loading;
+        self.current_version = None;
+        self.target_version = None;
         self.gaps = Loadable::Loading;
         self.functions = Loadable::Loading;
         backend.send(Command::LoadNistFunctionView(incident_id.to_string()));
@@ -152,9 +158,13 @@ impl NistState {
         };
         match &loadable {
             Loadable::Ready(history) if history.profile_type == ProfileType::Current => {
+                self.current_version = history.versions.len().checked_sub(1);
                 self.current = loadable;
             }
-            Loadable::Ready(_) => self.target = loadable,
+            Loadable::Ready(history) => {
+                self.target_version = history.versions.len().checked_sub(1);
+                self.target = loadable;
+            }
             _ => {
                 // Erro genérico: não sabemos a qual dos dois pertence: aplica
                 // a quem ainda estiver carregando.
@@ -237,8 +247,20 @@ impl NistState {
         ui.separator();
 
         ui.columns(2, |columns| {
-            profile_column(&mut columns[0], "Current Profile", &self.current);
-            profile_column(&mut columns[1], "Target Profile", &self.target);
+            profile_column(
+                &mut columns[0],
+                "current",
+                "Current Profile",
+                &self.current,
+                &mut self.current_version,
+            );
+            profile_column(
+                &mut columns[1],
+                "target",
+                "Target Profile",
+                &self.target,
+                &mut self.target_version,
+            );
         });
 
         ui.separator();
@@ -374,35 +396,71 @@ impl NistState {
     }
 }
 
-fn profile_column(ui: &mut egui::Ui, title: &str, loadable: &Loadable<ProfileHistoryView>) {
+fn profile_column(
+    ui: &mut egui::Ui,
+    id: &str,
+    title: &str,
+    loadable: &Loadable<ProfileHistoryView>,
+    selected_version: &mut Option<usize>,
+) {
     ui.heading(title);
     loadable.show(ui, |ui, history| {
         if history.versions.is_empty() {
+            *selected_version = None;
             ui.label("Nenhuma versão ainda.");
             return;
         }
-        let latest = history.versions.last().expect("checked non-empty above");
+        let latest_index = history.versions.len() - 1;
+        let selected_index = match *selected_version {
+            Some(index) if index <= latest_index => index,
+            _ => latest_index,
+        };
+        *selected_version = Some(selected_index);
+        let selected = &history.versions[selected_index];
+        egui::ComboBox::new(
+            format!("nist_{id}_profile_version"),
+            format!("Versão do {title}"),
+        )
+        .selected_text(format!(
+            "{} · {}",
+            selected.version_label, selected.created_at
+        ))
+        .show_ui(ui, |ui| {
+            for (index, version) in history.versions.iter().enumerate() {
+                ui.selectable_value(
+                    selected_version,
+                    Some(index),
+                    format!("{} · {}", version.version_label, version.created_at),
+                );
+            }
+        });
         ui.label(format!(
-            "Versão vigente: {} · fonte: {}",
-            latest.version_label, latest.source
+            "Versão exibida: {} · fonte: {}",
+            selected.version_label, selected.source
         ));
-        if let Some(tier) = &latest.tier {
+        if selected_index != latest_index {
+            super::hint_banner(
+                ui,
+                "Versão não vigente: visualização somente leitura. Novas análises continuam usando a versão vigente.",
+            );
+        }
+        if let Some(tier) = &selected.tier {
             ui.label(format!("Tier: {tier}"));
         }
-        if let Some(justification) = &latest.tier_justification {
+        if let Some(justification) = &selected.tier_justification {
             ui.label(format!("Justificativa do tier: {justification}"));
         }
         ui.label(format!(
-            "{} entradas · {} versões no histórico · última em {}",
-            latest.entries.len(),
+            "{} entradas · {} versões no histórico · criada em {}",
+            selected.entries.len(),
             history.versions.len(),
-            latest.created_at
+            selected.created_at
         ));
         egui::ScrollArea::vertical()
-            .id_salt(title)
+            .id_salt(format!("nist_{id}_entries"))
             .max_height(240.0)
             .show(ui, |ui| {
-                for entry in &latest.entries {
+                for entry in &selected.entries {
                     ui.label(format!(
                         "{} — {} ({})",
                         entry.subcategory_id, entry.subcategory_label, entry.implementation_status
@@ -589,6 +647,69 @@ mod ui_tests {
         }
     }
 
+    fn version(
+        version_label: &str,
+        source: &str,
+        tier: &str,
+        tier_justification: &str,
+        created_at: &str,
+        entry_id: &str,
+        entry_label: &str,
+        implementation_status: &str,
+    ) -> ProfileVersionView {
+        ProfileVersionView {
+            version_label: version_label.into(),
+            source: source.into(),
+            tier: Some(tier.into()),
+            tier_justification: Some(tier_justification.into()),
+            created_at: created_at.into(),
+            entries: vec![ProfileEntryRecord {
+                subcategory_id: entry_id.into(),
+                subcategory_label: entry_label.into(),
+                implementation_status: implementation_status.into(),
+                confidence: None,
+            }],
+        }
+    }
+
+    fn two_version_history(profile_type: ProfileType) -> ProfileHistoryView {
+        ProfileHistoryView {
+            profile_type,
+            versions: vec![
+                version(
+                    "antiga",
+                    "fonte-antiga",
+                    "TIER_1_PARTIAL",
+                    "contexto-antigo",
+                    "2026-11-17T00:00:00Z",
+                    "GV.OC-00",
+                    "Contexto antigo",
+                    "NOT_IMPLEMENTED",
+                ),
+                version(
+                    "atual",
+                    "fonte-atual",
+                    "TIER_2_RISK_INFORMED",
+                    "contexto-atual",
+                    "2026-11-18T00:00:00Z",
+                    "GV.OC-01",
+                    "Contexto atual",
+                    "IMPLEMENTED",
+                ),
+            ],
+        }
+    }
+
+    fn select_version(harness: &mut Harness<'static, State>, title: &str, option: &str) {
+        let combo_label = format!("Versão do {title}");
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, combo_label.as_str())
+            .click();
+        harness.run();
+        harness.get_by_label(option).click();
+        harness.run();
+    }
+
     fn gap(payload: serde_json::Value) -> AnalyticalResultResponse {
         AnalyticalResultResponse {
             id: "gap-1".into(),
@@ -699,6 +820,187 @@ mod ui_tests {
             !paints_id_clash_warning,
             "o egui não deve pintar avisos de ID duplicado sobre Current e Target"
         );
+    }
+
+    #[test]
+    fn two_versions_are_selectable_and_old_content_is_read_only() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = loaded_state(GapAnalysisState::Stale);
+        state.current = Loadable::Ready(two_version_history(ProfileType::Current));
+        let mut harness = harness(state, backend);
+        harness.run();
+
+        assert!(harness.query_by_label_contains("fonte-atual").is_some());
+        assert!(harness.query_by_label_contains("fonte-antiga").is_none());
+        assert!(harness.query_by_label_contains("Contexto antigo").is_none());
+        harness
+            .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Versão do Current Profile")
+            .click();
+        harness.run();
+        harness
+            .get_by_label("antiga · 2026-11-17T00:00:00Z")
+            .click();
+        harness.run();
+
+        harness.get_by_label("Versão exibida: antiga · fonte: fonte-antiga");
+        harness.get_by_label("Tier: TIER_1_PARTIAL");
+        harness.get_by_label("Justificativa do tier: contexto-antigo");
+        harness
+            .get_by_label("1 entradas · 2 versões no histórico · criada em 2026-11-17T00:00:00Z");
+        harness.get_by_label("GV.OC-00 — Contexto antigo (NOT_IMPLEMENTED)");
+        harness.get_by_label(
+            "Versão não vigente: visualização somente leitura. Novas análises continuam usando a versão vigente.",
+        );
+        harness.get_by_label(
+            "Os gaps foram calculados com uma versão anterior dos profiles: recalcule para atualizar as contagens de gap.",
+        );
+        assert!(harness.query_by_label_contains("Contexto atual").is_none());
+        assert!(
+            drain(&mut commands).is_empty(),
+            "selecionar histórico não pode emitir criação, mutação ou recálculo"
+        );
+    }
+
+    #[test]
+    fn current_and_target_version_selections_are_independent_and_read_only() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = loaded_state(GapAnalysisState::UpToDate);
+        state.current = Loadable::Ready(two_version_history(ProfileType::Current));
+        state.target = Loadable::Ready(two_version_history(ProfileType::Target));
+        let mut harness = harness(state, backend);
+        harness.run();
+
+        select_version(
+            &mut harness,
+            "Current Profile",
+            "antiga · 2026-11-17T00:00:00Z",
+        );
+        assert_eq!(
+            harness
+                .get_by_role_and_label(
+                    egui::accesskit::Role::ComboBox,
+                    "Versão do Current Profile",
+                )
+                .value()
+                .as_deref(),
+            Some("antiga · 2026-11-17T00:00:00Z")
+        );
+        assert_eq!(
+            harness
+                .get_by_role_and_label(egui::accesskit::Role::ComboBox, "Versão do Target Profile",)
+                .value()
+                .as_deref(),
+            Some("atual · 2026-11-18T00:00:00Z")
+        );
+
+        select_version(
+            &mut harness,
+            "Target Profile",
+            "antiga · 2026-11-17T00:00:00Z",
+        );
+        assert_eq!(
+            harness
+                .get_all_by_role_and_label(
+                    egui::accesskit::Role::Label,
+                    "Versão exibida: antiga · fonte: fonte-antiga",
+                )
+                .count(),
+            2
+        );
+
+        select_version(
+            &mut harness,
+            "Current Profile",
+            "atual · 2026-11-18T00:00:00Z",
+        );
+        harness.get_by_label("Versão exibida: atual · fonte: fonte-atual");
+        harness.get_by_label("Versão exibida: antiga · fonte: fonte-antiga");
+        assert!(
+            drain(&mut commands).is_empty(),
+            "nenhuma seleção de Current ou Target pode emitir comandos"
+        );
+    }
+
+    #[test]
+    fn history_reload_restores_the_latest_version_as_default() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = loaded_state(GapAnalysisState::UpToDate);
+        state.current = Loadable::Ready(two_version_history(ProfileType::Current));
+        let mut harness = harness(state, backend);
+        harness.run();
+        select_version(
+            &mut harness,
+            "Current Profile",
+            "antiga · 2026-11-17T00:00:00Z",
+        );
+        harness.get_by_label("Versão exibida: antiga · fonte: fonte-antiga");
+
+        harness
+            .state_mut()
+            .0
+            .on_history("inc-1", Ok(two_version_history(ProfileType::Current)));
+        harness.run();
+
+        assert_eq!(
+            harness
+                .get_by_role_and_label(
+                    egui::accesskit::Role::ComboBox,
+                    "Versão do Current Profile",
+                )
+                .value()
+                .as_deref(),
+            Some("atual · 2026-11-18T00:00:00Z")
+        );
+        harness.get_by_label("Versão exibida: atual · fonte: fonte-atual");
+        assert!(
+            harness
+                .query_by_label_contains("Versão não vigente:")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn empty_and_single_version_histories_remain_stable() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut harness = harness(loaded_state(GapAnalysisState::UpToDate), backend);
+        harness.run();
+        assert_eq!(
+            harness
+                .get_all_by_role_and_label(egui::accesskit::Role::Label, "Nenhuma versão ainda.",)
+                .count(),
+            2,
+            "Current e Target vazios devem continuar estáveis"
+        );
+        for label in ["Versão do Current Profile", "Versão do Target Profile"] {
+            assert!(
+                harness.query_by_label(label).is_none(),
+                "histórico vazio não deve criar seletor: {label}"
+            );
+        }
+
+        {
+            let (state, _) = harness.state_mut();
+            state.current = Loadable::Ready(history(ProfileType::Current));
+            state.target = Loadable::Ready(history(ProfileType::Target));
+        }
+        harness.run();
+        for title in ["Current Profile", "Target Profile"] {
+            let label = format!("Versão do {title}");
+            assert_eq!(
+                harness
+                    .get_by_role_and_label(egui::accesskit::Role::ComboBox, label.as_str())
+                    .value()
+                    .as_deref(),
+                Some("v1 · 2026-11-18T00:00:00Z")
+            );
+        }
+        select_version(&mut harness, "Current Profile", "v1 · 2026-11-18T00:00:00Z");
+        assert!(
+            harness
+                .query_by_label_contains("Versão não vigente:")
+                .is_none()
+        );
+        assert!(drain(&mut commands).is_empty());
     }
 
     #[test]
