@@ -86,6 +86,48 @@ pub async fn headless_deliverables(
     to_json(&generated)
 }
 
+/// Gera, assina e reverifica os entregáveis antes da auditoria. A resposta
+/// contém somente a chave pública necessária para a verificação offline.
+pub async fn headless_deliverables_signed(
+    config: &AppConfig,
+    paths: &StoragePaths,
+    incident_id: &str,
+    out: Option<&Path>,
+    options: service::deliverables::RenderOptions,
+    private_key: &Path,
+) -> AppResult<String> {
+    let services = build_services(config, paths).await?;
+    let out_dir = out.unwrap_or(paths.exports.as_path());
+    let generated = service::deliverables::generate_signed(
+        &services,
+        incident_id,
+        out_dir,
+        options,
+        private_key,
+    )
+    .await?;
+    let public_key = service::deliverables::public_key_hex(private_key, &services.paths)?;
+    let verification = service::deliverables::verify_directory(&generated.output_dir, &public_key)?;
+    to_json(&serde_json::json!({
+        "output_dir": generated.output_dir,
+        "generated_at": generated.generated_at,
+        "files": generated.files,
+        "public_key": public_key,
+        "public_key_id": verification.public_key_id,
+    }))
+}
+
+/// Verificação offline: não abre banco, engine nem rede.
+pub fn headless_verify_deliverables(
+    output_dir: &Path,
+    expected_public_key: &str,
+) -> AppResult<String> {
+    to_json(&service::deliverables::verify_directory(
+        output_dir,
+        expected_public_key,
+    )?)
+}
+
 /// Incidente de demonstração (F1-11): importa o `.evtx`, executa as análises
 /// reais do engine e registra o cenário BEC sintético num incidente novo.
 pub async fn headless_demo(

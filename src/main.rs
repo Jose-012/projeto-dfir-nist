@@ -154,6 +154,17 @@ enum Command {
         /// pessoais são mascarados; esta escolha é explícita e fica na auditoria.
         #[arg(long)]
         no_redaction: bool,
+        /// Assina o SHA-256 do manifest com uma chave privada Ed25519 externa
+        /// (32 bytes em hexadecimal), depois reverifica antes de auditar.
+        #[arg(long)]
+        sign_with: Option<std::path::PathBuf>,
+    },
+    /// Verifica offline manifest, documentos, hashes e assinatura destacada.
+    VerifyDeliverables {
+        output_dir: std::path::PathBuf,
+        /// Chave pública Ed25519 esperada (32 bytes em hexadecimal).
+        #[arg(long)]
+        public_key: String,
     },
     /// Cria o incidente de DEMONSTRAÇÃO: importa o .evtx informado, executa
     /// as análises reais e registra o cenário BEC sintético (dados fictícios,
@@ -325,12 +336,30 @@ fn main() -> Result<(), error::AppError> {
             incident_id,
             out,
             no_redaction,
+            sign_with,
         }) => run_json(async {
             let options = service::deliverables::RenderOptions {
                 mask_personal_data: !no_redaction,
             };
-            cli::headless_deliverables(&config, &paths, &incident_id, out.as_deref(), options).await
+            if let Some(private_key) = sign_with {
+                cli::headless_deliverables_signed(
+                    &config,
+                    &paths,
+                    &incident_id,
+                    out.as_deref(),
+                    options,
+                    &private_key,
+                )
+                .await
+            } else {
+                cli::headless_deliverables(&config, &paths, &incident_id, out.as_deref(), options)
+                    .await
+            }
         }),
+        Some(Command::VerifyDeliverables {
+            output_dir,
+            public_key,
+        }) => run_json(async move { cli::headless_verify_deliverables(&output_dir, &public_key) }),
         Some(Command::Demo { evtx }) => {
             run_json(async { cli::headless_demo(&config, &paths, &evtx).await })
         }

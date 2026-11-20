@@ -9,6 +9,8 @@ As dependências devem ser inventariadas a partir do `Cargo.lock` e do inventár
 
 > **Atualização 2026-11-19 (segurança):** inventário regenerado por `cargo metadata --locked --format-version 1` com cargo/rustc 1.100.0: 613 pacotes, 3 do workspace e 610 de terceiros; SHA-256 do `Cargo.lock` `bf5c5f5fef7c83af6846085681b5ee9587285df68f280e7a29d75d9fd1be4a14`. Atualizações mínimas: `sqlx 0.9.1`, `libsqlite3-sys 0.40.0`, `wasmtime 48.0.9` e a família Cranelift 0.135.9; entrou `objc2-system-configuration 0.3.2`. SBOM permanece fora do escopo (ADR-0028).
 
+> **Atualização 2026-11-20 (F1-40):** inventário regenerado por `cargo metadata --locked --format-version 1` com cargo/rustc 1.100.0: 621 pacotes, 3 do workspace e 618 de terceiros; SHA-256 do `Cargo.lock` `09116593a6ccba436852821fbbfc09aa55b55a7fefb1784be376587256db2304`. A mudança adiciona `ed25519-dalek 3.0.0` e sua árvore de assinatura Ed25519. Metadata e lock têm as mesmas identidades de pacote. SBOM permanece fora do escopo (ADR-0028).
+
 ## Ferramentas explicitamente rejeitadas como componentes do produto
 
 **Hayabusa** e **Chainsaw** não fazem parte do produto e não devem ser adicionados a `Cargo.toml`, inventário de componentes, fixtures ou pacotes distribuídos sem uma nova decisão arquitetural e revisão jurídica aplicável ao modelo efetivo de distribuição.
@@ -19,6 +21,7 @@ A razão técnica registrada na ADR-0002 é preservar a possibilidade de distrib
 
 - serde_json_canonicalizer 0.3.2 — MIT.
 - thiserror 2.0.21 — MIT OR Apache-2.0.
+- ed25519-dalek 3.0.0 — BSD-3-Clause.
 - proptest 1.12.0 — MIT OR Apache-2.0.
 - evtx 0.15.1 — MIT/Apache-2.0.
 - eframe 0.37.0 — MIT OR Apache-2.0.
@@ -37,41 +40,42 @@ Nenhum pacote declara apenas uma licença copyleft (GPL, LGPL, AGPL, MPL, EPL, C
 |---|---|
 | MIT OR Apache-2.0 | 276 |
 | MIT | 123 |
-| Apache-2.0 OR MIT | 40 |
-| MIT/Apache-2.0 | 28 |
+| Apache-2.0 OR MIT | 43 |
+| MIT/Apache-2.0 | 29 |
 | Apache-2.0 WITH LLVM-exception | 27 |
 | Apache-2.0 | 18 |
 | Unicode-3.0 | 18 |
 | Unlicense OR MIT | 13 |
 | Zlib OR Apache-2.0 OR MIT | 13 |
 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | 12 |
+| BSD-3-Clause | 6 |
 | MIT OR Apache-2.0 OR Zlib | 6 |
 | Zlib | 4 |
 | Apache-2.0/MIT | 3 |
-| BSD-3-Clause | 3 |
-| BSL-1.0 | 2 |
-| MIT OR Zlib OR Apache-2.0 | 2 |
-| BSD-3-Clause OR Apache-2.0 | 2 |
-| BSD-3-Clause OR MIT OR Apache-2.0 | 2 |
-| MIT OR Apache-2.0 OR LGPL-2.1-or-later | 2 |
-| Unlicense/MIT | 2 |
 | (MIT OR Apache-2.0) AND Unicode-3.0 | 2 |
 | BSD-2-Clause OR Apache-2.0 OR MIT | 2 |
-| 0BSD OR MIT OR Apache-2.0 | 1 |
-| CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception | 1 |
-| MIT / Apache-2.0 | 1 |
-| CC0-1.0 OR MIT-0 OR Apache-2.0 | 1 |
-| Apache-2.0 AND MIT | 1 |
+| BSD-3-Clause OR Apache-2.0 | 2 |
+| BSD-3-Clause OR MIT OR Apache-2.0 | 2 |
+| BSL-1.0 | 2 |
+| MIT OR Apache-2.0 OR LGPL-2.1-or-later | 2 |
+| MIT OR Zlib OR Apache-2.0 | 2 |
+| Unlicense/MIT | 2 |
 | (Apache-2.0 OR MIT) AND BSD-3-Clause | 1 |
 | (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0 | 1 |
+| 0BSD OR MIT OR Apache-2.0 | 1 |
 | Apache-2.0 / MIT | 1 |
-| ISC | 1 |
-| BSD-2-Clause OR MIT OR Apache-2.0 | 1 |
+| Apache-2.0 AND MIT | 1 |
 | Apache-2.0 OR BSL-1.0 | 1 |
-| Apache-2.0 OR GPL-2.0-only | 1 |
 | Apache-2.0 OR BSL-1.0 OR MIT | 1 |
+| Apache-2.0 OR GPL-2.0-only | 1 |
+| BSD-2-Clause OR MIT OR Apache-2.0 | 1 |
+| CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception | 1 |
+| CC0-1.0 OR MIT-0 OR Apache-2.0 | 1 |
+| ISC | 1 |
+| MIT / Apache-2.0 | 1 |
+| MIT OR Apache-2.0 OR BSD-1-Clause | 1 |
 
-## Inventário do `Cargo.lock` (613 pacotes)
+## Inventário do `Cargo.lock` (621 pacotes)
 
 Crate, versão, licença declarada e origem, ordenados por nome.
 
@@ -186,6 +190,8 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | crypto-common | 0.2.2 | MIT OR Apache-2.0 | crates.io |
 | ctutils | 0.4.7 | Apache-2.0 OR MIT | crates.io |
 | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib | crates.io |
+| curve25519-dalek | 5.0.0 | BSD-3-Clause | crates.io |
+| curve25519-dalek-derive | 0.1.1 | MIT/Apache-2.0 | crates.io |
 | daachorse | 5.1.0 | MIT OR Apache-2.0 | crates.io |
 | darling | 0.24.1 | MIT | crates.io |
 | darling_core | 0.24.1 | MIT | crates.io |
@@ -204,6 +210,8 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | downcast-rs | 1.2.1 | MIT/Apache-2.0 | crates.io |
 | dpi | 0.1.2 | Apache-2.0 AND MIT | crates.io |
 | ecolor | 0.37.0 | MIT OR Apache-2.0 | crates.io |
+| ed25519 | 3.0.0 | Apache-2.0 OR MIT | crates.io |
+| ed25519-dalek | 3.0.0 | BSD-3-Clause | crates.io |
 | eframe | 0.37.0 | MIT OR Apache-2.0 | crates.io |
 | egui | 0.37.0 | MIT OR Apache-2.0 | crates.io |
 | egui-wgpu | 0.37.0 | MIT OR Apache-2.0 | crates.io |
@@ -233,6 +241,7 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | fax | 0.2.7 | MIT | crates.io |
 | fdeflate | 0.3.7 | MIT OR Apache-2.0 | crates.io |
 | fearless_simd | 0.4.1 | Apache-2.0 OR MIT | crates.io |
+| fiat-crypto | 0.3.0 | MIT OR Apache-2.0 OR BSD-1-Clause | crates.io |
 | find-msvc-tools | 0.1.15 | MIT OR Apache-2.0 | crates.io |
 | fixedbitset | 0.5.9 | MIT OR Apache-2.0 | crates.io |
 | flate2 | 1.1.10 | MIT OR Apache-2.0 | crates.io |
@@ -499,6 +508,7 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | sharded-slab | 0.1.7 | MIT | crates.io |
 | shlex | 2.0.1 | MIT OR Apache-2.0 | crates.io |
 | signal-hook-registry | 1.4.8 | MIT OR Apache-2.0 | crates.io |
+| signature | 3.0.0 | Apache-2.0 OR MIT | crates.io |
 | simd-adler32 | 0.3.10 | MIT | crates.io |
 | simd_cesu8 | 1.2.0 | Apache-2.0 OR MIT | crates.io |
 | simdutf8 | 0.1.5 | MIT OR Apache-2.0 | crates.io |
@@ -529,6 +539,7 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | stringprep | 0.1.5 | MIT/Apache-2.0 | crates.io |
 | strsim | 0.11.1 | MIT | crates.io |
 | strum_macros | 0.28.0 | MIT | crates.io |
+| subtle | 2.6.1 | BSD-3-Clause | crates.io |
 | syn | 1.0.109 | MIT OR Apache-2.0 | crates.io |
 | syn | 2.0.119 | MIT OR Apache-2.0 | crates.io |
 | syn | 3.0.9 | MIT OR Apache-2.0 | crates.io |
@@ -683,6 +694,7 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | zerocopy-derive | 0.8.63 | BSD-2-Clause OR Apache-2.0 OR MIT | crates.io |
 | zerofrom | 0.1.8 | Unicode-3.0 | crates.io |
 | zerofrom-derive | 0.1.8 | Unicode-3.0 | crates.io |
+| zeroize | 1.9.2 | Apache-2.0 OR MIT | crates.io |
 | zerotrie | 0.2.5 | Unicode-3.0 | crates.io |
 | zerovec | 0.11.9 | Unicode-3.0 | crates.io |
 | zerovec-derive | 0.11.7 | Unicode-3.0 | crates.io |

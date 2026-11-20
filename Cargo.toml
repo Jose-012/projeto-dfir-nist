@@ -14,6 +14,7 @@ blake3 = "1.8.6"
 chrono = { version = "0.4.45", features = ["serde", "clock"] }
 clap = { version = "4.6.6", features = ["derive"] }
 dfir-protocol = { path = "protocol", version = "0.1.0" }
+ed25519-dalek = { version = "3.0.0", default-features = false, features = ["zeroize"] }
 # `accesskit` desligado de propósito: o app não expõe ponte de acessibilidade
 # AT-SPI (zbus/atspi) e os testes de GUI (egui_kittest) usam a árvore interna do
 # egui. Remove zbus/zvariant/atspi do grafo de produção (RUSTSEC-2026-0370/0371/0372).

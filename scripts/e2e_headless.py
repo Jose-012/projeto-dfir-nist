@@ -350,6 +350,79 @@ def demo_and_documents(runner: "Runner", evtx: Path, expected_sha: str, data_roo
         raw_manifest = json.loads((raw_dir / "manifest.json").read_text(encoding="utf-8"))
         record("sem máscara: o manifest registra a escolha", raw_manifest["redaction"]["masked"] is False)
 
+    # F1-40: chave estritamente sintética e fora do armazenamento interno.
+    with tempfile.TemporaryDirectory(prefix="dfir-e2e-keys-") as key_root:
+        private_key = Path(key_root) / "synthetic-ed25519.key"
+        private_hex = "42" * 32
+        private_key.write_text(private_hex + "\n", encoding="ascii")
+        ok, signed, detail = runner.json(
+            "deliverables", incident_id, "--out", str(base / "assinado"), "--sign-with", str(private_key)
+        )
+        if record("assinatura: geração assinada concluiu", ok, detail):
+            signed_dir = Path(signed["output_dir"])
+            public_key = signed["public_key"]
+            signature_path = signed_dir / "manifest.json.sig"
+            envelope = json.loads(signature_path.read_text(encoding="utf-8"))
+            record(
+                "assinatura: oito arquivos e digest exato do manifest",
+                len(signed["files"]) == 8
+                and envelope["schema"] == "dfir-deliverables-signature/1"
+                and envelope["algorithm"] == "Ed25519"
+                and envelope["manifest_sha256"] == file_digest(signed_dir / "manifest.json"),
+            )
+            record(
+                "assinatura: resposta traz só chave pública/fingerprint",
+                len(public_key) == 64
+                and signed["public_key_id"].startswith("sha256:")
+                and private_hex not in json.dumps(signed)
+                and str(private_key) not in json.dumps(signed),
+            )
+            ok, verified, detail = runner.json(
+                "verify-deliverables", str(signed_dir), "--public-key", public_key
+            )
+            record(
+                "assinatura: verificação offline do conjunto",
+                ok and verified["documents"] == 6 and verified["public_key_id"] == signed["public_key_id"],
+                detail,
+            )
+            wrong = runner.run("verify-deliverables", str(signed_dir), "--public-key", "43" * 32)
+            record("assinatura: chave pública errada é recusada", wrong.returncode != 0)
+
+            manifest_path = signed_dir / "manifest.json"
+            original = manifest_path.read_bytes()
+            manifest_path.write_bytes(original + b" ")
+            changed = runner.run("verify-deliverables", str(signed_dir), "--public-key", public_key)
+            record("assinatura: manifest alterado é recusado", changed.returncode != 0)
+            manifest_path.write_bytes(original)
+
+            document_path = signed_dir / DOCUMENTS[0]
+            original = document_path.read_bytes()
+            document_path.write_bytes(original + b"\n")
+            changed = runner.run("verify-deliverables", str(signed_dir), "--public-key", public_key)
+            record("assinatura: documento alterado é recusado", changed.returncode != 0)
+            document_path.write_bytes(original)
+
+            original = signature_path.read_bytes()
+            changed_envelope = dict(envelope)
+            signature_hex = changed_envelope["signature"]
+            changed_envelope["signature"] = ("0" if signature_hex[0] != "0" else "1") + signature_hex[1:]
+            signature_path.write_text(json.dumps(changed_envelope), encoding="utf-8")
+            changed = runner.run("verify-deliverables", str(signed_dir), "--public-key", public_key)
+            record("assinatura: assinatura alterada é recusada", changed.returncode != 0)
+            signature_path.write_bytes(original)
+
+            signature_path.rename(signed_dir / "signature-backup")
+            missing = runner.run("verify-deliverables", str(signed_dir), "--public-key", public_key)
+            record("assinatura: artefato ausente é recusado", missing.returncode != 0)
+            (signed_dir / "signature-backup").rename(signature_path)
+
+            ok, unsigned_dir, _, detail = generate_documents(runner, incident_id, base / "assinado")
+            record(
+                "assinatura: geração não assinada remove assinatura obsoleta",
+                ok and not (unsigned_dir / "manifest.json.sig").exists(),
+                detail,
+            )
+
     ok, again_dir, _, detail = generate_documents(runner, incident_id, base / "repetido")
     if record("determinismo: segunda geração concluiu", ok, detail):
         differing = [name for name in EXPORTED_DOCUMENTS if file_digest(again_dir / name) != file_digest(masked_dir / name)]
@@ -509,6 +582,13 @@ def main() -> int:
                         f"total filtrado={filtered['total']}",
                     )
             structured_checks(runner, analysis["job_id"], events, total)
+            late_cancel = runner.run("cancel-analysis", evidence_id)
+            record("cancelamento: CLI recusa pedido sem análise ativa", late_cancel.returncode != 0)
+            ok, completed_page, _ = runner.json("results", analysis["job_id"], "--limit", "1")
+            record(
+                "cancelamento: corrida tardia preserva COMPLETED",
+                ok and completed_page["job"]["status"] == "COMPLETED",
+            )
         else:
             record("analyze EVTX: detalhe da falha", False, detail or json.dumps(analysis)[:300])
 

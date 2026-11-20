@@ -22,9 +22,13 @@ pub mod markdown;
 mod maturity;
 mod redaction;
 mod report;
+mod signing;
 mod vulnerabilities;
 
 pub use redaction::RedactionSummary;
+#[cfg(test)]
+use signing::FILE_SIGNATURE;
+pub use signing::{VerifiedDeliverables, public_key_hex, verify_directory};
 
 use super::findings::{CriticalPathView, FindingsView};
 use super::nist::NistFunctionView;
@@ -37,7 +41,7 @@ use crate::error::{AppError, AppResult};
 use crate::infrastructure::storage::StoragePaths;
 use crate::persistence::audit;
 use markdown::{Doc, esc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -728,7 +732,8 @@ pub async fn preview(
 // Gravação
 // ---------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ManifestDocument {
     file: String,
     title: String,
@@ -738,15 +743,16 @@ struct ManifestDocument {
     source_result_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Manifest {
-    schema: &'static str,
+    schema: String,
     incident_id: String,
     incident_name: String,
     generated_at: String,
-    tool: &'static str,
-    tool_version: &'static str,
-    scope: &'static str,
+    tool: String,
+    tool_version: String,
+    scope: String,
     /// Só contagens do que foi mascarado, nunca os valores.
     redaction: ManifestRedaction,
     /// Evidências citadas que o operador marcou como contendo dado pessoal.
@@ -754,7 +760,8 @@ struct Manifest {
     documents: Vec<ManifestDocument>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ManifestRedaction {
     masked: bool,
     ips: usize,
@@ -875,6 +882,18 @@ pub fn write_set(
     generated_at: &str,
 ) -> AppResult<GeneratedDeliverables> {
     let target = prepare_output_dir(out_dir, &set.incident_id, paths)?;
+    // Reescrever sem assinatura não pode deixar um artefato antigo que pareça
+    // cobrir o manifest novo. Remover o link em si nunca segue seu destino.
+    match std::fs::symlink_metadata(target.join(signing::FILE_SIGNATURE)) {
+        Ok(metadata) if metadata.is_dir() => {
+            return Err(AppError::Config(
+                "the detached signature path is occupied by a directory".into(),
+            ));
+        }
+        Ok(_) => std::fs::remove_file(target.join(signing::FILE_SIGNATURE))?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
     let documents: Vec<&RenderedDocument> = set
         .documents
         .iter()
@@ -901,13 +920,13 @@ pub fn write_set(
         });
     }
     let manifest = Manifest {
-        schema: "dfir-deliverables/1",
+        schema: "dfir-deliverables/1".into(),
         incident_id: set.incident_id.clone(),
         incident_name: set.incident_name.clone(),
         generated_at: generated_at.to_string(),
-        tool: "dfir-app",
-        tool_version: env!("CARGO_PKG_VERSION"),
-        scope: "Análise automática apenas de logs EVTX; demais fontes só por registro manual do analista.",
+        tool: "dfir-app".into(),
+        tool_version: env!("CARGO_PKG_VERSION").into(),
+        scope: "Análise automática apenas de logs EVTX; demais fontes só por registro manual do analista.".into(),
         redaction: match &set.redaction {
             Some(summary) => ManifestRedaction {
                 masked: true,
@@ -942,22 +961,18 @@ pub fn write_set(
     })
 }
 
-/// Gera os cinco documentos e o manifest em `out_dir`, e registra o evento
-/// na trilha de auditoria (só nomes de arquivo e hashes, sem caminhos).
-pub async fn generate(
+async fn audit_generated(
     services: &AppServices,
     incident_id: &str,
-    out_dir: &Path,
-    options: RenderOptions,
-) -> AppResult<GeneratedDeliverables> {
-    let data = collect(services, incident_id).await?;
-    let set = render_with(&data, options)?;
-    let generated_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
-    let generated = write_set(&set, out_dir, &services.paths, &generated_at)?;
-
+    set: &DeliverableSet,
+    generated: &GeneratedDeliverables,
+    verification: Option<&VerifiedDeliverables>,
+) -> AppResult<()> {
     let metadata = serde_json::json!({
         "redacted": set.redaction.is_some(),
         "personal_data_evidence": set.personal_data_evidence,
+        "signed": verification.is_some(),
+        "public_key_id": verification.map(|value| &value.public_key_id),
         "files": generated
             .files
             .iter()
@@ -978,8 +993,46 @@ pub async fn generate(
     tracing::info!(
         incident_id,
         files = generated.files.len(),
+        signed = verification.is_some(),
         "deliverables generated"
     );
+    Ok(())
+}
+
+/// Gera os cinco documentos e o manifest em `out_dir`, e registra o evento
+/// na trilha de auditoria (só nomes de arquivo e hashes, sem caminhos).
+pub async fn generate(
+    services: &AppServices,
+    incident_id: &str,
+    out_dir: &Path,
+    options: RenderOptions,
+) -> AppResult<GeneratedDeliverables> {
+    let data = collect(services, incident_id).await?;
+    let set = render_with(&data, options)?;
+    let generated_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let generated = write_set(&set, out_dir, &services.paths, &generated_at)?;
+    audit_generated(services, incident_id, &set, &generated, None).await?;
+    Ok(generated)
+}
+
+/// Gera e assina o manifest, verifica todo o conjunto localmente e só depois
+/// registra `DELIVERABLES_GENERATED`. Nenhuma chave é criada por esta função.
+pub async fn generate_signed(
+    services: &AppServices,
+    incident_id: &str,
+    out_dir: &Path,
+    options: RenderOptions,
+    private_key: &Path,
+) -> AppResult<GeneratedDeliverables> {
+    let data = collect(services, incident_id).await?;
+    let set = render_with(&data, options)?;
+    let generated_at = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let mut generated = write_set(&set, out_dir, &services.paths, &generated_at)?;
+    let signature = signing::sign_directory(&generated.output_dir, private_key, &services.paths)?;
+    let public_key = signing::public_key_hex(private_key, &services.paths)?;
+    let verification = signing::verify_directory(&generated.output_dir, &public_key)?;
+    generated.files.push(signature);
+    audit_generated(services, incident_id, &set, &generated, Some(&verification)).await?;
     Ok(generated)
 }
 
@@ -2273,5 +2326,87 @@ mod tests {
 
         // Incidente inexistente.
         assert!(collect(&fx.services, "nao-existe").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn signed_generation_verifies_before_audit_and_never_creates_a_key() {
+        const PRIVATE: &str = "4242424242424242424242424242424242424242424242424242424242424242";
+        let fx = fixture().await;
+        let incident = crate::service::create_incident(&fx.services, "Assinatura sintética")
+            .await
+            .expect("incident");
+        let keys = tempfile::tempdir().expect("keys");
+        let private_key = keys.path().join("synthetic-private.key");
+        let out = tempfile::tempdir().expect("output");
+
+        let preview = preview(&fx.services, &incident.id, RenderOptions::default())
+            .await
+            .expect("preview");
+        assert_eq!(preview.documents.len(), 5);
+        assert!(
+            generate_signed(
+                &fx.services,
+                &incident.id,
+                out.path(),
+                RenderOptions::default(),
+                &private_key,
+            )
+            .await
+            .is_err()
+        );
+        assert!(!private_key.exists(), "a chave ausente não pode ser gerada");
+        let count = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM audit_events WHERE action = 'DELIVERABLES_GENERATED'",
+        )
+        .fetch_one(&fx.services.db)
+        .await
+        .expect("audit count");
+        assert_eq!(
+            count, 0,
+            "preview e falha de assinatura não auditam conclusão"
+        );
+
+        std::fs::write(&private_key, format!("{PRIVATE}\n")).expect("synthetic key");
+        let generated = generate_signed(
+            &fx.services,
+            &incident.id,
+            out.path(),
+            RenderOptions::default(),
+            &private_key,
+        )
+        .await
+        .expect("signed generation");
+        assert_eq!(generated.files.len(), 8);
+        let public_key = public_key_hex(&private_key, &fx.services.paths).expect("public key");
+        let verified = verify_directory(&generated.output_dir, &public_key).expect("verification");
+        assert_eq!(verified.documents, 6);
+
+        let metadata = sqlx::query_scalar::<_, String>(
+            "SELECT metadata FROM audit_events WHERE action = 'DELIVERABLES_GENERATED' ORDER BY sequence DESC LIMIT 1",
+        )
+        .fetch_one(&fx.services.db)
+        .await
+        .expect("audit metadata");
+        let value: serde_json::Value = serde_json::from_str(&metadata).expect("metadata json");
+        assert_eq!(value["signed"], true);
+        assert_eq!(value["public_key_id"], verified.public_key_id);
+        assert!(metadata.contains(FILE_SIGNATURE));
+        assert!(!metadata.contains(PRIVATE));
+        assert!(!metadata.contains(&private_key.display().to_string()));
+
+        let unsigned = generate(
+            &fx.services,
+            &incident.id,
+            out.path(),
+            RenderOptions::default(),
+        )
+        .await
+        .expect("unsigned regeneration");
+        assert_eq!(unsigned.files.len(), 7);
+        assert!(
+            !unsigned.output_dir.join(FILE_SIGNATURE).exists(),
+            "geração não assinada não pode conservar assinatura obsoleta"
+        );
+        assert!(verify_directory(&unsigned.output_dir, &public_key).is_err());
     }
 }
