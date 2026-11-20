@@ -5,6 +5,7 @@
 //!
 //! | termo                | casa com                                           |
 //! |----------------------|----------------------------------------------------|
+//! | `ref:record:5,record:9` | `raw_reference` exato (vários valores = OU)    |
 //! | `event:4624,4625`    | `event_id` exato (vários valores = OU)             |
 //! | `user:fsir`          | conta contém o texto                               |
 //! | `host:DC01`          | máquina contém o texto                             |
@@ -27,6 +28,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TimelineFilter {
     pub text: Option<String>,
+    /// Referências brutas dos eventos de origem (`record:N`), por igualdade exata.
+    pub references: Vec<String>,
     pub event_ids: Vec<String>,
     pub users: Vec<String>,
     pub hosts: Vec<String>,
@@ -120,7 +123,8 @@ pub fn parse(input: &str) -> Result<TimelineFilter, String> {
         let key_lower = key.to_ascii_lowercase();
         let known = matches!(
             key_lower.as_str(),
-            "event"
+            "ref"
+                | "event"
                 | "id"
                 | "eventid"
                 | "user"
@@ -145,6 +149,7 @@ pub fn parse(input: &str) -> Result<TimelineFilter, String> {
             continue;
         }
         match key_lower.as_str() {
+            "ref" => filter.references.extend(values(value)),
             "event" | "id" | "eventid" => filter.event_ids.extend(values(value)),
             "user" => filter.users.extend(values(value)),
             "host" | "computer" => filter.hosts.extend(values(value)),
@@ -185,6 +190,17 @@ mod tests {
         assert!(filter.event_ids.is_empty() && filter.users.is_empty());
         assert!(parse("   ").unwrap().is_empty());
         assert!(parse("").unwrap().is_empty());
+    }
+
+    #[test]
+    fn candidate_reference_term_is_not_free_text() {
+        let filter = parse("ref:record:5,record:9 event:4624").unwrap();
+        assert_eq!(
+            filter.text, None,
+            "ref:record:5,record:9 não pode ser tratado como texto livre"
+        );
+        assert_eq!(filter.references, vec!["record:5", "record:9"]);
+        assert_eq!(filter.event_ids, vec!["4624"]);
     }
 
     #[test]

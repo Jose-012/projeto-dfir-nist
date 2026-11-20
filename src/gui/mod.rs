@@ -355,6 +355,42 @@ impl DfirApp {
             });
     }
 
+    /// Trilha derivada do mesmo estado que renderiza a tela e os detalhes.
+    /// Não há uma segunda seleção só para navegação (F1-37/ADR-0030 D-4).
+    fn breadcrumb_text(&self) -> String {
+        let mut trail = match self.screen {
+            Screen::Evidence => vec!["Evidências".to_string()],
+            Screen::Incidents => vec!["Incidentes".to_string()],
+        };
+        match self.screen {
+            Screen::Evidence => {
+                if let Some(label) = self.evidence.selected_label() {
+                    trail.push(label.to_string());
+                }
+            }
+            Screen::Incidents => {
+                if let Some((incident, tab)) = self.incidents.breadcrumb_context() {
+                    trail.push(incident.to_string());
+                    trail.push(tab.to_string());
+                }
+            }
+        }
+        trail.join(" > ")
+    }
+
+    fn main_panels(&mut self, ui: &mut egui::Ui) {
+        self.navigation(ui);
+
+        egui::CentralPanel::default().show(ui, |ui| {
+            ui.label(self.breadcrumb_text());
+            ui.separator();
+            match self.screen {
+                Screen::Evidence => self.evidence.ui(ui, &self.backend, self.incidents.items()),
+                Screen::Incidents => self.incidents.ui(ui, &self.backend),
+            }
+        });
+    }
+
     fn apply_event(&mut self, event: Event) {
         match event {
             Event::EvidenceListed(result) => self.evidence.on_listed(result),
@@ -670,15 +706,7 @@ impl eframe::App for DfirApp {
             self.evidence.on_files_dropped(&dropped, &self.backend);
         }
 
-        self.navigation(ui);
-
-        egui::CentralPanel::default().show(ui, |ui| {
-            let screen = self.screen;
-            match screen {
-                Screen::Evidence => self.evidence.ui(ui, &self.backend, self.incidents.items()),
-                Screen::Incidents => self.incidents.ui(ui, &self.backend),
-            }
-        });
+        self.main_panels(ui);
 
         // Ações em voo (análise, importação) terminam na thread de backend;
         // sem isto a tela só seria redesenhada em resposta a input do SO.
@@ -750,7 +778,40 @@ mod presentation_tests {
 #[cfg(test)]
 mod navigation_tests {
     use super::{Backend, DfirApp};
+    use crate::service::{EvidenceResponse, IncidentResponse};
     use egui_kittest::kittest::Queryable;
+
+    fn evidence(id: &str, filename: &str) -> EvidenceResponse {
+        EvidenceResponse {
+            id: id.into(),
+            original_filename: filename.into(),
+            storage_reference: format!("evidence/{id}"),
+            format: "evtx".into(),
+            size_bytes: 2048,
+            blake3: "b3".repeat(32),
+            sha256: "5a".repeat(32),
+            imported_at: "2026-10-01T10:00:00+00:00".into(),
+            status: "FORENSIC".into(),
+            source: "NOT_PROVIDED".into(),
+            provided_by: None,
+            collection_method: "NOT_PROVIDED".into(),
+            collection_tool: None,
+            collection_tool_version: None,
+            collected_at: None,
+            authorization_reference: None,
+            contains_personal_data: false,
+            incident_id: None,
+        }
+    }
+
+    fn incident(id: &str, name: &str) -> IncidentResponse {
+        IncidentResponse {
+            id: id.into(),
+            name: name.into(),
+            state: "OPEN".into(),
+            created_at: "2026-03-01T00:00:00Z".into(),
+        }
+    }
 
     #[test]
     fn navigation_does_not_depend_on_missing_emoji_fonts() {
@@ -764,6 +825,110 @@ mod navigation_tests {
         harness.run();
         harness.get_by_label("Evidência");
         harness.get_by_label("Incidentes");
+    }
+
+    #[test]
+    fn evidence_breadcrumbs_follow_selection_changes_and_removal() {
+        let (backend, _commands) = Backend::for_test();
+        let mut app = DfirApp::new(backend);
+        app.evidence.on_listed(Ok(vec![
+            evidence("ev-fixture-a", "fixture-alpha.evtx"),
+            evidence("ev-fixture-b", "fixture-beta.evtx"),
+        ]));
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1280.0, 900.0))
+            .build_ui_state(|ui, app: &mut DfirApp| app.main_panels(ui), app);
+        harness.step();
+
+        harness.get_by_label("Evidências");
+        assert!(
+            harness
+                .query_by_label("Evidências > fixture-alpha.evtx")
+                .is_none()
+        );
+
+        harness.get_by_label("fixture-alpha.evtx").click();
+        // O clique é aplicado pelo painel depois da trilha no mesmo frame;
+        // o segundo frame confirma a pós-condição já derivada do novo estado.
+        harness.run_steps(2);
+        harness.get_by_label("Evidências > fixture-alpha.evtx");
+        harness.get_by_label("Detalhes — fixture-alpha.evtx");
+
+        harness.get_by_label("fixture-beta.evtx").click();
+        harness.run_steps(2);
+        harness.get_by_label("Evidências > fixture-beta.evtx");
+        harness.get_by_label("Detalhes — fixture-beta.evtx");
+        assert!(
+            harness
+                .query_by_label("Evidências > fixture-alpha.evtx")
+                .is_none()
+        );
+
+        harness
+            .state_mut()
+            .evidence
+            .on_destroyed("ev-fixture-b", Ok(()));
+        harness.step();
+        harness.get_by_label("Evidências");
+        assert!(
+            harness
+                .query_by_label("Evidências > fixture-beta.evtx")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn incident_breadcrumbs_follow_incident_tab_and_screen_changes() {
+        let (backend, _commands) = Backend::for_test();
+        let mut app = DfirApp::new(backend);
+        app.incidents.on_listed(Ok(vec![
+            incident("inc-fixture-a", "Incidente fixture A"),
+            incident("inc-fixture-b", "Incidente fixture B"),
+        ]));
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1280.0, 900.0))
+            .build_ui_state(|ui, app: &mut DfirApp| app.main_panels(ui), app);
+        harness.step();
+
+        harness.get_by_label("Incidentes").click();
+        harness.step();
+        harness.get_by_label("Selecione ou crie um incidente à esquerda.");
+        assert!(
+            harness
+                .query_by_label("Incidentes > Incidente fixture A > NIST CSF")
+                .is_none()
+        );
+
+        harness.get_by_label("Incidente fixture A · OPEN").click();
+        harness.run_steps(2);
+        harness.get_by_label("Incidentes > Incidente fixture A > NIST CSF");
+
+        harness.get_by_label("Achados").click();
+        harness.run_steps(2);
+        harness.get_by_label("Incidentes > Incidente fixture A > Achados");
+        assert!(
+            harness
+                .query_by_label("Incidentes > Incidente fixture A > NIST CSF")
+                .is_none()
+        );
+
+        harness.get_by_label("Incidente fixture B · OPEN").click();
+        harness.run_steps(2);
+        harness.get_by_label("Incidentes > Incidente fixture B > Achados");
+        assert!(
+            harness
+                .query_by_label("Incidentes > Incidente fixture A > Achados")
+                .is_none()
+        );
+
+        harness.get_by_label("Evidência").click();
+        harness.step();
+        harness.get_by_label("Evidências");
+        assert!(
+            harness
+                .query_by_label("Incidentes > Incidente fixture B > Achados")
+                .is_none()
+        );
     }
 }
 

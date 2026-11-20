@@ -17,6 +17,8 @@ use egui_extras::{Column, TableBuilder};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+const TIMELINE_HEADING: &str = "Timeline (EVTX)";
+
 /// Proveniência que o operador declara **antes** de escolher o arquivo
 /// (F1-31). O que fica em branco vai como não informado.
 #[derive(Default)]
@@ -69,6 +71,8 @@ pub struct EvidenceState {
     provenance: ProvenanceForm,
     last_analysis_error: HashMap<String, String>,
     timeline: HashMap<String, TimelineView>,
+    /// Expansão transitória pedida pela navegação de um candidato.
+    timeline_expand: Option<String>,
     analytical: HashMap<String, Loadable<Vec<AnalyticalResultResponse>>>,
     /// Candidatos de detecção por regras (F1-28).
     pub detection: DetectionState,
@@ -209,6 +213,19 @@ impl EvidenceState {
         self.list.ready().map(Vec::as_slice).unwrap_or(&[])
     }
 
+    /// Nome da evidência já selecionada, com o mesmo fallback de id usado
+    /// pelos detalhes quando uma listagem nova ainda não contém o item.
+    pub(super) fn selected_label(&self) -> Option<&str> {
+        let selected = self.selected.as_deref()?;
+        Some(
+            self.items()
+                .iter()
+                .find(|item| item.id == selected)
+                .map(|item| item.original_filename.as_str())
+                .unwrap_or(selected),
+        )
+    }
+
     pub fn on_listed(&mut self, result: Result<Vec<EvidenceResponse>, String>) {
         self.list = match result {
             Ok(items) => Loadable::Ready(items),
@@ -294,6 +311,22 @@ impl EvidenceState {
         if let Some(view) = self.timeline.get_mut(evidence_id) {
             view.on_page(filter, offset, result);
         }
+    }
+
+    /// Abre refs de um candidato na mesma evidência. `job_id: None` resolve o
+    /// último job EVTX concluído; o `job_id` da detecção nunca entra na consulta.
+    fn open_candidate_timeline(&mut self, evidence_id: &str, filter: String, backend: &Backend) {
+        self.timeline_expand = Some(evidence_id.to_string());
+        self.timeline
+            .insert(evidence_id.to_string(), TimelineView::for_filter(&filter));
+        backend.send(Command::TimelinePage {
+            evidence_id: evidence_id.to_string(),
+            job_id: None,
+            filter,
+            offset: 0,
+            limit: PAGE_SIZE as u64,
+            want_total: true,
+        });
     }
 
     pub fn on_analytical_results(
@@ -702,6 +735,9 @@ impl EvidenceState {
         ui.collapsing("Detecções por regras (candidatos a revisar)", |ui| {
             self.detection
                 .ui(ui, evidence_id, is_evtx, incidents, backend);
+            if let Some(filter) = self.detection.take_timeline_filter() {
+                self.open_candidate_timeline(evidence_id, filter, backend);
+            }
         });
 
         ui.collapsing("Resultados analíticos (YARA)", |ui| {
@@ -720,25 +756,31 @@ impl EvidenceState {
             });
         });
 
-        ui.collapsing("Timeline (EVTX)", |ui| {
-            // Ao abrir, carrega o último job EVTX concluído da evidência (a
-            // timeline sobrevive a reiniciar o app: está no banco).
-            let view = self
-                .timeline
-                .entry(evidence_id.to_string())
-                .or_insert_with(|| {
-                    backend.send(Command::TimelinePage {
-                        evidence_id: evidence_id.to_string(),
-                        job_id: None,
-                        filter: String::new(),
-                        offset: 0,
-                        limit: PAGE_SIZE as u64,
-                        want_total: true,
+        let expand_timeline = self.timeline_expand.as_deref() == Some(evidence_id);
+        if expand_timeline {
+            self.timeline_expand = None;
+        }
+        egui::CollapsingHeader::new(TIMELINE_HEADING)
+            .open(expand_timeline.then_some(true))
+            .show(ui, |ui| {
+                // Ao abrir, carrega o último job EVTX concluído da evidência (a
+                // timeline sobrevive a reiniciar o app: está no banco).
+                let view = self
+                    .timeline
+                    .entry(evidence_id.to_string())
+                    .or_insert_with(|| {
+                        backend.send(Command::TimelinePage {
+                            evidence_id: evidence_id.to_string(),
+                            job_id: None,
+                            filter: String::new(),
+                            offset: 0,
+                            limit: PAGE_SIZE as u64,
+                            want_total: true,
+                        });
+                        TimelineView::loading()
                     });
-                    TimelineView::loading()
-                });
-            view.show(ui, evidence_id, backend);
-        });
+                view.show(ui, evidence_id, backend);
+            });
     }
 
     /// Painel de vínculo evidência↔incidente (F1-19) e cadeia de custódia
@@ -981,10 +1023,11 @@ fn provenance_summary(ui: &mut egui::Ui, item: &EvidenceResponse) {
 
 #[cfg(test)]
 mod timeline_reload_tests {
-    use super::{EvidenceState, should_reload_timeline};
+    use super::{EvidenceState, TIMELINE_HEADING, should_reload_timeline};
     use crate::gui::backend::{Backend, Command};
     use crate::gui::test_harness::drain;
-    use crate::service::AnalyzeResponse;
+    use crate::service::{AnalyzeResponse, TimelinePage};
+    use egui_kittest::kittest::Queryable;
 
     #[test]
     fn only_evtx_jobs_reload_the_timeline() {
@@ -1009,6 +1052,95 @@ mod timeline_reload_tests {
             item_count: 1,
             warnings: vec![],
         }
+    }
+
+    #[test]
+    fn candidate_refs_open_same_evidence_at_page_zero_with_latest_job_and_total() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = EvidenceState::default();
+        state
+            .timeline
+            .insert("ev-1".into(), super::TimelineView::for_filter("event:4624"));
+
+        state.open_candidate_timeline("ev-1", "ref:record:5,record:9".into(), &backend);
+
+        let sent = drain(&mut commands);
+        assert_eq!(sent.len(), 1, "somente a nova página inicial: {sent:?}");
+        assert!(matches!(
+            &sent[0],
+            Command::TimelinePage {
+                evidence_id,
+                job_id: None,
+                filter,
+                offset: 0,
+                limit,
+                want_total: true,
+            } if evidence_id == "ev-1"
+                && filter == "ref:record:5,record:9"
+                && *limit == super::PAGE_SIZE as u64
+        ));
+    }
+
+    #[test]
+    fn candidate_navigation_expands_the_collapsed_timeline_section() {
+        const REFS: &str = "ref:record:5,record:9";
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = EvidenceState::default();
+        state.detection.queue_timeline_filter_for_test(REFS);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1000.0, 1200.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut (EvidenceState, Backend)| {
+                    state.details(ui, "ev-1", true, &[], backend);
+                },
+                (state, backend),
+            );
+        harness.step();
+        assert!(harness.query_by_label("Carregando a timeline…").is_none());
+
+        harness
+            .get_by_label("Detecções por regras (candidatos a revisar)")
+            .click();
+        harness.run_steps(2);
+
+        let sent = drain(&mut commands);
+        assert!(
+            sent.iter().any(|command| matches!(
+                command,
+                Command::TimelinePage { filter, .. } if filter == REFS
+            )),
+            "a navegação precisa pedir a página filtrada: {sent:?}"
+        );
+        let (state, _) = harness.state();
+        assert!(state.timeline.contains_key("ev-1"));
+        assert!(state.timeline_expand.is_none());
+        harness.get_by_label(TIMELINE_HEADING);
+        harness.get_by_label("Carregando a timeline…");
+        harness
+            .state_mut()
+            .0
+            .timeline
+            .get_mut("ev-1")
+            .expect("visão da evidência")
+            .on_page(
+                REFS,
+                0,
+                Ok(Some(TimelinePage::for_test(
+                    "job-1",
+                    Some(0),
+                    0,
+                    vec![],
+                    vec![],
+                ))),
+            );
+        harness.step();
+        assert_eq!(
+            harness
+                .get_by_role(egui::accesskit::Role::TextInput)
+                .value()
+                .as_deref(),
+            Some(REFS)
+        );
     }
 
     #[test]

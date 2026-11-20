@@ -95,7 +95,7 @@ enum ViewState {
 }
 
 /// Ajuda do filtro (dica da caixa de texto).
-const FILTER_HELP: &str = "Texto livre (título, descrição, provedor, canal) e termos campo:valor: event, user, host, ip, src, dst, proc, action, outcome, provider, channel, from, to. Ex.: event:4625 user:admin from:2026-03-01. Vírgula = OU; aspas agrupam.";
+const FILTER_HELP: &str = "Texto livre (título, descrição, provedor, canal) e termos campo:valor: ref, event, user, host, ip, src, dst, proc, action, outcome, provider, channel, from, to. Ex.: ref:record:5,record:9 ou event:4625 user:admin from:2026-03-01. Vírgula = OU; aspas agrupam.";
 
 /// Estado da timeline de uma evidência.
 pub struct TimelineView {
@@ -134,6 +134,15 @@ impl TimelineView {
     pub fn for_job(job_id: &str) -> Self {
         let mut view = Self::loading();
         view.expected_job = Some(job_id.to_string());
+        view
+    }
+
+    /// Nova consulta sobre o último job EVTX concluído, sem páginas do filtro anterior.
+    pub fn for_filter(filter: &str) -> Self {
+        let mut view = Self::loading();
+        view.applied_filter = filter.to_string();
+        view.filter_input = filter.to_string();
+        view.filtering = true;
         view
     }
 
@@ -677,6 +686,48 @@ mod ui_tests {
         // A caixa de filtro e as linhas continuam na tela: o analista corrige e tenta de novo.
         harness.get_by_role(egui::accesskit::Role::TextInput);
         harness.get_by_label("evento-0");
+    }
+
+    #[test]
+    fn candidate_filter_view_discards_previous_filter_responses() {
+        const REFS: &str = "ref:record:5,record:9";
+        let (backend, _commands) = Backend::for_test();
+        let mut view = TimelineView::for_filter(REFS);
+        view.on_page(
+            "",
+            0,
+            Ok(Some(TimelinePage::for_test(
+                "job-velho",
+                Some(9),
+                0,
+                events(9),
+                vec![],
+            ))),
+        );
+        let mut harness = harness(view, backend);
+        harness.step();
+        harness.get_by_label("Carregando a timeline…");
+
+        harness.state_mut().0.on_page(
+            REFS,
+            0,
+            Ok(Some(TimelinePage::for_test(
+                "job-novo",
+                Some(2),
+                0,
+                events(2),
+                vec![],
+            ))),
+        );
+        harness.step();
+        harness.get_by_label("evento-0");
+        assert_eq!(
+            harness
+                .get_by_role(egui::accesskit::Role::TextInput)
+                .value()
+                .as_deref(),
+            Some(REFS)
+        );
     }
 
     #[test]

@@ -1981,6 +1981,7 @@ fn push_timeline_filter(
         query.push_bind(pattern);
         query.push(" ESCAPE '\\')");
     }
+    push_any_equal(query, &["raw_reference"], &filter.references);
     push_any_equal(query, &["event_id"], &filter.event_ids);
     push_any_like(query, "user_name", &filter.users);
     push_any_like(query, "host", &filter.hosts);
@@ -3065,6 +3066,81 @@ mod tests {
         assert_eq!(count("to:2026-01-01").await.unwrap(), Some(1));
         let error = count("from:ontem").await.expect_err("data inválida é erro");
         assert!(matches!(error, AppError::Config(message) if message.contains("invalid date")));
+    }
+
+    #[tokio::test]
+    async fn candidate_reference_filter_is_exact_and_combines_with_other_terms() {
+        let fx = fixture().await;
+        let mut items = Vec::new();
+        for (record, event_id, stamp) in [
+            (5_u64, 4624_u64, "2026-01-01T00:00:01Z"),
+            (9_u64, 4625_u64, "2026-01-01T00:00:02Z"),
+            (50_u64, 4624_u64, "2026-01-01T00:00:03Z"),
+        ] {
+            items.push(
+                dfir_protocol::NormalizedEvent::new(
+                    record,
+                    stamp,
+                    security_record(event_id, serde_json::json!({})),
+                    "ev_refs",
+                )
+                .into_item()
+                .expect("item"),
+            );
+        }
+        let job_id = seed_items_job(&fx, "ev_refs", items).await;
+
+        let selected = timeline_page_core(
+            &fx.pool,
+            &fx.paths,
+            &job_id,
+            0,
+            50,
+            Some("ref:record:5,record:9"),
+            true,
+        )
+        .await
+        .expect("exact reference OR");
+        assert_eq!(selected.total, Some(2));
+        let references: Vec<&str> = selected
+            .events
+            .iter()
+            .filter_map(|event| event.raw_reference.as_deref())
+            .collect();
+        assert_eq!(
+            references,
+            vec!["record:5", "record:9"],
+            "record:50 existe, mas não pode casar por prefixo"
+        );
+
+        let combined = timeline_page_core(
+            &fx.pool,
+            &fx.paths,
+            &job_id,
+            0,
+            50,
+            Some("ref:record:5,record:9 event:4624"),
+            true,
+        )
+        .await
+        .expect("reference AND event id");
+        assert_eq!(combined.total, Some(1));
+        assert_eq!(
+            combined.events[0].raw_reference.as_deref(),
+            Some("record:5")
+        );
+        let positive_control = timeline_page_core(
+            &fx.pool,
+            &fx.paths,
+            &job_id,
+            0,
+            50,
+            Some("ref:record:50"),
+            true,
+        )
+        .await
+        .expect("record:50 remains directly queryable");
+        assert_eq!(positive_control.total, Some(1));
     }
 
     #[tokio::test]

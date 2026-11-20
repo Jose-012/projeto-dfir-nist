@@ -42,6 +42,8 @@ pub struct DetectionState {
     running: HashSet<String>,
     forms: HashMap<String, DecisionForm>,
     status_filter: HashMap<String, String>,
+    /// Filtro de refs aguardando a tela de evidência abrir a timeline.
+    pending_timeline_filter: Option<String>,
     /// Última mensagem de execução/decisão por evidência (`Err` = erro).
     message: HashMap<String, Result<String, String>>,
 }
@@ -49,6 +51,16 @@ pub struct DetectionState {
 impl DetectionState {
     pub fn is_running(&self, evidence_id: &str) -> bool {
         self.running.contains(evidence_id)
+    }
+
+    /// Entrega uma única navegação à tela de evidência, sem decidir o candidato.
+    pub fn take_timeline_filter(&mut self) -> Option<String> {
+        self.pending_timeline_filter.take()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn queue_timeline_filter_for_test(&mut self, filter: &str) {
+        self.pending_timeline_filter = Some(filter.to_string());
     }
 
     pub fn start(&mut self, evidence_id: &str, backend: &Backend) {
@@ -280,6 +292,31 @@ impl DetectionState {
                     ""
                 };
                 ui.label(format!("Eventos de origem: {}{}", refs.join(", "), more));
+                if item.event_refs.is_empty() {
+                    ui.label(
+                        egui::RichText::new(
+                            "Este candidato não preservou referências de evento para abrir na timeline.",
+                        )
+                        .weak(),
+                    );
+                } else {
+                    let open = ui
+                        .button("Ver eventos na timeline")
+                        .on_hover_text("Filtra somente as referências preservadas neste candidato");
+                    reveal_on_focus(&open);
+                    if open.clicked() {
+                        self.pending_timeline_filter =
+                            Some(format!("ref:{}", item.event_refs.join(",")));
+                    }
+                }
+                if item.refs_truncated {
+                    ui.label(
+                        egui::RichText::new(
+                            "A seleção contém somente as referências preservadas no candidato; eventos omitidos pelo truncamento não aparecem.",
+                        )
+                        .weak(),
+                    );
+                }
                 if !item.iocs.is_empty() {
                     let list: Vec<String> = item
                         .iocs
@@ -484,6 +521,62 @@ mod ui_tests {
         harness.get_by_label_contains("IP 185.220.101.5");
         harness.get_by_label_contains("O que esta regra não prova");
         harness.get_by_label_contains("Nada vira achado sem a sua confirmação");
+    }
+
+    #[test]
+    fn origin_events_action_requests_exact_refs_without_deciding_the_candidate() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = DetectionState::default();
+        state.on_loaded("ev_1", Ok(vec![view("a", "CONFIRMED")]));
+        let mut harness = harness(state, backend, vec![]);
+        harness.run();
+
+        harness.get_by_label("Ver eventos na timeline").click();
+        harness.step();
+
+        let sent = drain(&mut commands);
+        assert!(
+            sent.iter().all(|command| !matches!(
+                command,
+                Command::ConfirmCandidate { .. } | Command::RejectCandidate { .. }
+            )),
+            "navegação não pode confirmar nem rejeitar: {sent:?}"
+        );
+        let (state, _, _) = harness.state_mut();
+        assert_eq!(
+            state.take_timeline_filter().as_deref(),
+            Some("ref:record:5,record:9")
+        );
+        let Some(Loadable::Ready(items)) = state.candidates.get("ev_1") else {
+            panic!("candidatos carregados");
+        };
+        assert_eq!(items[0].status, "CONFIRMED", "a decisão humana permanece");
+        assert!(
+            state.take_timeline_filter().is_none(),
+            "a ação é consumida uma vez"
+        );
+    }
+
+    #[test]
+    fn empty_and_truncated_refs_explain_the_navigation_limit() {
+        let (backend, _commands) = Backend::for_test();
+        let mut truncated = view("truncated", "PENDING");
+        truncated.refs_truncated = true;
+        let mut empty = view("empty", "PENDING");
+        empty.event_refs.clear();
+        let mut state = DetectionState::default();
+        state.on_loaded("ev_1", Ok(vec![truncated, empty]));
+        let mut harness = harness(state, backend, vec![]);
+        harness.set_size(egui::vec2(1000.0, 1800.0));
+        harness.run();
+
+        harness.get_by_label_contains("somente as referências preservadas no candidato");
+        harness.get_by_label_contains("não preservou referências de evento");
+        assert_eq!(
+            harness.get_all_by_label("Ver eventos na timeline").count(),
+            1,
+            "somente o candidato com refs oferece navegação"
+        );
     }
 
     #[test]

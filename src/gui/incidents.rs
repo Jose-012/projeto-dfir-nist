@@ -31,10 +31,36 @@ enum Tab {
     Audit,
 }
 
+impl Tab {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Nist => "NIST CSF",
+            Self::Attack => "ATT&CK",
+            Self::CriticalPath => "Caminho crítico",
+            Self::Impact => "Impacto",
+            Self::Findings => "Achados",
+            Self::Plan => "Plano",
+            Self::Gaps => "Lacunas",
+            Self::Iocs => "IOCs",
+            Self::Recommendations => "Recomendações",
+            Self::Deliverables => "Entregáveis",
+            Self::Export => "Exportar",
+            Self::Evidence => "Evidências",
+            Self::Audit => "Auditoria",
+        }
+    }
+}
+
 impl IncidentsState {
     /// Incidentes já carregados (vazio enquanto a lista não chegou).
     pub fn items(&self) -> &[IncidentResponse] {
         self.list.ready().map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// Contexto derivado da seleção que já controla o painel de incidentes.
+    pub(super) fn breadcrumb_context(&self) -> Option<(&str, &'static str)> {
+        let incident = self.selected.as_ref()?;
+        Some((incident.name.as_str(), self.tab.label()))
     }
 }
 
@@ -225,22 +251,22 @@ impl IncidentsState {
             };
             ui.heading(&incident.name);
             ui.horizontal_wrapped(|ui| {
-                for (tab, label) in [
-                    (Tab::Nist, "NIST CSF"),
-                    (Tab::Attack, "ATT&CK"),
-                    (Tab::CriticalPath, "Caminho crítico"),
-                    (Tab::Impact, "Impacto"),
-                    (Tab::Findings, "Achados"),
-                    (Tab::Plan, "Plano"),
-                    (Tab::Gaps, "Lacunas"),
-                    (Tab::Iocs, "IOCs"),
-                    (Tab::Recommendations, "Recomendações"),
-                    (Tab::Deliverables, "Entregáveis"),
-                    (Tab::Export, "Exportar"),
-                    (Tab::Evidence, "Evidências"),
-                    (Tab::Audit, "Auditoria"),
+                for tab in [
+                    Tab::Nist,
+                    Tab::Attack,
+                    Tab::CriticalPath,
+                    Tab::Impact,
+                    Tab::Findings,
+                    Tab::Plan,
+                    Tab::Gaps,
+                    Tab::Iocs,
+                    Tab::Recommendations,
+                    Tab::Deliverables,
+                    Tab::Export,
+                    Tab::Evidence,
+                    Tab::Audit,
                 ] {
-                    if ui.selectable_label(self.tab == tab, label).clicked() {
+                    if ui.selectable_label(self.tab == tab, tab.label()).clicked() {
                         self.tab = tab;
                     }
                 }

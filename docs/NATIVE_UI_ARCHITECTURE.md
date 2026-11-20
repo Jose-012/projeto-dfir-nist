@@ -35,7 +35,7 @@ Cada `Command` (ex.: `Command::Analyze`) vira uma task Tokio independente que ch
 
 | Arquivo | Papel |
 |---|---|
-| `mod.rs` | `DfirApp` (impl `eframe::App`), navegação (Evidência / Incidentes), `Loadable<T>` (estado idle/loading/ready/failed reutilizado por toda tela de lista), `enum_combo` e as listas de valores válidos de cada enum (mesmas aceitas por `src/persistence/`). |
+| `mod.rs` | `DfirApp` (impl `eframe::App`), navegação (Evidência / Incidentes), breadcrumbs derivados da tela e das seleções/aba vigentes, `Loadable<T>` (estado idle/loading/ready/failed reutilizado por toda tela de lista), `enum_combo` e as listas de valores válidos de cada enum (mesmas aceitas por `src/persistence/`). |
 | `backend.rs` | `Command`/`Event`, `Backend::spawn` (thread + runtime Tokio), `handle_command` (um braço por `Command`, chama `src/service/`). |
 | `file_dialog.rs` | Seletor nativo de arquivo/pasta **fora da thread da UI** (GUI-01): `FilePicker` cria a thread, pede `rfd::FileDialog` e devolve o resultado por canal; `poll()` é drenado a cada quadro. O `rfd` não distingue cancelamento de falha do seletor, então a UI trata os dois como "nada escolhido" e oferece os caminhos alternativos. |
 | `evidence.rs` | Lista de evidências (`egui_extras::TableBuilder`), importação (seletor de `file_dialog.rs`, campo de caminho digitado e arrastar-e-soltar, todos por `request_import`), destruição, disparo de análise (EVTX, YARA e **Detectar**) e resultados YARA. O painel recolhível "Detecções por regras" delega para `detection.rs`. |

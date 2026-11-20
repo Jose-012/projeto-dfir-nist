@@ -88,6 +88,7 @@ O campo de filtro aceita texto livre (título, descrição, provedor, canal) e t
 
 | Termo | Casa com |
 |---|---|
+| `ref:record:5,record:9` | referência bruta exata do evento de origem |
 | `event:4624,4625` | Event ID exato |
 | `user:fsir` | conta contém o texto |
 | `host:DC01` | máquina contém o texto |
@@ -99,6 +100,10 @@ O campo de filtro aceita texto livre (título, descrição, provedor, canal) e t
 | `from:2026-03-01` `to:2026-03-02` | intervalo em UTC; `to:` com data inclui o dia inteiro |
 
 Exemplo: `event:4625 user:admin from:2026-03-01`. Uma data inválida é **erro**, não busca de texto. Na linha de comando: `dfir-app results <JOB_ID> --filter "event:4625 user:admin"`.
+
+Em um candidato de detecção com referências preservadas, **Ver eventos na timeline** abre e expande a timeline da mesma evidência com `ref:` e os identificadores exatos. A consulta resolve o último job EVTX concluído, não o job da detecção. Referências truncadas são sinalizadas como seleção parcial; candidato sem referências não oferece a ação. Navegar não confirma nem rejeita o candidato.
+
+A trilha textual no topo do painel central mostra `Evidências > <nome lógico>` ou `Incidentes > <incidente> > <aba>`. Ela deriva da seleção que já controla a tela e converge no quadro seguinte às ações, sem criar uma segunda navegação nem depender de imagens. Esse comportamento foi testado sem janela; não é uma declaração de suporte AT-SPI nem de fluxo X11 verificado.
 
 ## 3C. Detecção por regras e revisão de candidatos
 
