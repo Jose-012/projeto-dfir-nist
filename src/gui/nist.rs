@@ -648,15 +648,11 @@ mod ui_tests {
     }
 
     fn version(
-        version_label: &str,
-        source: &str,
-        tier: &str,
-        tier_justification: &str,
-        created_at: &str,
-        entry_id: &str,
-        entry_label: &str,
-        implementation_status: &str,
+        metadata: (&str, &str, &str, &str, &str),
+        entry: (&str, &str, &str),
     ) -> ProfileVersionView {
+        let (version_label, source, tier, tier_justification, created_at) = metadata;
+        let (entry_id, entry_label, implementation_status) = entry;
         ProfileVersionView {
             version_label: version_label.into(),
             source: source.into(),
@@ -677,24 +673,24 @@ mod ui_tests {
             profile_type,
             versions: vec![
                 version(
-                    "antiga",
-                    "fonte-antiga",
-                    "TIER_1_PARTIAL",
-                    "contexto-antigo",
-                    "2026-11-17T00:00:00Z",
-                    "GV.OC-00",
-                    "Contexto antigo",
-                    "NOT_IMPLEMENTED",
+                    (
+                        "antiga",
+                        "fonte-antiga",
+                        "TIER_1_PARTIAL",
+                        "contexto-antigo",
+                        "2026-11-17T00:00:00Z",
+                    ),
+                    ("GV.OC-00", "Contexto antigo", "NOT_IMPLEMENTED"),
                 ),
                 version(
-                    "atual",
-                    "fonte-atual",
-                    "TIER_2_RISK_INFORMED",
-                    "contexto-atual",
-                    "2026-11-18T00:00:00Z",
-                    "GV.OC-01",
-                    "Contexto atual",
-                    "IMPLEMENTED",
+                    (
+                        "atual",
+                        "fonte-atual",
+                        "TIER_2_RISK_INFORMED",
+                        "contexto-atual",
+                        "2026-11-18T00:00:00Z",
+                    ),
+                    ("GV.OC-01", "Contexto atual", "IMPLEMENTED"),
                 ),
             ],
         }
