@@ -6,7 +6,7 @@ allowed-tools: agentgrep, read, edit, apply_patch, write, bash, todo
 
 # Alteração controlada de regras de detecção
 
-Use esta skill ao incluir, alterar ou remover regras internas de `EVTX_DETECTION` em `engine/src/detect.rs`, inclusive ao ajustar normalização indispensável, testes ou catálogo dessas regras.
+Use esta skill ao incluir, alterar ou remover regras internas de `EVTX_DETECTION` em `engine/src/detect.rs`, inclusive ao ajustar normalização indispensável, testes ou catálogo dessas regras. Use-a junto com `dfir-improve`, `dfir-change` e `dfir-verify`; esta skill cobre somente o recorte de detecção.
 
 Não use esta skill para:
 

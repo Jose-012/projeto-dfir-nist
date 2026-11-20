@@ -223,8 +223,8 @@ Essas pendências seguem `docs/FASE1_BACKLOG.md`, `docs/RELEASE_GATE.md` e `docs
 
 ## 10. Ferramentas de agente e limites operacionais
 
-- Políticas de swarm, skills e MCPs estão em `AGENTS.md` §17. Uma lane precisa de artefato, orçamento e dono exclusivo; início automático e `swarm spawn` não se combinam.
-- Skills locais: `dfir-change` para mudanças, `dfir-verify` para gates e `dfir-detect` para regras EVTX. Carregar skill não é evidência.
+- Políticas de swarm, skills e MCPs estão em `AGENTS.md` §17. Uma lane precisa de artefato, orçamento e dono exclusivo; início automático e `swarm spawn` não se combinam. `.jcode/swarm-prompt.md` é o template derivado para novas missões.
+- Skills locais: `dfir-improve` para o loop de sessões com mudanças ou gates, `dfir-change` para mudanças, `dfir-verify` para gates e `dfir-detect` para regras EVTX. Carregar skill não é evidência.
 - MCPs mantidos: `context7`, `jcodemunch` e `sequential-thinking`, somente quando trouxerem utilidade concreta. Não enviar dados de caso, nomes de evidências, eventos, caminhos sensíveis ou secrets.
 - GitHub é consultado exclusivamente pelo comando `gh`, sem GitHub MCP.
 - dbhub foi removido e não deve ser recriado sem necessidade demonstrada, banco sintético sanitizado e acesso somente leitura. Acesso SQL direto não substitui invariantes dos serviços.

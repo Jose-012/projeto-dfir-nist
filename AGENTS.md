@@ -214,9 +214,11 @@ Atualizado em 2026-11-18 (verificado no host: `rtk 0.49.0`, `rg`, `ast-grep 0.51
 
 Toda sessão executa o loop de `docs/SESSION_IMPROVEMENT.md` e consulta as lições aplicáveis em `docs/SESSION_LEARNINGS.md`. O loop não altera escopo nem cria narrativa obrigatória por rotina.
 
+Em sessões que alteram arquivos ou executam gates, carregue `.jcode/skills/dfir-improve/SKILL.md` como checklist derivado no início e no fechamento. Se a skill não estiver disponível, o procedimento e este guia continuam obrigatórios. A skill não substitui a autoridade nem prova aprendizado.
+
 - **Início:** registre HEAD/status, transforme lições anteriores em ações do plano, defina pós-condições e orçamento de investigação. IDs futuros de evidência ficam em scratch até que arquivo e registro existam.
 - **Execução:** exit 0 não substitui pós-condição e diagnóstico; busca vazia inesperada exige controle positivo ou método alternativo; duas tentativas sem informação nova mudam o método ou encerram a investigação. Os limites padrão são 15 minutos por método improdutivo e 30 por lane exploratória, seguidos de consolidação ou decisão explícita.
-- **Coordenação:** copie IDs completos de background/swarm, confirme progresso antes de cancelar builds silenciosos e verifique o resultado ao parar workers. Trabalho Rust pesado permanece sequencial.
+- **Coordenação:** copie IDs completos de background/swarm, confirme progresso antes de cancelar builds silenciosos e verifique o resultado ao parar workers. IDs de `await_members` pertencem somente a `todo.waiting_on` e ao acompanhamento de swarm, nunca a `bg wait`. Trabalho Rust pesado permanece sequencial.
 - **Fechamento:** revise diff semântico, comandos/exits, status e processos próprios. Para cada lição reutilizável nova, implemente instrução, checklist, teste, lint ou gate; registre-a de forma sanitizada no arquivo vivo. Se não houver lição nova, não edite o registro.
 - **Próxima sessão:** confirme a prevenção por ação observada. Recorrência exige promover a prevenção ao controle executável mais barato, não apenas acrescentar texto.
 
@@ -230,15 +232,16 @@ Estas regras coordenam ferramentas de agente. Elas não alteram escopo, arquitet
 
 - Use swarm para trabalho paralelo com entrega concreta e arquivos ou fronteiras de escopo independentes. Não use para tarefa trivial, investigação sem artefato, ou lanes que editam os mesmos arquivos sem um dono definido.
 - Antes de iniciar, o coordenador registra no todo a lane, a entrega, as pós-condições, o orçamento e o dono. O coordenador mantém a autoridade, a integração e o resultado final.
+- Use `.jcode/swarm-prompt.md` como template derivado para preparar a missão e o contrato das lanes. Preencha os campos da tarefa sem transformar o template em requisito ou autorização de ações externas.
 - `owner = "worker"` (ou `lane_owner = "worker"`) pode iniciar o worker automaticamente. Escolha **um único mecanismo**: não combine esse modo com `swarm spawn` para a mesma lane. Se usar spawn explícito, não configure também início automático.
 - Cada worker tem escopo exclusivo de escrita, lê as instruções aplicáveis e entrega mudança, teste ou decisão útil. Não crie lanes apenas de leitura/revisão sem artefato. Builds e testes Rust pesados permanecem sequenciais e coordenados pelo root.
 - Não compartilhe com workers dados de caso, secrets ou arquivos sensíveis fora da necessidade autorizada. Não delegue ações destrutivas, pagamentos, envios ou mudanças externas irreversíveis.
-- Copie IDs completos, acompanhe o progresso e confirme o resultado antes de parar um worker. Ao integrar, revise diff e pós-condições, aguarde os membros necessários e verifique `swarm list`/`bg list` para não deixar tarefas próprias ativas.
+- Copie IDs completos, acompanhe o progresso e confirme o resultado antes de parar um worker. Antes de assumir a escrita de um worker parado, confirme seu estado terminal e releia o artefato imediatamente antes de editar; uma escrita atrasada é uma nova entrega concorrente a revisar. Ao integrar, revise diff e pós-condições, aguarde os membros necessários e verifique `swarm list`/`bg list` para não deixar tarefas próprias ativas.
 
 ### Skills
 
 - Carregue somente skills cuja descrição corresponda à tarefa. As instruções do repositório e a hierarquia de autoridade prevalecem sobre qualquer skill.
-- Skills locais disponíveis: `.jcode/skills/dfir-change/SKILL.md` para mudanças controladas, `.jcode/skills/dfir-verify/SKILL.md` para gates e `.jcode/skills/dfir-detect/SKILL.md` para regras `EVTX_DETECTION`. Não duplique esses procedimentos em uma skill nova sem lacuna demonstrada.
+- Skills locais disponíveis: `.jcode/skills/dfir-improve/SKILL.md` para o loop de sessões com mudanças ou gates, `.jcode/skills/dfir-change/SKILL.md` para mudanças controladas, `.jcode/skills/dfir-verify/SKILL.md` para gates e `.jcode/skills/dfir-detect/SKILL.md` para regras `EVTX_DETECTION`. Não duplique esses procedimentos em uma skill nova sem lacuna demonstrada.
 - Skills globais são opcionais e exigem utilidade clara no caso concreto. Não instale skills, pacotes ou catálogos automaticamente; instalação é mudança de tooling/supply chain, não um passo implícito da tarefa.
 - Skill carregada ou executada não é evidência de verificação. O gate real e sua pós-condição continuam obrigatórios.
 

@@ -21,7 +21,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** a lane gráfica consumiu cerca de 50 minutos com múltiplas técnicas de injeção/observação antes de receber ordem de consolidação. O resultado útil final foi `EVD-050 BLOCKED`, não um fluxo validado.
 - **Risco:** pesquisa aberta, consumo de contexto e atraso sem nova informação proporcional.
 - **Prevenção:** orçamento explícito no plano; duas tentativas sem informação nova mudam o método; limites padrão de 15/30 minutos e consolidação obrigatória.
-- **Confirmação:** pendente.
+- **Confirmação:** confirmada em 2026-11-19: a lane do swarm-prompt teve orçamento de 20 minutos, recebeu pedido explícito de consolidação, foi inspecionada após timeout e parada por ID completo; o root só assumiu a escrita após confirmar a ausência de artefato.
 
 ### 3. Exit de helper tratado como possível sucesso funcional
 
@@ -60,8 +60,8 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Classe:** erro de execução.
 - **Fato:** um `bg wait` usou um ID de await incompleto e retornou `Task not found`. Uma tentativa de parar workers com parâmetro inadequado também falhou; o worker CPython já não existia quando outra parada foi tentada.
 - **Risco:** esperar ou encerrar o alvo errado, ou acreditar que a coordenação terminou quando a chamada falhou.
-- **Prevenção:** copiar IDs completos, usar `todo.waiting_on`, consultar `swarm list`/`bg list` e verificar o resultado efetivo de cada parada.
-- **Confirmação:** confirmada em 2026-11-19: os IDs completos foram usados em `bg wait`; `bg list` confirmou todas as tarefas próprias em estado terminal e os resultados foram lidos.
+- **Prevenção:** copiar IDs completos, usar `todo.waiting_on`, consultar `swarm list`/`bg list` e verificar o resultado efetivo de cada parada. Após a recorrência, `AGENTS.md` §16, `docs/SESSION_IMPROVEMENT.md`, `dfir-improve` e `swarm-prompt` passaram a vedar explicitamente IDs de `await_members` em `bg wait`.
+- **Confirmação:** recorrente em 2026-11-19: um ID completo de `await_members` foi usado em `bg wait` e retornou `Task not found`. O estado foi verificado por `swarm list`, e a distinção de canais foi promovida nos checklists.
 
 ### 8. Encurtamento acidental de linhas históricas da RTM
 
@@ -101,7 +101,23 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** em 2026-11-19, uma lane com `lane_owner = "worker"` iniciou um worker automático e um `swarm spawn` explícito iniciou outro para a mesma entrega. Os dois chegaram a progresso 1/2 sobre o mesmo alvo antes da duplicidade ser detectada. O worker automático concluiu; o duplicado foi parado por ID completo e a entrega foi revisada.
 - **Risco:** escritas concorrentes, resultado ambíguo e consumo duplicado de contexto/recursos.
 - **Prevenção:** `AGENTS.md` §17 exige escolher um único mecanismo de início por lane, com dono exclusivo de escrita e confirmação de progresso/parada; `CONVENTIONS.md` e `CLAUDE.md` ligam a regra, e o `doc_gate` verifica sua presença.
-- **Confirmação:** pendente para a próxima lane com worker.
+- **Confirmação:** confirmada em 2026-11-19: uma única lane usou spawn explícito com início automático desativado; `swarm list` confirmou um único worker e depois sua parada por ID completo, sem duplicação.
+
+### 13. Transição de todo sem efeito repetida
+
+- **Classe:** erro de execução.
+- **Fato:** em 2026-11-19, várias chamadas de `todo update` mantiveram os itens em `in_progress`, embora a intenção fosse concluí-los. A divergência ficou visível nos estados retornados, mas a mesma forma de chamada foi repetida antes da mudança de método.
+- **Risco:** churn de coordenação, falsa expectativa de fechamento e perda de tempo sem nova evidência.
+- **Prevenção:** `.jcode/skills/dfir-improve/SKILL.md` exige ler o estado retornado após mutações de todo/swarm/background e aplicar o limite de duas tentativas sem informação nova antes de mudar de método.
+- **Confirmação:** pendente para a próxima transição de coordenação observada.
+
+### 14. Escrita atrasada após parada do worker
+
+- **Classe:** erro de coordenação revelado pela revisão do gate.
+- **Fato:** em 2026-11-19, uma versão do prompt escrita pelo root foi substituída posteriormente por uma entrega atrasada do worker que já havia sido parado. Um needle de `await_members` falhou no gate e o controle positivo direto revelou a mudança de conteúdo antes do commit.
+- **Risco:** perder uma entrega válida, sobrescrever correções ou commitar uma versão cuja autoria e conteúdo não foram revisados.
+- **Prevenção:** `AGENTS.md` §17, `docs/SESSION_IMPROVEMENT.md`, `dfir-improve` e `swarm-prompt` exigem confirmar estado terminal e reler o artefato antes de assumir sua escrita; o `doc_gate` preserva essa salvaguarda e a distinção de IDs de await.
+- **Confirmação:** pendente para a próxima reatribuição de escrita após parada de worker.
 
 ## Próxima revisão
 

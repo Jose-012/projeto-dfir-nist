@@ -13,6 +13,8 @@ LER -> APLICAR -> OBSERVAR -> CORRIGIR -> VERIFICAR -> REGISTRAR
 
 Toda sessão executa o loop. Uma sessão somente de leitura faz a revisão em memória e não edita o repositório. Uma sessão que altera arquivos ou executa gates deixa evidência do fechamento nos comandos e na resposta. O registro permanente só muda quando houver lição reutilizável nova, recorrência ou mudança de pendência; não se cria relatório por rotina.
 
+Nessas sessões com mudanças ou gates, use `.jcode/skills/dfir-improve/SKILL.md` como checklist derivado no início e no fechamento. A skill orienta a execução e a seleção das demais skills, mas não substitui este procedimento nem prova aprendizado. Se ela não puder ser carregada, este procedimento continua suficiente e obrigatório.
+
 ## 1. Início da sessão
 
 1. Execute `git status --short` e identifique HEAD e mudanças preexistentes antes de editar.
@@ -30,7 +32,8 @@ Toda sessão executa o loop. Uma sessão somente de leitura faz a revisão em me
 - Duas tentativas da mesma técnica sem nova informação exigem mudança de hipótese ou parada. Uma terceira tentativa precisa ter instrumentação ou pressuposto novo, não ser repetição com outro nome.
 - Como padrão, limite a 15 minutos um método sem novo estado observável e a 30 minutos uma lane exploratória sem resultado útil. Ao atingir o limite, consolide `BLOCKED`/`PENDING-HUMAN` ou obtenha decisão explícita para um novo orçamento. Não deixe worker aberto enquanto o coordenador apenas espera.
 - Compilação ou teste longo conhecido não é investigação improdutiva. Antes de cancelar por silêncio, confira progresso, processo e consumo; trabalho Rust pesado continua sequencial neste host.
-- Use IDs completos retornados por `bg`, `swarm` e `todo.waiting_on`. Liste membros antes de parar workers; não invente prefixos nem suponha que um worker ausente ainda esteja ativo.
+- Use IDs completos retornados por `bg`, `swarm` e `todo.waiting_on`. IDs de `await_members` vão somente para `todo.waiting_on` e acompanhamento de swarm, nunca para `bg wait`. Liste membros antes de parar workers; não invente prefixos nem suponha que um worker ausente ainda esteja ativo.
+- Antes de assumir a escrita de um worker parado, confirme seu estado terminal e releia o artefato imediatamente antes de editar. Trate escrita atrasada como nova entrega concorrente a revisar, não como ruído a sobrescrever.
 - Não antecipe `PASS`, `VERIFIED` ou aceite em documentação viva. Primeiro execute e registre a evidência; depois atualize a referência vigente e repita o gate documental.
 - Preserve narrativa histórica e detalhes fora da tarefa. Em RTM, ADRs e evidências, prefira acréscimos cirúrgicos e revise o diff para detectar perdas acidentais.
 
@@ -60,7 +63,7 @@ Confirmação: pendente | confirmada | recorrente, com sessão/comando
 
 ## Antipadrões
 
-`scripts/doc_gate.py` verifica a presença dos dois arquivos vivos e suas ligações em `AGENTS.md`, `CLAUDE.md`, `CONVENTIONS.md` e `docs/DOCUMENT_AUTHORITY.md`. Esse controle impede remoção/desconexão silenciosa, mas não prova que uma sessão aplicou a regra; essa confirmação continua exigindo ação observada.
+`scripts/doc_gate.py` verifica a presença dos arquivos vivos, das skills locais, do template de swarm e de suas ligações em `AGENTS.md`, `CLAUDE.md`, `CONVENTIONS.md` e `docs/DOCUMENT_AUTHORITY.md`. Esse controle impede remoção/desconexão silenciosa, mas não prova que uma sessão aplicou a regra; essa confirmação continua exigindo ação observada.
 
 - Criar uma retrospectiva permanente para toda rotina ou copiar toda a narrativa da conversa.
 - Guardar a lição apenas em scratch, onde a próxima sessão não a encontrará.

@@ -6,7 +6,7 @@ allowed-tools: agentgrep, read, edit, apply_patch, write, bash, todo
 
 # Mudança controlada no DFIR/NIST
 
-Use esta skill ao alterar código, contratos ou documentação deste repositório.
+Use esta skill ao alterar código, contratos ou documentação deste repositório. Em sessões com mudanças ou gates, use-a junto com `dfir-improve`, que cobre o loop da sessão; esta skill cobre somente a mudança controlada.
 
 ## Procedimento
 

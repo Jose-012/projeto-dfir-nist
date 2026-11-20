@@ -6,7 +6,7 @@ allowed-tools: agentgrep, read, bash, todo
 
 # Verificação honesta no DFIR/NIST
 
-Use esta skill antes de declarar uma mudança integrada ou verificada.
+Use esta skill antes de declarar uma mudança integrada ou verificada. Em sessões com mudanças ou gates, use-a junto com `dfir-improve`, que cobre o loop da sessão; esta skill cobre somente a verificação.
 
 ## Diagnóstico
 
