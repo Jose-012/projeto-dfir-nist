@@ -13,7 +13,7 @@ Ferramenta forense local/offline. Autenticação, RBAC, sessões e server-mode f
 |---|---|---|---|
 | Monólito modular Rust | IMPLEMENTED | `src/`, `engine/`, `protocol/` | Cargo |
 | SQLite + WAL + FK + FULL sync | IMPLEMENTED | `src/persistence/db.rs` | Cargo + testes |
-| Migrations locais | IMPLEMENTED | `migrations/0001_fase0.sql` até `0012_structured_events_and_detection_candidates.sql` (12 arquivos em `migrations/`) | migração do zero + upgrade legado |
+| Migrations locais | IMPLEMENTED | `migrations/0001_fase0.sql` até `0013_custody_anchor.sql` (13 arquivos em `migrations/`) | migração do zero + upgrade legado |
 | Audit chain append-only | IMPLEMENTED | `src/persistence/audit.rs` | testes concorrentes |
 | BLAKE3-256-v2-JCS + BLAKE3-v1 | IMPLEMENTED | `src/persistence/audit.rs` | testes de hash |
 | Storage/staging | IMPLEMENTED | `src/infrastructure/storage.rs` | testes adversariais |
@@ -34,7 +34,7 @@ Ferramenta forense local/offline. Autenticação, RBAC, sessões e server-mode f
 - `PENDING-HUMAN`: execução sobre incidente real. A fixture sanitizada, o cenário DEMO e os datasets públicos de `EVD-052` não substituem essa verificação. O fluxo nativo completo também permanece pendente (`EVD-050`).
 - SBOM (`cyclonedx`): fora do escopo por ADR-0028, não é gate.
 
-> Gap origem: INC-07 e INC-04 (2026-11-04): migrations atualizadas para 0001–0012, verificação de 2026-09-22 marcada como histórica e gates reescritos com ponteiro para o registro de evidências.
+> Gap origem: INC-07 e INC-04 (2026-11-04): migrations atualizadas para 0001–0012, verificação de 2026-09-22 marcada como histórica e gates reescritos com ponteiro para o registro de evidências. Atualização factual de escopo em 2026-11-20: migration 0013 (ADR-0030/F1-36).
 
 ## Histórico
 

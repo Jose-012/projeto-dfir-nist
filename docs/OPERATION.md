@@ -128,6 +128,8 @@ dfir-app audit [--limit N]                                      # eventos de aud
 
 Confirmar um candidato (`candidate-confirm`) também vincula a evidência ao incidente. A destruição de evidência preserva custódia e auditoria (F1-21).
 
+Desde a migration 0013 (F1-36/ADR-0030), `custody_state` mantém por evidência a contagem e o hash da cabeça, atualizados na mesma transação de cada append. A verificação falha fechado se a âncora estiver ausente ou divergir da cadeia, inclusive quando a cauda é removida. O upgrade preenche âncoras a partir das entradas existentes, sem reescrevê-las. Esse backfill não pode descobrir uma remoção que já tenha ocorrido antes da migration; também não impede um atacante com escrita no banco de alterar coordenadamente entradas e âncora de forma consistente. A âncora é uma guarda local adicional, não uma assinatura ou uma âncora externa de confiança.
+
 ## 3D. Diálogo nativo de arquivos no Linux (GUI-01)
 
 O aplicativo **não precisa** de portal nem de `zenity` para iniciar e analisar evidência. O

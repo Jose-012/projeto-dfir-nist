@@ -306,10 +306,35 @@ pub(crate) async fn append_custody_on_connection(
     .bind(timestamp)
     .bind(reason)
     .bind(metadata)
-    .bind(previous)
-    .bind(entry_hash)
+    .bind(&previous)
+    .bind(&entry_hash)
     .execute(&mut *connection)
     .await?;
+
+    // F1-36: a entrada e sua âncora mudam na mesma transação. A primeira
+    // entrada cria a âncora; nas demais, ausência de estado é erro e nunca uma
+    // oportunidade de reiniciar a contagem depois de uma adulteração.
+    if previous.is_none() {
+        sqlx::query("INSERT INTO custody_state(evidence_id,entry_count,head_hash) VALUES(?,?,?)")
+            .bind(evidence_id)
+            .bind(1_i64)
+            .bind(&entry_hash)
+            .execute(&mut *connection)
+            .await?;
+    } else {
+        let updated = sqlx::query(
+            "UPDATE custody_state SET entry_count=entry_count+1,head_hash=? WHERE evidence_id=?",
+        )
+        .bind(&entry_hash)
+        .bind(evidence_id)
+        .execute(&mut *connection)
+        .await?;
+        if updated.rows_affected() != 1 {
+            return Err(sqlx::Error::Protocol(
+                "custody anchor is missing for an existing chain".into(),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -511,6 +536,15 @@ pub async fn list_events(
 }
 
 pub async fn verify_custody(pool: &SqlitePool, evidence_id: &str) -> Result<bool, sqlx::Error> {
+    let anchor = sqlx::query_as::<_, (i64, Option<String>)>(
+        "SELECT entry_count,head_hash FROM custody_state WHERE evidence_id=?",
+    )
+    .bind(evidence_id)
+    .fetch_optional(pool)
+    .await?;
+    let Some(anchor) = anchor else {
+        return Ok(false);
+    };
     let rows = sqlx::query_as::<_, (i64, String, String, String, String, String, String, Option<String>, String)>(
         "SELECT sequence,entry_id,action,actor,timestamp,reason,metadata,previous_entry_hash,entry_hash FROM chain_of_custody WHERE evidence_id=? ORDER BY sequence",
     )
@@ -519,6 +553,7 @@ pub async fn verify_custody(pool: &SqlitePool, evidence_id: &str) -> Result<bool
     .await?;
 
     let mut previous: Option<String> = None;
+    let mut verified_count = 0_i64;
     for (
         sequence,
         entry_id,
@@ -560,8 +595,17 @@ pub async fn verify_custody(pool: &SqlitePool, evidence_id: &str) -> Result<bool
             return Ok(false);
         }
         previous = Some(stored_hash);
+        verified_count = verified_count.saturating_add(1);
     }
-    Ok(true)
+    if anchor.0 != verified_count || anchor.1 != previous {
+        return Ok(false);
+    }
+    let actual_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM chain_of_custody WHERE evidence_id=?")
+            .bind(evidence_id)
+            .fetch_one(pool)
+            .await?;
+    Ok(actual_count == verified_count)
 }
 
 #[cfg(test)]
@@ -734,6 +778,243 @@ mod tests {
                 .await
                 .expect("verify custody")
         );
+    }
+
+    #[tokio::test]
+    async fn custody_tail_deletion_is_detected() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let db_path = temp.path().join("custody-tail.sqlite");
+        let url = format!("sqlite://{}", db_path.display());
+        let pool = crate::persistence::db::connect(&url)
+            .await
+            .expect("database connection");
+        crate::persistence::db::migrate(&pool)
+            .await
+            .expect("migrations");
+        sqlx::query("INSERT INTO evidence(id,original_filename,storage_reference,format,size_bytes,blake3,sha256,imported_at,status) VALUES('ev-tail','test.evtx','evidence/ev-tail.evtx','evtx',1,'b3','sha','2026-08-20T00:00:00Z','FORENSIC')")
+            .execute(&pool)
+            .await
+            .expect("evidence fixture");
+        for action in ["IMPORTED", "ANALYSIS_COMPLETED"] {
+            append_custody(&pool, "ev-tail", action, "local-analyst", "fixture", "{}")
+                .await
+                .expect("custody append");
+        }
+        assert!(
+            verify_custody(&pool, "ev-tail")
+                .await
+                .expect("verify intact chain")
+        );
+
+        sqlx::query("DROP TRIGGER custody_no_delete")
+            .execute(&pool)
+            .await
+            .expect("drop delete trigger for tamper simulation");
+        sqlx::query("DELETE FROM chain_of_custody WHERE sequence=(SELECT MAX(sequence) FROM chain_of_custody WHERE evidence_id='ev-tail')")
+            .execute(&pool)
+            .await
+            .expect("tail deletion tamper simulation");
+
+        assert!(
+            !verify_custody(&pool, "ev-tail")
+                .await
+                .expect("tail deletion must be detected"),
+            "removing the newest custody entry must invalidate the chain"
+        );
+    }
+
+    #[tokio::test]
+    async fn custody_anchor_backfill_and_tampering_are_verified() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let url = format!(
+            "sqlite://{}",
+            temp.path().join("custody-backfill.sqlite").display()
+        );
+        let pool = crate::persistence::db::connect(&url)
+            .await
+            .expect("database connection");
+        crate::persistence::db::migrate(&pool)
+            .await
+            .expect("migrations");
+        sqlx::query("INSERT INTO evidence(id,original_filename,storage_reference,format,size_bytes,blake3,sha256,imported_at,status) VALUES('ev-legacy','test.evtx','evidence/ev-legacy.evtx','evtx',1,'b3','sha','2026-08-20T00:00:00Z','FORENSIC')")
+            .execute(&pool)
+            .await
+            .expect("evidence fixture");
+        for action in ["IMPORTED", "ANALYSIS_COMPLETED"] {
+            append_custody(&pool, "ev-legacy", action, "local-analyst", "fixture", "{}")
+                .await
+                .expect("custody append");
+        }
+        let expected_head: String = sqlx::query_scalar(
+            "SELECT entry_hash FROM chain_of_custody WHERE evidence_id='ev-legacy' ORDER BY sequence DESC LIMIT 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("expected head");
+
+        // Simula um banco da versão anterior, sem a tabela de âncora, e aplica
+        // somente a migration pendente pelo migrador real.
+        sqlx::query("DROP TABLE custody_state")
+            .execute(&pool)
+            .await
+            .expect("drop current anchor for legacy fixture");
+        sqlx::query("DELETE FROM _sqlx_migrations WHERE version=13")
+            .execute(&pool)
+            .await
+            .expect("mark anchor migration pending");
+        crate::persistence::db::migrate(&pool)
+            .await
+            .expect("backfill migration");
+
+        let anchor: (i64, String) = sqlx::query_as(
+            "SELECT entry_count,head_hash FROM custody_state WHERE evidence_id='ev-legacy'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("backfilled anchor");
+        assert_eq!(anchor, (2, expected_head));
+        assert!(
+            verify_custody(&pool, "ev-legacy")
+                .await
+                .expect("verify backfilled chain")
+        );
+
+        sqlx::query("UPDATE custody_state SET entry_count=1 WHERE evidence_id='ev-legacy'")
+            .execute(&pool)
+            .await
+            .expect("tamper anchor count");
+        assert!(
+            !verify_custody(&pool, "ev-legacy")
+                .await
+                .expect("detect count tampering")
+        );
+        sqlx::query("UPDATE custody_state SET entry_count=2,head_hash='tampered' WHERE evidence_id='ev-legacy'")
+            .execute(&pool)
+            .await
+            .expect("tamper anchor head");
+        assert!(
+            !verify_custody(&pool, "ev-legacy")
+                .await
+                .expect("detect head tampering")
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_custody_anchor_fails_closed_and_append_does_not_reset_it() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let url = format!(
+            "sqlite://{}",
+            temp.path().join("custody-missing-anchor.sqlite").display()
+        );
+        let pool = crate::persistence::db::connect(&url)
+            .await
+            .expect("database connection");
+        crate::persistence::db::migrate(&pool)
+            .await
+            .expect("migrations");
+        sqlx::query("INSERT INTO evidence(id,original_filename,storage_reference,format,size_bytes,blake3,sha256,imported_at,status) VALUES('ev-no-anchor','test.evtx','evidence/ev-no-anchor.evtx','evtx',1,'b3','sha','2026-08-20T00:00:00Z','FORENSIC')")
+            .execute(&pool)
+            .await
+            .expect("evidence fixture");
+        for action in ["IMPORTED", "ANALYSIS_STARTED"] {
+            append_custody(
+                &pool,
+                "ev-no-anchor",
+                action,
+                "local-analyst",
+                "fixture",
+                "{}",
+            )
+            .await
+            .expect("custody append");
+        }
+        sqlx::query("DELETE FROM custody_state WHERE evidence_id='ev-no-anchor'")
+            .execute(&pool)
+            .await
+            .expect("remove anchor for tamper fixture");
+        assert!(
+            !verify_custody(&pool, "ev-no-anchor")
+                .await
+                .expect("missing anchor fails")
+        );
+
+        let error = append_custody(
+            &pool,
+            "ev-no-anchor",
+            "ANALYSIS_COMPLETED",
+            "local-analyst",
+            "must roll back",
+            "{}",
+        )
+        .await
+        .expect_err("append cannot recreate an anchor for an existing chain");
+        assert!(
+            error.to_string().contains("custody anchor is missing"),
+            "{error:?}"
+        );
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM chain_of_custody WHERE evidence_id='ev-no-anchor'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count after rollback");
+        assert_eq!(
+            count, 2,
+            "the failed append must roll back its custody entry"
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_custody_appends_preserve_the_anchor() {
+        let temp = tempfile::tempdir().expect("temporary directory");
+        let url = format!(
+            "sqlite://{}",
+            temp.path().join("custody-concurrent.sqlite").display()
+        );
+        let pool = crate::persistence::db::connect(&url)
+            .await
+            .expect("database connection");
+        crate::persistence::db::migrate(&pool)
+            .await
+            .expect("migrations");
+        sqlx::query("INSERT INTO evidence(id,original_filename,storage_reference,format,size_bytes,blake3,sha256,imported_at,status) VALUES('ev-concurrent','test.evtx','evidence/ev-concurrent.evtx','evtx',1,'b3','sha','2026-08-20T00:00:00Z','FORENSIC')")
+            .execute(&pool)
+            .await
+            .expect("evidence fixture");
+
+        let mut tasks = Vec::new();
+        for _ in 0..16 {
+            let pool = pool.clone();
+            tasks.push(tokio::spawn(async move {
+                append_custody(
+                    &pool,
+                    "ev-concurrent",
+                    "CHECKED",
+                    "local-analyst",
+                    "fixture",
+                    "{}",
+                )
+                .await
+            }));
+        }
+        for task in tasks {
+            task.await
+                .expect("append task did not panic")
+                .expect("custody append");
+        }
+
+        assert!(
+            verify_custody(&pool, "ev-concurrent")
+                .await
+                .expect("verify concurrent chain")
+        );
+        let count: i64 = sqlx::query_scalar(
+            "SELECT entry_count FROM custody_state WHERE evidence_id='ev-concurrent'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("anchor count");
+        assert_eq!(count, 16);
     }
 
     #[tokio::test]
