@@ -23,12 +23,14 @@
 
 > **Nota de implementação superseded — 2026-11-18 (10):** **ADR-0029** reavalia a interface após auditoria prática e mantém `eframe/egui/egui_extras` 0.37, sem alterar RF ou escopo. Os defeitos de rolagem, foco, IDs, respostas assíncronas e exportação foram tratados na implementação, sem nova stack. A feature `accesskit` do `eframe` permanece desativada; a árvore interna de testes não é AT-SPI e não comprova leitor de tela externo. Se AT-SPI virar aceite obrigatório, a decisão será reavaliada com protótipo e evidência prática.
 
+> **Nota de implementação — 2026-11-20 (11):** **ADR-0030** registra decisão explícita do operador que reintroduz, sem origem nova na demanda SENAI, cinco melhorias antes adiadas por ADR-0018 D-2: âncora de cabeça/contagem da custódia, breadcrumbs e cancelamento de job na Fase 1; SVG do caminho crítico na Fase 2; assinatura destacada dos entregáveis na Fase 3. A assinatura do pipeline atual cobre o SHA-256 do `manifest.json`, que referencia os documentos e o SVG, usando Ed25519 e verificação obrigatória quando habilitada. Nenhum estado de implementação ou verificação decorre desta nota. `cargo vet` e os demais adiamentos permanecem.
+
 ```xml
 <documento-projeto>
   <identificacao>
     <versao>6.5.1</versao>
     <status>ESPECIFICAÇÃO REALINHADA À DEMANDA ORIGINAL — ARQUITETURA FECHADA E BASE CONTROLADA DE IMPLEMENTAÇÃO</status>
-    <data>2026-11-18</data>
+    <data>2026-11-20</data>
     <programa>SAGA SENAI de Inovação 2026/01 — Projeto Integrador</programa>
     <escola>(SP) 1.32 Escola SENAI de Informática</escola>
     <empresa-parceira>Avivatec Soluções em Tecnologia da Informação Ltda.</empresa-parceira>
@@ -3284,7 +3286,8 @@ Uma alteração estrutural não é justificativa para refatorar código não rel
 - YARA-X;
 - IOCs;
 - múltiplos incidentes;
-- proveniência, cobertura declarada e lacunas.
+- proveniência, cobertura declarada e lacunas;
+- âncora de cabeça/contagem da custódia, breadcrumbs contextuais e cancelamento explícito de job (ADR-0030).
 
 ## Fase 2 — NIST e análise
 
@@ -3297,7 +3300,8 @@ Uma alteração estrutural não é justificativa para refatorar código não rel
 - ATT&CK;
 - Finding/vulnerabilidade e causa-raiz;
 - visão NIST por Function;
-- itens de plano (hardening, criptografia, chaves, resposta a incidentes).
+- itens de plano (hardening, criptografia, chaves, resposta a incidentes);
+- grafo SVG determinístico do caminho crítico, com alternativa textual (ADR-0030).
 
 ## Fase 3 — Entregáveis e demonstração
 
@@ -3305,7 +3309,7 @@ Uma alteração estrutural não é justificativa para refatorar código não rel
 - Markdown/JSON;
 - exportação dos entregáveis com manifest de hashes e redação de dados pessoais;
 - dataset BEC;
-- assinatura de relatório quando habilitada;
+- assinatura destacada Ed25519 do manifest de entregáveis quando habilitada, com verificação offline (ADR-0030);
 - modo offline;
 - backup antes de migration e procedimento manual de atualização/rollback;
 - dashboard executivo **somente se houver tempo e valor demonstrado; não é requisito da demanda**.
@@ -3342,7 +3346,7 @@ Uma alteração estrutural não é justificativa para refatorar código não rel
 | RF-001 | MVP | Upload | Arquivo válido recebe UUID e Evidence. |
 | RF-002 | MVP | Integridade | SHA-256 antes da análise. |
 | RF-003 | MVP | Preservação | Original não alterado. |
-| RF-004 | MVP | Custódia | Cadeia verificável. |
+| RF-004 | MVP | Custódia | Cadeia verificável, incluindo âncora transacional de cabeça/contagem que detecta remoção da cauda (ADR-0030). |
 | RF-005 | MVP | EVTX | Eventos normalizados. |
 | RF-006 | MVP | Erro de parsing | Erro registrado, nunca descartado silenciosamente. |
 | RF-007 | MVP | Timeline | Ordenação e referência à evidência. |
@@ -3351,12 +3355,12 @@ Uma alteração estrutural não é justificativa para refatorar código não rel
 | RF-010 | MVP | Gap | Gap reproduzível a partir dos dados. |
 | RF-011 | MVP | ATT&CK | Mapping possui evidência e confiança. |
 | RF-012 | F4 | Hardening (Ansible) | Recomendação pode gerar artefato Ansible quando aplicável. **Movido para Fase 4 (ADR-0018); o MVP usa `RF-052`.** |
-| RF-013 | MVP | Entregáveis | Cinco documentos cobrem os seis requisitos de conteúdo da demanda. |
+| RF-013 | MVP | Entregáveis | Cinco documentos cobrem os seis requisitos de conteúdo da demanda; quando habilitada, assinatura Ed25519 destacada cobre o manifest e seus hashes, com verificação offline (ADR-0030). |
 | RF-014 | MVP | Offline | MVP executa sem Internet. |
 | RF-015 | MVP | Auditoria | Ações sensíveis auditadas. |
 | RF-016 | MVP | Segurança | Testes de injection/traversal (caminho, template de relatório, envelope JSONL) passam; sem superfície HTML/HTTP desde ADR-0017. |
 | RF-017 | MVP | Demo | Dataset determinístico e sanitizado. |
-| RF-018 | MVP | Caminho crítico | Eventos relacionados podem ser ligados com evidência/confiança. |
+| RF-018 | MVP | Caminho crítico | Eventos relacionados podem ser ligados com evidência/confiança; o grafo vigente tem exportação SVG determinística e alternativa textual (ADR-0030). |
 | RF-019 | MVP | IOCs | IOCs extraídos com origem. |
 | RF-020 | MVP | Impacto | Matriz de impacto com confiança. |
 | RF-021 | F4 | Sigma | Regra exportada e validada quando possível. |
@@ -3380,11 +3384,11 @@ Uma alteração estrutural não é justificativa para refatorar código não rel
 | RF-039 | MVP | Idempotência | Reprocessamento do mesmo job não cria artefatos de análise duplicados silenciosamente. |
 | RF-040 | MVP | Relatórios | Dados de evidência não conseguem alterar a estrutura de template nem acessar recursos arbitrários durante a renderização. |
 | RF-041 | MVP | Falha inspecionável | Job falho registra código de erro específico e mensagem acionável e permanece consultável; não há retry automático (ADR-0018). |
-| RF-042 | MVP | Shutdown/Recovery | `SIGTERM`/`SIGINT` interrompem a aceitação de novos jobs e jobs `PROCESSING` são recuperados explicitamente após reinício. |
+| RF-042 | MVP | Shutdown/Recovery | `SIGTERM`/`SIGINT` interrompem a aceitação de novos jobs e jobs `PROCESSING` são recuperados explicitamente após reinício; cancelamento explícito encerra o processo supervisionado e persiste `CANCELLED` sem consumir resultados parciais (ADR-0030). |
 | RF-043 | MVP | Armazenamento | Abaixo do limite configurado de espaço livre, novos uploads são rejeitados e a condição é registrada sem apagar evidências automaticamente. |
 | RF-044 | MVP | Validação | Entradas da interface e envelope JSONL inválidos são rejeitados antes de alcançar o domínio/engine; o Rust valida novamente a própria fronteira. |
 | RF-045 | F4 | Benchmark | `just perf` reproduz o conjunto mínimo de benchmarks e grava metadados suficientes para reproduzir os resultados. **Movido para Fase 4 (ADR-0018).** |
-| RF-046 | MVP | UX de análise | Timeline suporta filtros mínimos (intervalo, tipo/Event ID, host, usuário, texto), tarefas longas exibem estado/progresso quando disponível e relatórios possuem preview. Sem perfis executivo/técnico (ADR-0018). |
+| RF-046 | MVP | UX de análise | Timeline suporta filtros mínimos (intervalo, tipo/Event ID, host, usuário, texto), tarefas longas exibem estado/progresso quando disponível, breadcrumbs refletem o contexto atual e relatórios possuem preview. Sem perfis executivo/técnico (ADR-0018; breadcrumbs por ADR-0030). |
 | RF-047 | MVP | Versionamento | Todo release usa versões estáveis mais recentes adotadas conforme a política da seção 6.6, registra versões exatas, lockfiles/checksums/digests e não utiliza identificadores flutuantes como `latest`. |
 | RF-048 | MVP | Evento normalizado | O evento normalizado expõe campos estruturados opcionais (`event_id`, provedor/canal, host, usuário, IP de origem/destino, processo, ação, resultado, tipo de fonte), preservando o registro original; filtro e ordenação usam esses campos. |
 | RF-049 | Adiado (decisão do operador, ADR-0025) | Importação estruturada | CSV/JSONL são importados por mapeamento declarativo de colunas para o evento normalizado; linhas inválidas são contadas e exibidas, nunca descartadas em silêncio (RF-006). |
@@ -3422,6 +3426,17 @@ Texto anterior (v6.4.1) e motivo, conforme a ADR-0028. As duas linhas estavam au
 |---|---|---|
 | RF-024 | Reescrito | "SBOM/licenças — Documentação gerada com versões reais" |
 | RF-031 | Reescrito | "Release possui `Cargo.lock`, SBOM e imagens identificadas por digest" |
+
+### 39.3. Mudanças de RF por ADR-0030 (2026-11-20)
+
+Decisão explícita do operador, sem alterar a demanda original nem reabrir outros adiamentos:
+
+| RF | Mudança | Alcance |
+|---|---|---|
+| RF-004/RF-029 | Ampliados | Verificação da custódia inclui cabeça/contagem transacionais. |
+| RF-013/RF-015/RF-038 | Ampliados | Entregáveis podem ter assinatura Ed25519 destacada e auditada, com verificação obrigatória. |
+| RF-018/RF-046 | Ampliados | Caminho crítico tem SVG determinístico e a UI tem breadcrumbs contextuais. |
+| RF-037/RF-041/RF-042 | Ampliados | Job pode ser cancelado explicitamente, com processo encerrado e estado `CANCELLED` persistido. |
 
 ---
 

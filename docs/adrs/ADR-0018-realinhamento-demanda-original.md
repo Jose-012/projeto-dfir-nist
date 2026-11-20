@@ -72,6 +72,10 @@ Esta ADR é documental. As correções de código e lock aplicadas na mesma data
 - `F1-12` (release candidate) reconcilia só os RFs que permanecem MVP.
 - Risco aceito: o importador estruturado e as regras de detecção são trabalho novo e não verificado; entram como `PLANNED`.
 
+## Atualização — 2026-11-20
+
+ADR-0030 supersede parcialmente D-2 somente quanto a assinatura de relatório, âncora extra de custódia, grafo SVG, breadcrumbs e cancelamento de job, agora alocados pelo operador em F1-36..F1-40. `cargo vet` e todos os demais cortes/adiamentos desta decisão permanecem. A tabela histórica acima não é reescrita.
+
 ## Atualização — 2026-10-11
 
 Depois desta ADR o backlog ganhou F1-34 (CLI headless, ADR-0019) e F1-35 (observabilidade e testes de GUI, ADR-0022); as ADR-0020 e ADR-0021 deram tratamento a F1-17, F1-18, F1-10 (parcial), F1-19 (parcial) e F1-20 (parcial). O estado vigente de cada ticket está em `docs/rtm.md`.

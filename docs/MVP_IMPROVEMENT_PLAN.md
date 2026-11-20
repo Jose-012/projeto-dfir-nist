@@ -13,6 +13,8 @@ Este documento é uma **proposta derivada**, não uma fonte de requisitos nem um
 
 As numerações das fatias são apenas âncoras locais deste plano. Não são IDs normativos nem substituem `F1-*`, `RF-*`, `EVD-*` ou ADRs.
 
+**Ativação em 2026-11-20:** o operador autorizou explicitamente a execução das fatias 1–6 nesta sessão. As melhorias de produto usam os tickets existentes; os cinco recursos anteriormente adiados foram alocados por ADR-0030 em F1-36..F1-40. Esta autorização ativa trabalho, não antecipa implementação, gates ou aceite. A tabela abaixo preserva a ordem inicial recomendada; o estado normativo continua exclusivamente na RTM.
+
 ## 1. Ordem recomendada
 
 | Ordem | Fatia | Classe | Motivo da prioridade | Dependência ou limite |
@@ -214,7 +216,7 @@ Essas pendências seguem `docs/FASE1_BACKLOG.md`, `docs/RELEASE_GATE.md` e `docs
 
 | Tema | Decisão necessária antes de avançar | Tratamento documental |
 |---|---|---|
-| Ativação das fatias 2 a 6 | Operador escolhe quais propostas entram no trabalho e em qual ordem | Criar/atualizar ticket e RTM somente após decisão; não reutilizar IDs |
+| Ativação das fatias 2 a 6 | **Decidido em 2026-11-20:** operador ativou as fatias 1–6; execução segue os tickets existentes e evidências próprias | ADR-0030 para os cinco recursos extras; demais fatias sem ADR enquanto preservarem os contratos internos existentes |
 | Filtro `ref:` e histórico NIST | Confirmar que o recorte somente leitura atende ao uso | Sem ADR se permanecer nos contratos internos existentes; atualizar documentação afetada |
 | Linhagem | Confirmar histórico mais relações de saída como primeiro recorte | ADR somente se surgir novo modelo, mutação, compartilhamento externo ou mudança arquitetural |
 | Hardening | Manter somente leitura e recomendações humanas | Sem nova ADR no recorte atual; automação de clientes/Ansible exige decisão e supersessão aplicável |
