@@ -1,0 +1,129 @@
+EVD-056 — F1-38/F1-40: cancelamento explícito e assinatura dos entregáveis
+=======================================================================
+
+Status: PASS no escopo local Linux x86_64 das implementações e dos gates listados.
+Não é aceite final do release nem verificação de Windows, aarch64, incidente real
+ou do fluxo nativo X11.
+
+Executed-at: 2026-11-20T15:21:34Z..16:25:20Z para os gates integrados; as
+reproduções focadas Before/After ocorreram antes nesse mesmo dia e têm logs
+próprios no scratch.
+Commit-tree: árvore de trabalho baseada em
+ aeee41ba4b3edd3e9d9bacaed98ac40153b6b431, com as mudanças F1-38/F1-40.
+ Após os gates, o mesmo código foi separado sem nova edição nos commits
+ 751474353da37946f08fcd97d5c19eb8ddb0aa1c (F1-38) e
+ e13e68b3965a181e67a98bd11ac23e360822fdd2 (F1-40); a documentação e esta
+ evidência formam o commit documental seguinte.
+Toolchain: rustc/cargo 1.100.0; nextest 0.9.151; CPython 3.13.5;
+ cargo-audit 0.22.2; cargo-deny 0.20.2.
+Ambiente: Linux x86_64, Debian 13; fixture sanitizada versionada; sandbox
+ required no E2E; chave Ed25519 exclusivamente sintética e temporária.
+
+1. Reproduções Before e testes focados After
+---------------------------------------------
+
+F1-38 Before — log f1-38-before-race.txt:
+  o teste late_completion_preserves_terminal_job_before_fix falhou como esperado;
+  uma conclusão tardia produziu COMPLETED sobre FAILED (0 passed/1 failed;
+  436 skipped). Isso reproduziu a corrida antes da correção.
+
+F1-38 After — logs f1-38-focused-after.txt e f1-38-cross-instance-after.txt:
+  12 passed/439 skipped nos testes filtrados por cancelamento;
+  1 passed/451 skipped no teste persisted_cancellation_between_service_instances_
+  kills_engine_without_indexing.
+  Esse teste usa duas instâncias de AppServices e confirma: status CANCELLED nas
+  duas respostas; processo do engine encerrado (kill(pid, 0) falha); zero eventos
+  e zero entradas de timeline_index; página vazia com total 0; exatamente um
+  ANALYSIS_CANCELLED; audit chain e custódia íntegras.
+
+F1-40 Before — log f1-40-before-roundtrip.txt:
+  o roundtrip falhou com Config("deliverable signing is not implemented")
+  (0 passed/1 failed; 449 skipped).
+
+F1-40 After — logs f1-40-focused-after.txt e
+  f1-40-signed-generation-after.txt:
+  5 passed/446 skipped nos testes de signing;
+  1 passed/450 skipped na geração assinada com reverificação antes da auditoria.
+  Os testes cobrem roundtrip determinístico sobre exatamente os 32 bytes do
+  SHA-256 do manifest, adulteração de manifest/documento/assinatura, artefato
+  ausente/inválido/chave errada, chave fora das raízes proibidas e caminhos
+  inseguros; a geração não assinada remove assinatura obsoleta.
+
+2. Gate Rust integrado
+----------------------
+
+Tentativas preservadas, sem reescrita:
+  just-verify-pre-docs.txt: validate-fase0 exit 1, oito erros documentais
+    (README, migration 0014 e cinco APIs); os testes Rust não começaram.
+  just-verify-post-docs.txt: nextest 573 passed/1 skipped e doc-tests verdes;
+    Clippy exit 101 por run_engine sem chamadores. O wrapper morto foi removido
+    e a reexportação não usada de FILE_SIGNATURE foi limitada aos testes.
+
+Comando final: CARGO_BUILD_JOBS=1 rtk just verify
+Log: just-verify-after-clippy-fix.txt
+Exit: 0.
+Pós-condições: validate-fase0 0 erros/0 avisos; cargo fmt --check, check
+  --workspace --locked --all-targets, doc-tests e clippy -D warnings verdes;
+  nextest 573 passed/1 skipped, incluindo os testes de cancelamento e assinatura.
+
+3. Supply chain
+---------------
+
+Comando: CARGO_BUILD_JOBS=1 rtk just supply-chain
+Log: supply-chain.txt
+Exit: 0.
+cargo audit --no-yanked: 1555 advisories carregados, 621 dependências varridas,
+  um aviso permitido.
+cargo deny --workspace check: advisories ok, bans ok, licenses ok, sources ok.
+O aviso permitido é RUSTSEC-2025-0141 (bincode), já exceção informativa
+  documentada. Nenhuma exceção nova foi adicionada para ed25519-dalek 3.0.0.
+As duplicatas impressas pelo deny são avisos informativos do grafo, não falha.
+
+Inventário RF-024: `cargo metadata --locked --format-version 1` confirmou 621
+pacotes, 3 do workspace e 618 de terceiros, com identidades exatamente iguais às
+do lock. `LICENSES_THIRD_PARTY.md` foi regenerado para o lock SHA-256
+09116593a6ccba436852821fbbfc09aa55b55a7fefb1784be376587256db2304.
+ed25519-dalek 3.0.0 declara BSD-3-Clause; nenhum pacote sem licença declarada.
+
+4. Ponta a ponta sanitizado
+---------------------------
+
+Comando: CARGO_BUILD_JOBS=1 rtk just e2e tests/fixtures/senai-demo.evtx
+Logs: e2e-signed-cancel.txt e e2e-signed-cancel-full.txt (recuperado por
+  rtk recall 29fa467f8868 após truncamento da saída condensada).
+Exit: 0; 123/123 etapas passaram.
+Novas pós-condições observadas:
+  cancel-analysis sem análise ativa é recusado;
+  cancelamento tardio preserva COMPLETED;
+  geração assinada produz oito arquivos e digest exato do manifest;
+  a resposta contém somente chave pública/fingerprint;
+  verificação offline passa com a chave esperada;
+  chave errada, manifest/documento/assinatura adulterados e artefato ausente são
+    recusados;
+  geração não assinada remove a assinatura obsoleta;
+  audit chain e custódia continuam íntegras após geração e descarte.
+A raiz temporária dfir-e2e-l9eaa1zt foi removida; nenhuma chave privada,
+  exportação ou dado de caso foi adicionado ao Git.
+
+5. Gate documental
+------------------
+
+Comando: CARGO_BUILD_JOBS=1 rtk just doc-gate
+Logs: doc-gate-initial.txt e doc-gate-after-all-docs.txt
+Exits: 0 nas duas execuções; validate-fase0 0 erros/0 avisos; documentation gate
+PASS antes e depois de RTM/tickets/registro/licenças/lições.
+Também foram observados git diff --check limpo, py_compile do E2E com cache fora
+do Git, cmp -s entre a especificação canônica e a cópia raiz, e cmp -s entre o
+inventário de licenças e o scratch validado.
+
+6. Limites
+----------
+
+Windows, Linux aarch64, incidente real e fluxo nativo X11 permanecem nos estados
+e waivers já registrados. Esta evidência não altera EVD-050 (BLOCKED), não dispensa
+PENDING-HUMAN e não declara validade jurídica da assinatura. A assinatura é um
+mecanismo de integridade/autenticidade do conjunto exportado.
+
+Logs externos citados ficam em:
+  /home/jose/.jcode/scratch/continuation-2026-11-20/
+Nenhum valor de chave privada aparece neste arquivo.

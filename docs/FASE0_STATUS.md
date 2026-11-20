@@ -13,7 +13,7 @@ Ferramenta forense local/offline. Autenticação, RBAC, sessões e server-mode f
 |---|---|---|---|
 | Monólito modular Rust | IMPLEMENTED | `src/`, `engine/`, `protocol/` | Cargo |
 | SQLite + WAL + FK + FULL sync | IMPLEMENTED | `src/persistence/db.rs` | Cargo + testes |
-| Migrations locais | IMPLEMENTED | `migrations/0001_fase0.sql` até `0013_custody_anchor.sql` (13 arquivos em `migrations/`) | migração do zero + upgrade legado |
+| Migrations locais | IMPLEMENTED | `migrations/0001_fase0.sql` até `0014_job_cancellation.sql` (14 arquivos em `migrations/`) | migração do zero + upgrade legado |
 | Audit chain append-only | IMPLEMENTED | `src/persistence/audit.rs` | testes concorrentes |
 | BLAKE3-256-v2-JCS + BLAKE3-v1 | IMPLEMENTED | `src/persistence/audit.rs` | testes de hash |
 | Storage/staging | IMPLEMENTED | `src/infrastructure/storage.rs` | testes adversariais |
@@ -28,13 +28,13 @@ Ferramenta forense local/offline. Autenticação, RBAC, sessões e server-mode f
 
 ## Gates e limites de verificação
 
-- `PASS` vigente em Linux x86_64 com Rust/Cargo 1.100.0 e CPython 3.14.6 de QA: validação estática, fmt, check, nextest 536 passed/1 skipped, clippy, doc-tests e e2e 110/110 (`EVD-052`; anterior `EVD-012`); supply chain vigente verde em `EVD-051`.
+- `PASS` vigente em Linux x86_64 com Rust/Cargo 1.100.0 e CPython 3.13.5 de QA: validação estática, fmt, check, nextest 573 passed/1 skipped, clippy, doc-tests e e2e 123/123 (`EVD-056`); supply chain vigente verde na mesma evidência. Anteriores: `EVD-051`/`EVD-052`.
 - `WAIVED`: Windows (`WVR-001`), Linux aarch64 (`WVR-002`) e CI automático (`WVR-003`), todos com validade e escopo em `docs/EVIDENCE_REGISTER.md`.
 - `WVR-004`: exceção temporária para `RUSTSEC-2026-0459`, **encerrada em 2026-11-19** após `sqlx 0.9.1` + `libsqlite3-sys 0.40.0`; não é exceção vigente no lock atual (`EVD-051`). O risco aceito histórico nunca equivaleu a verificação de inexploração.
 - `PENDING-HUMAN`: execução sobre incidente real. A fixture sanitizada, o cenário DEMO e os datasets públicos de `EVD-052` não substituem essa verificação. O fluxo nativo completo também permanece pendente (`EVD-050`).
 - SBOM (`cyclonedx`): fora do escopo por ADR-0028, não é gate.
 
-> Gap origem: INC-07 e INC-04 (2026-11-04): migrations atualizadas para 0001–0012, verificação de 2026-09-22 marcada como histórica e gates reescritos com ponteiro para o registro de evidências. Atualização factual de escopo em 2026-11-20: migration 0013 (ADR-0030/F1-36).
+> Gap origem: INC-07 e INC-04 (2026-11-04): migrations atualizadas para 0001–0012, verificação de 2026-09-22 marcada como histórica e gates reescritos com ponteiro para o registro de evidências. Atualizações factuais de escopo em 2026-11-20: migrations 0013 (ADR-0030/F1-36) e 0014 (ADR-0030/F1-38).
 
 ## Histórico
 

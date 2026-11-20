@@ -173,6 +173,32 @@ Além dos cinco documentos Markdown, a geração grava `caminho-critico.svg` e o
 
 A pré-visualização continua mostrando os cinco Markdown e não grava nem assina arquivos. O SVG é uma representação exportada dos dados atuais; seu teste headless não comprova renderização em navegador, X11 ou tecnologia assistiva.
 
+## 3G. Cancelamento explícito de análise (F1-38/ADR-0030)
+
+Na tela da evidência, **Cancelar análise** aparece enquanto existe análise vigente. Na linha de comando:
+
+```bash
+dfir-app cancel-analysis <EVIDENCE_ID>   # cancela o job vigente mais recente
+dfir-app results <JOB_ID>                # confirma status CANCELLED, sem timeline parcial
+```
+
+O serviço `cancel_job` também aceita o ID específico do job. A requisição persiste `CANCELLED`, grava `ANALYSIS_CANCELLED` e custódia, notifica o worker local e é observada por outra instância através do banco. O engine é morto e recolhido. Repetir o cancelamento é seguro; se o job já terminou, `COMPLETED` é preservado. Falhas ou conclusões tardias não substituem o estado cancelado, e eventos/resultados parciais não são publicados.
+
+## 3H. Assinatura e verificação offline (F1-40/ADR-0030)
+
+Crie e proteja a chave privada fora de `DFIR_DATA_ROOT` e fora da pasta exportada. O arquivo deve conter exatamente 32 bytes em 64 caracteres hexadecimais, com no máximo uma quebra de linha final. O aplicativo não gera essa chave. Para um arquivo de 32 bytes aleatórios já protegido, uma conversão de engenharia possível é `od -An -tx1 -v CHAVE.bin | tr -d ' \n' > CHAVE.hex`; não execute isso sobre segredos reais em logs ou diretórios compartilhados.
+
+```bash
+dfir-app deliverables <INCIDENTE> --out ./saida --sign-with /caminho/externo/CHAVE.hex
+# stdout informa somente public_key e public_key_id
+
+dfir-app verify-deliverables ./saida --public-key <64_HEX_DA_CHAVE_PUBLICA>
+```
+
+`manifest.json.sig` usa o schema `dfir-deliverables-signature/1`. A assinatura Ed25519 cobre os 32 bytes do SHA-256 de `manifest.json`; `public_key_id` é `sha256:<hash-da-chave-pública>`. A verificação exige a chave pública esperada e confere schema, algoritmo, assinatura, manifesto e tamanho/SHA-256/BLAKE3 dos cinco Markdown e do SVG. Ela falha com chave errada, artefato adulterado ou ausente. Não há rede nem confiança em chave fornecida somente pelo envelope.
+
+A geração assinada reverifica antes de auditar. Preview não assina; gerar novamente sem `--sign-with` remove a assinatura antiga para não deixar um envelope inválido junto de arquivos novos.
+
 ## 4. O que este documento não cobre
 
 Bundle assinado, preflight e health/smoke automáticos, e `.dfirpkg` são Fase 4 (ADR-0018). Importar CSV/JSONL (rede, SIEM, dispositivos de segurança) foi adiado por decisão do operador (ADR-0025).

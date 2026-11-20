@@ -1968,6 +1968,14 @@ Jobs `PROCESSING` encontrados após reinício nunca podem permanecer silenciosam
 
 A aplicação não deve marcar um resultado parcial como `COMPLETED`.
 
+### 26.5.1. Cancelamento explícito (ADR-0030/F1-38)
+
+A migration `0014_job_cancellation.sql` admite `CANCELLED` e registra `cancellation_requested_at`. O cancelamento não apaga o job nem introduz `CANCELLING` como estado persistido: a requisição condicional muda `PENDING`/`PROCESSING` para `CANCELLED` na mesma transação `BEGIN IMMEDIATE` de `ANALYSIS_CANCELLED` e da entrada de custódia. Um job já `COMPLETED` permanece concluído; repetir o cancelamento de um job `CANCELLED` é idempotente.
+
+Cada análise possui um `CancellationToken` registrado por `job_id`. O worker observa esse token e a coluna persistida enquanto aguarda semáforo, grava requisição, lê JSONL e espera o processo. Ao cancelar, mata e recolhe o engine, para o watcher e propaga `AppError::JobCancelled`. Essa combinação cobre tanto a instância que originou a análise quanto outra invocação CLI.
+
+A indexação dos eventos, a escrita dos resultados e a conclusão/auditoria compartilham uma única transação protegida contra cancelamento. Assim não se publica índice parcial, e uma conclusão ou falha tardia não substitui um estado terminal diverso. `cancel_active_analysis` seleciona a análise vigente mais recente da evidência; `cancel_job` opera pelo `job_id`. A GUI usa o mesmo serviço sem bloquear sua thread e não recarrega timeline ou resultados após `CANCELLED`.
+
 ## 26.6. Limite operacional de armazenamento
 
 O sistema deve monitorar espaço livre no storage usado por evidências e artefatos.
@@ -2430,26 +2438,39 @@ A interação exige estado visual local ou visualização rica?
 
 A assinatura de relatório é um mecanismo opcional de integridade/autenticidade, não uma declaração jurídica.
 
-**DECISÃO:** para o MVP, quando habilitada, a assinatura será **destacada**:
+**DECISÃO (ADR-0030/F1-40):** no pipeline atual, a assinatura é destacada e cobre o SHA-256 do `manifest.json`, que por sua vez referencia os cinco documentos Markdown e o SVG do caminho crítico:
 
 ```text
-Relatorio.pdf
-Relatorio.pdf.sha256
-Relatorio.pdf.sig
+manifest.json
+manifest.json.sig
 ```
 
-O `.sig` será uma assinatura Ed25519 do hash SHA-256 do PDF, usando uma chave de assinatura específica para relatórios.
+O arquivo `.sig` é um envelope JSON com schema `dfir-deliverables-signature/1`:
 
-Isso é deliberadamente diferente de “assinatura PDF incorporada”.
+```json
+{
+  "schema": "dfir-deliverables-signature/1",
+  "algorithm": "Ed25519",
+  "manifest_sha256": "<64 hex>",
+  "public_key_id": "sha256:<64 hex>",
+  "signature": "<128 hex>"
+}
+```
+
+A assinatura Ed25519 cobre exatamente os 32 bytes decodificados de `manifest_sha256`, e não a representação textual do hash. O identificador público é o SHA-256 dos 32 bytes da chave pública; a verificação recebe separadamente a chave pública esperada, confere esse identificador e não confia em uma chave fornecida apenas pelo envelope.
+
+Isso é deliberadamente diferente de “assinatura PDF incorporada”. Não há PDF neste pipeline.
 
 ### Regras
 
-- chave de relatório separada da chave de sessão;
-- chave privada fora do storage de evidências;
-- assinatura auditada;
-- verificação obrigatória quando a funcionalidade estiver habilitada;
-- não considerar o texto “Assinado digitalmente...” como evidência criptográfica;
-- documentação informa exatamente qual chave/certificado foi usado e seu identificador público.
+- chave privada de relatório separada, em arquivo regular com 32 bytes codificados por 64 caracteres hexadecimais e, opcionalmente, uma quebra de linha final;
+- a chave privada deve estar fora da raiz inteira de storage (`DFIR_DATA_ROOT`) e da pasta exportada; a aplicação não cria, persiste, audita nem retorna a chave privada;
+- caminhos de chave e exportação são canonicalizados e validados, sem aceitar diretório, link simbólico ou entrada não regular como chave;
+- geração assinada reverifica manifesto, assinatura, tamanhos e hashes SHA-256/BLAKE3 dos cinco Markdown e do SVG antes de auditar;
+- preview não grava nem assina; geração sem `--sign-with` remove `manifest.json.sig` obsoleto da pasta reescrita;
+- verificação offline é obrigatória no fluxo assinado e falha para manifesto/assinatura ausente ou inválido, chave pública divergente, artefato adulterado/ausente ou caminho fora do envelope permitido;
+- a resposta ao operador contém apenas a chave pública e seu identificador, nunca material privado;
+- não considerar o texto “Assinado digitalmente...” como evidência criptográfica.
 
 Caso um requisito futuro exija uma assinatura PDF padronizada, a implementação deverá adotar o padrão exigido naquele contexto em vez de adaptar esta assinatura destacada.
 

@@ -20,6 +20,8 @@ Convenções: o primeiro parâmetro de quase todas as funções é `services: &A
 | `async import_evidence_with_provenance` | `source_path: &Path, max_upload_bytes: u64, declared: &provenance::EvidenceProvenance` | `AppResult<EvidenceResponse>` | Importa uma evidência a partir de um caminho local já escolhido pelo operador (diálogo nativo de arquivo, `src/gui`). |
 | `async import_evidence_classified` | `source_path: &Path, max_upload_bytes: u64, declared: &provenance::EvidenceProvenance, data_class: &str` | `AppResult<EvidenceResponse>` | Como `import_evidence_with_provenance`, com a classe do dado explícita. |
 | `async analyze` | `evidence_id: &str, kind: &str, max_output_bytes: Option<u64>, max_items: Option<u64>` | `AppResult<AnalyzeResponse>` | Executa uma análise e registra o resultado no log (job, tipo, itens, avisos e duração total, ou o erro). |
+| `async cancel_job` | `job_id: &str` | `AppResult<JobStatusResponse>` | Persiste `CANCELLED` com auditoria/custódia, acorda o sinal local do job e preserva `COMPLETED`; chamadas repetidas são idempotentes. |
+| `async cancel_active_analysis` | `evidence_id: &str` | `AppResult<JobStatusResponse>` | Resolve o job `PENDING`/`PROCESSING` mais recente da evidência e aplica `cancel_job`. |
 | `async recover_orphaned_jobs` | `db: &SqlitePool` | `AppResult<u64>` | Recupera jobs que ficaram `PENDING`/`PROCESSING` porque o app anterior foi fechado ou morreu no meio da análise (F1-10, AUD-03). |
 | `async latest_timeline_job` | `evidence_id: &str` | `AppResult<Option<String>>` | O job EVTX concluído mais recente da evidência, se houver (a GUI o usa para mostrar a timeline ao selecionar a evidência, sem reanalisar). |
 | `async timeline_page` | `job_id: &str, offset: u64, limit: u64, filter: Option<&str>, want_total: bool` | `AppResult<TimelinePage>` | Uma página da timeline de um job, ordenada por UTC. |
@@ -140,6 +142,16 @@ Ao revisar um item, a checagem de ciclos exige que `depends_on` presente nos ite
 | `async preview` | `incident_id: &str, options: RenderOptions` | `AppResult<DeliverableSet>` | Pré-visualização: coleta e renderiza sem gravar nada. |
 | `write_set` | `set: &DeliverableSet, out_dir: &Path, paths: &StoragePaths, generated_at: &str` | `AppResult<GeneratedDeliverables>` | Grava os documentos e o manifest. |
 | `async generate` | `incident_id: &str, out_dir: &Path, options: RenderOptions` | `AppResult<GeneratedDeliverables>` | Gera os cinco documentos, o SVG e o manifest em `out_dir`, e registra o evento na trilha de auditoria (só nomes de arquivo e hashes, sem caminhos). |
+| `async generate_signed` | `incident_id: &str, out_dir: &Path, options: RenderOptions, private_key: &Path` | `AppResult<GeneratedDeliverables>` | Gera, assina o digest do manifest, verifica todo o conjunto e só então audita; nunca cria a chave privada. |
+
+### `src/service/deliverables/signing.rs` — Assinatura destacada (F1-40, ADR-0030)
+
+| Função | Parâmetros relevantes | Retorno | Descrição |
+|---|---|---|---|
+| `public_key_hex` | `private_key: &Path, paths: &StoragePaths` | `AppResult<String>` | Lê uma chave privada externa de 32 bytes em hexadecimal e deriva a pública, sem criar chave nem registrar segredo. |
+| `verify_directory` | `output_dir: &Path, expected_public_key_hex: &str` | `AppResult<VerifiedDeliverables>` | Verifica offline manifest, caminhos, tamanhos, SHA-256/BLAKE3 dos documentos e assinatura Ed25519 do digest. |
+
+O artefato `manifest.json.sig` usa `dfir-deliverables-signature/1`, `algorithm = Ed25519`, `manifest_sha256`, `public_key_id = sha256:<hash-da-chave-pública>` e `signature` hexadecimal. A assinatura cobre exatamente os 32 bytes do SHA-256 do manifest; a chave pública esperada é entrada independente da verificação. Preview não assina, e uma geração não assinada remove assinatura obsoleta da pasta reescrita.
 
 ### `src/service/deliverables/markdown.rs` — Documentos de entrega: renderização Markdown
 

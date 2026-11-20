@@ -36,6 +36,7 @@ Nessas sessões com mudanças ou gates, use `.jcode/skills/dfir-improve/SKILL.md
 - Antes de assumir a escrita de um worker parado, confirme seu estado terminal e releia o artefato imediatamente antes de editar. Trate escrita atrasada como nova entrega concorrente a revisar, não como ruído a sobrescrever.
 - Não antecipe `PASS`, `VERIFIED` ou aceite em documentação viva. Primeiro execute e registre a evidência; depois atualize a referência vigente e repita o gate documental.
 - Preserve narrativa histórica e detalhes fora da tarefa. Em RTM, ADRs e evidências, prefira acréscimos cirúrgicos e revise o diff para detectar perdas acidentais.
+- Não trate a saída da ferramenta `read` como bytes do arquivo: ela pode conter numeração/anotações. Ao transferir conteúdo entre ferramentas, use uma fonte bruta, considere o limite de saída de cada canal e compare origem e destino com `cmp` ou hash antes do gate. Uma transferência truncada exige blocos completos ou outro método, nunca gravação do prefixo recebido.
 
 ## 3. Fechamento da sessão
 

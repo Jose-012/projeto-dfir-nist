@@ -26,6 +26,7 @@ Sem subcomando, `dfir-app` abre a interface nativa. Os subcomandos são não int
 | `import` | `import <ARQUIVO> [--source ..] [--provided-by ..] [--collection-method ..] [--collection-tool ..] [--collection-tool-version ..] [--collected-at AAAA-MM-DD] [--authorization ..] [--personal-data]` | preserva, calcula hash e registra custódia/proveniência declarada |
 | `evidence-list` | `evidence-list` | lista evidências ativas |
 | `analyze` | `analyze <ID> [--kind EVTX_TIMELINE ou YARA_SCAN] [--max-output-bytes N] [--max-items N]` | executa análise; o padrão é `EVTX_TIMELINE` |
+| `cancel-analysis` | `cancel-analysis <ID>` | cancela a análise vigente da evidência, persiste `CANCELLED` e encerra o engine |
 | `results` | `results <JOB_ID> [--offset N] [--limit N] [--filter TEXTO]` | pagina a timeline; aceita texto livre e `campo:valor` |
 | `findings` | `findings <ID>` | lista resultados analíticos da evidência |
 | `detect` | `detect <ID>` | cria candidatos de detecção pendentes |
@@ -37,7 +38,8 @@ Sem subcomando, `dfir-app` abre a interface nativa. Os subcomandos são não int
 | `custody` | `custody <ID>` | mostra a cadeia de custódia |
 | `audit` | `audit [--limit N]` | mostra eventos da trilha de auditoria |
 | `destroy` | `destroy <ID> --confirm-filename <NOME>` | descarta evidência após confirmação exata |
-| `deliverables` | `deliverables <INCIDENTE> [--out PASTA] [--no-redaction]` | gera cinco documentos Markdown e `manifest.json`, mascarados por padrão |
+| `deliverables` | `deliverables <INCIDENTE> [--out PASTA] [--no-redaction] [--sign-with CHAVE]` | gera documentos/manifest, mascarados por padrão; opcionalmente assina o digest do manifest |
+| `verify-deliverables` | `verify-deliverables <PASTA_EXPORTADA> --public-key <HEX>` | verifica offline documentos, hashes e assinatura Ed25519 |
 | `demo` | `demo <ARQUIVO.evtx>` | registra o incidente sintético de demonstração, rotulado DEMO |
 | `diagnostics` | `diagnostics` | emite diagnóstico seguro, sem nomes/conteúdo de evidências |
 | `audit-verify` | `audit-verify` | verifica audit chain e custódia |
@@ -81,7 +83,8 @@ A detecção só enxerga o que o log registrou. Ausência de candidato não prov
 - NIST Current/Target/Gap e visão por Function;
 - ATT&CK, caminho crítico, impacto, IOCs, achados e recomendações;
 - plano nos oito domínios, lacunas de fonte e redação de dados pessoais;
-- cinco documentos Markdown com `manifest.json` e cenário DEMO.
+- cinco documentos Markdown com `manifest.json` e cenário DEMO;
+- cancelamento explícito de jobs e assinatura destacada Ed25519 opcional dos entregáveis.
 
 O parser usa `evtx 0.15.1` com `default-features = false`. BinXML não é reimplementado.
 

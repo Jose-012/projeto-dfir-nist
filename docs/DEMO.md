@@ -25,8 +25,10 @@ O rótulo **DEMO** (spec §21.3) está na classe da evidência (`status = DEMO`)
 ```bash
 export DFIR_DATA_ROOT=/caminho/para/uma/pasta/nova        # recomendado: dados da demo separados dos reais
 dfir-app demo caminho/security.evtx                        # JSON: incident_id, evidence_id, jobs e contagens
-dfir-app deliverables <incident_id> --out ./saida          # 5 documentos + manifest.json, dados pessoais mascarados
+dfir-app deliverables <incident_id> --out ./saida          # 5 documentos + SVG + manifest.json, dados pessoais mascarados
 dfir-app deliverables <incident_id> --out ./saida-bruta --no-redaction   # os mesmos, sem máscara (compare)
+dfir-app deliverables <incident_id> --out ./saida-assinada --sign-with /caminho/externo/chave.hex
+dfir-app verify-deliverables ./saida-assinada --public-key <chave_publica_hex>
 dfir-app audit-verify                                      # cadeias de auditoria e de custódia
 dfir-app                                                   # a interface: o incidente [DEMO] já está na lista
 ```

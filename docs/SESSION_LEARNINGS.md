@@ -127,6 +127,14 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** `AGENTS.md` §17 e `.jcode/swarm-prompt.md` passaram a exigir checkout absoluto no prompt e confirmação de `git rev-parse --show-toplevel`/HEAD antes da primeira edição. Correção de diretório ocorre na sessão existente.
 - **Confirmação:** confirmada em 2026-11-20 nos dois spawns seguintes (`breadcrumbs-native` e `svg-deterministico`): ambos usaram início explícito sem modo automático, retomaram as mesmas sessões por DM após o retorno inicial sem relatório e confirmaram `pwd`, `git rev-parse --show-toplevel` e HEAD no checkout absoluto antes da primeira edição. Não houve respawn nem duplicação.
 
+### 16. Round-trip de leitura anotada e saída truncada
+
+- **Classe:** erro de execução detectado antes do commit.
+- **Fato:** em 2026-11-20, uma transferência `read` → `write` gravou os prefixos de numeração apresentados pela leitura no inventário de licenças. A recuperação por Base64 também encontrou o limite de 30.000 caracteres da saída do bash. Leitura direta e `cmp` detectaram o problema; três blocos completos restauraram o texto e o destino ficou byte a byte igual ao scratch validado.
+- **Risco:** um exit 0 de escrita poderia transformar representação anotada ou truncada em documento normativo aparentemente regenerado.
+- **Prevenção:** `docs/SESSION_IMPROVEMENT.md` §2 exige fonte bruta, atenção ao limite do canal e `cmp`/hash entre origem e destino antes do gate; conteúdo parcial não pode ser gravado como completo.
+- **Confirmação:** pendente.
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.

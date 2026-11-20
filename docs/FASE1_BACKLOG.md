@@ -8,10 +8,10 @@ Este arquivo lista somente trabalho remanescente. Estado de requisitos/tickets: 
 | Pista | Escopo restante | Estado |
 |---|---|---|
 | A. Verificação externa | Windows x86_64 (F1-22), Linux aarch64 e incidente real com sanitização | `PENDING-HUMAN`; Windows/aarch64 têm WVR-001/WVR-002 até 2026-12-31 |
-| E. Supply chain | Repetir `just supply-chain` a cada mudança de dependência e revisar as exceções informativas bincode/chrono | local verde em `EVD-051` e CI verde em `EVD-054`/`EVD-055`; oito vulnerabilidades de Wasmtime foram corrigidas e `WVR-004` foi encerrado; revisões recorrentes continuam em `docs/SUPPLY_CHAIN.md` |
+| E. Supply chain | Repetir `just supply-chain` a cada mudança de dependência e revisar as exceções informativas bincode/chrono | local verde em `EVD-056` após `ed25519-dalek 3.0.0` (621 dependências, 1555 advisories, sem exceção nova); anteriores `EVD-051` e CI `EVD-054`/`EVD-055`; revisões recorrentes continuam em `docs/SUPPLY_CHAIN.md` |
 | F. Fechamento do RC | Resolver ou aceitar formalmente as pendências externas e nativas antes de declarar aceite final | bloqueado pelas pistas A e G; estado normativo em `docs/RELEASE_GATE.md` |
 | G. Fluxo nativo X11 | Confirmar navegação, abrir/cancelar seletor e importar fixture sanitizada sem travamento | `BLOCKED/PENDING-HUMAN` em `EVD-050`; somente janela/resize observados, com `Xlib BadMatch` no smoke final |
-| H. Melhorias ativadas | Fatias 1–6 de `docs/MVP_IMPROVEMENT_PLAN.md`; F1-36..F1-40 por ADR-0030 | trabalho novo autorizado pelo operador em 2026-11-20; implementação e evidências próprias pendentes, sem alterar os bloqueadores A/F/G |
+| H. Melhorias ativadas | Fatias 1–6 de `docs/MVP_IMPROVEMENT_PLAN.md`; F1-36..F1-40 por ADR-0030 | F1-38/F1-40 `VERIFIED` em Linux x86_64 por `EVD-056`; demais fatias continuam conforme RTM, sem alterar os bloqueadores A/F/G |
 
 Nenhuma pista autoriza afirmar verificação em ambiente não executado. Fixture DEMO, testes sintéticos e os dois datasets públicos externos de `EVD-052` não substituem incidente real autorizado e sanitizado.
 

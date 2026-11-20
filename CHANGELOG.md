@@ -1,6 +1,13 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-20 - cancelamento de jobs e assinatura de entregáveis (`EVD-056`)
+
+- F1-38: migration 0014, estado `CANCELLED`, sinal por job e watcher persistido, kill/recolhimento do engine, indexação/conclusão/auditoria atômicas e comandos na CLI/GUI. Cancelamento entre instâncias encerra o processo sem publicar índice parcial; conclusão tardia preserva o estado terminal.
+- F1-40: `ed25519-dalek 3.0.0`, envelope `dfir-deliverables-signature/1`, assinatura dos 32 bytes do SHA-256 do manifest, chave privada externa e verificação offline de assinatura, manifesto, tamanhos e hashes. Preview não assina e geração não assinada remove envelope obsoleto.
+- Before reproduziu a corrida de estado e a assinatura não implementada. After: 12 testes de cancelamento, um entre instâncias, cinco de signing e um de geração; `just verify` com 573 passed/1 skipped, supply chain verde com 621 dependências e E2E 123/123. As tentativas documental e de Clippy não verdes foram corrigidas e permanecem descritas na evidência.
+- Windows, Linux aarch64, incidente real e fluxo nativo X11 continuam fora desse `PASS`; `EVD-050` e os demais bloqueadores não foram alterados. A assinatura não é alegação de validade jurídica.
+
 ## Unreleased - 2026-11-19 - integração contínua e consolidação das instruções (`EVD-054`/`EVD-055`)
 
 - Criado o repositório privado `Jose-012/projeto-dfir-nist` pelo MCP GitHub, preservando o histórico local, e adicionado `.github/workflows/ci.yml` com toolchain pinada, actions por SHA completo, checksum e `fallback: none`. O run `44582760249` passou com 536 testes/1 skipped, supply chain, documentação e E2E 110/110 com sandbox obrigatório.
