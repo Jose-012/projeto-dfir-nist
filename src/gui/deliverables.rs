@@ -342,6 +342,12 @@ mod ui_tests {
                     source_result_ids: vec![],
                 },
             ],
+            critical_path_svg: RenderedDocument {
+                file_name: "caminho-critico.svg",
+                title: "Caminho crítico (SVG)",
+                content: "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>\n".into(),
+                source_result_ids: vec!["a".into()],
+            },
             redaction: None,
             personal_data_evidence: 2,
         }

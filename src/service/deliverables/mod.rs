@@ -47,6 +47,7 @@ pub const FILE_E2: &str = "02-vulnerabilidades-attack.md";
 pub const FILE_E3: &str = "03-nist-recomendacoes.md";
 pub const FILE_E4: &str = "04-hardening.md";
 pub const FILE_E5: &str = "05-criptografia.md";
+pub const FILE_CRITICAL_PATH_SVG: &str = "caminho-critico.svg";
 pub const FILE_MANIFEST: &str = "manifest.json";
 
 // ---------------------------------------------------------------------
@@ -170,6 +171,8 @@ pub struct DeliverableSet {
     pub incident_id: String,
     pub incident_name: String,
     pub documents: Vec<RenderedDocument>,
+    /// SVG determinístico separado dos cinco documentos Markdown do preview.
+    pub critical_path_svg: RenderedDocument,
     /// `Some` quando os dados pessoais foram mascarados.
     pub redaction: Option<RedactionSummary>,
     /// Quantas evidências citadas o operador marcou como contendo dado pessoal.
@@ -457,10 +460,27 @@ pub fn render_all(data: &DeliverableData) -> AppResult<DeliverableSet> {
             )));
         }
     }
+    let critical_path_svg = RenderedDocument {
+        file_name: FILE_CRITICAL_PATH_SVG,
+        title: "Caminho crítico (SVG)",
+        content: super::critical_path_svg::render(&data.critical_path)?,
+        source_result_ids: {
+            let mut ids: Vec<String> = data
+                .critical_path
+                .stages
+                .iter()
+                .map(|stage| stage.id.clone())
+                .collect();
+            ids.sort();
+            ids.dedup();
+            ids
+        },
+    };
     Ok(DeliverableSet {
         incident_id: data.incident.id.clone(),
         incident_name: data.incident.name.clone(),
         documents,
+        critical_path_svg,
         redaction: data.redaction.clone(),
         personal_data_evidence: data
             .evidence
@@ -855,9 +875,14 @@ pub fn write_set(
     generated_at: &str,
 ) -> AppResult<GeneratedDeliverables> {
     let target = prepare_output_dir(out_dir, &set.incident_id, paths)?;
-    let mut files = Vec::new();
-    let mut manifest_documents = Vec::new();
-    for document in &set.documents {
+    let documents: Vec<&RenderedDocument> = set
+        .documents
+        .iter()
+        .chain(std::iter::once(&set.critical_path_svg))
+        .collect();
+    let mut files = Vec::with_capacity(documents.len() + 1);
+    let mut manifest_documents = Vec::with_capacity(documents.len());
+    for document in documents {
         let bytes = document.content.as_bytes();
         write_atomically(&target, document.file_name, bytes)?;
         let sha256 = sha256_hex(bytes);
@@ -1989,7 +2014,7 @@ mod tests {
     }
 
     #[test]
-    fn write_set_writes_the_six_files_with_matching_hashes_and_is_idempotent() {
+    fn write_set_writes_the_seven_files_with_matching_hashes_and_is_idempotent() {
         let (_root, paths) = storage_for_tests();
         let out = tempfile::tempdir().expect("output directory");
         let set = render_all(&sample_data()).expect("render");
@@ -1998,7 +2023,15 @@ mod tests {
         let names: Vec<&str> = first.files.iter().map(|f| f.file_name.as_str()).collect();
         assert_eq!(
             names,
-            vec![FILE_E1, FILE_E2, FILE_E3, FILE_E4, FILE_E5, FILE_MANIFEST]
+            vec![
+                FILE_E1,
+                FILE_E2,
+                FILE_E3,
+                FILE_E4,
+                FILE_E5,
+                FILE_CRITICAL_PATH_SVG,
+                FILE_MANIFEST
+            ]
         );
         assert!(first.output_dir.ends_with("entregaveis-inc-00000001"));
         for file in &first.files {
@@ -2013,7 +2046,7 @@ mod tests {
         assert_eq!(manifest["schema"], "dfir-deliverables/1");
         assert_eq!(manifest["incident_id"], "inc-00000001");
         assert_eq!(manifest["generated_at"], "2026-10-14T12:00:00Z");
-        assert_eq!(manifest["documents"].as_array().map(Vec::len), Some(5));
+        assert_eq!(manifest["documents"].as_array().map(Vec::len), Some(6));
         assert!(
             manifest["documents"][0]["source_result_ids"]
                 .as_array()
@@ -2027,10 +2060,10 @@ mod tests {
         // Regravar com os mesmos dados mantém os hashes dos documentos; só o
         // manifest (que carrega `generated_at`) muda.
         let second = write_set(&set, out.path(), &paths, "2026-10-14T13:00:00Z").expect("rewrite");
-        for index in 0..5 {
+        for index in 0..6 {
             assert_eq!(first.files[index].sha256, second.files[index].sha256);
         }
-        assert_ne!(first.files[5].sha256, second.files[5].sha256);
+        assert_ne!(first.files[6].sha256, second.files[6].sha256);
         let leftovers: Vec<String> = std::fs::read_dir(&first.output_dir)
             .expect("read dir")
             .filter_map(Result::ok)
@@ -2161,7 +2194,13 @@ mod tests {
         )
         .await
         .expect("generate");
-        assert_eq!(generated.files.len(), 6);
+        assert_eq!(generated.files.len(), 7);
+        let svg_file = generated
+            .files
+            .iter()
+            .find(|file| file.file_name == FILE_CRITICAL_PATH_SVG)
+            .expect("SVG file metadata");
+        assert!(generated.output_dir.join(FILE_CRITICAL_PATH_SVG).is_file());
         let e4 = std::fs::read_to_string(generated.output_dir.join(FILE_E4)).expect("e4");
         assert!(e4.contains("MFA no acesso remoto"));
 
@@ -2172,6 +2211,7 @@ mod tests {
         .await
         .expect("audit metadata");
         assert!(metadata.contains(&generated.files[0].sha256));
+        assert!(metadata.contains(&svg_file.sha256));
         assert!(
             !metadata.contains(&out.path().display().to_string()),
             "a auditoria guarda nomes e hashes, não caminhos"

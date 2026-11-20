@@ -398,9 +398,10 @@ mod tests {
         .await
         .expect("deliverables");
         let value: serde_json::Value = serde_json::from_str(&json).expect("json output");
-        assert_eq!(value["files"].as_array().map(Vec::len), Some(6));
+        assert_eq!(value["files"].as_array().map(Vec::len), Some(7));
         let dir = PathBuf::from(value["output_dir"].as_str().expect("output_dir"));
         assert!(dir.join("01-relatorio-forense.md").is_file());
+        assert!(dir.join("caminho-critico.svg").is_file());
         assert!(dir.join("manifest.json").is_file());
 
         // Sem --out: a pasta de exportações da aplicação.

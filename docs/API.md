@@ -118,6 +118,12 @@ Ao revisar um item, a checagem de ciclos exige que `depends_on` presente nos ite
 |---|---|---|---|
 | `parse` | `input: &str` | `Result<TimelineFilter, String>` | Interpreta o texto do filtro. |
 
+### `src/service/critical_path_svg.rs` — Grafo SVG do caminho crítico
+
+| Função | Parâmetros relevantes | Retorno | Descrição |
+|---|---|---|---|
+| `render` | `view: &CriticalPathView` | `AppResult<String>` | Renderiza a visão atual sem consultar nem alterar o banco. Permutar `stages`/`edges` na entrada não muda os bytes da saída. |
+
 ### `src/service/demo.rs` — Incidente de demonstração
 
 | Função | Parâmetros relevantes | Retorno | Descrição |
@@ -128,12 +134,12 @@ Ao revisar um item, a checagem de ciclos exige que `depends_on` presente nos ite
 
 | Função | Parâmetros relevantes | Retorno | Descrição |
 |---|---|---|---|
-| `render_all` | `data: &DeliverableData` | `AppResult<DeliverableSet>` | Renderiza os cinco documentos. |
+| `render_all` | `data: &DeliverableData` | `AppResult<DeliverableSet>` | Renderiza os cinco documentos Markdown e o SVG separado do caminho crítico. |
 | `render_with` | `data: &DeliverableData, options: RenderOptions` | `AppResult<DeliverableSet>` | Renderiza aplicando as opções: com a máscara ligada, os dados pessoais são trocados por marcadores antes de qualquer documento ser escrito. |
 | `async collect` | `incident_id: &str` | `AppResult<DeliverableData>` | Lê do banco tudo que os documentos usam. |
 | `async preview` | `incident_id: &str, options: RenderOptions` | `AppResult<DeliverableSet>` | Pré-visualização: coleta e renderiza sem gravar nada. |
 | `write_set` | `set: &DeliverableSet, out_dir: &Path, paths: &StoragePaths, generated_at: &str` | `AppResult<GeneratedDeliverables>` | Grava os documentos e o manifest. |
-| `async generate` | `incident_id: &str, out_dir: &Path, options: RenderOptions` | `AppResult<GeneratedDeliverables>` | Gera os cinco documentos e o manifest em `out_dir`, e registra o evento na trilha de auditoria (só nomes de arquivo e hashes, sem caminhos). |
+| `async generate` | `incident_id: &str, out_dir: &Path, options: RenderOptions` | `AppResult<GeneratedDeliverables>` | Gera os cinco documentos, o SVG e o manifest em `out_dir`, e registra o evento na trilha de auditoria (só nomes de arquivo e hashes, sem caminhos). |
 
 ### `src/service/deliverables/markdown.rs` — Documentos de entrega: renderização Markdown
 

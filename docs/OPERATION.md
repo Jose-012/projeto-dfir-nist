@@ -167,6 +167,12 @@ soltos importam o primeiro e avisam quantos ficaram de fora. O `rfd` não distin
 "cancelado" de "seletor indisponível"; por isso a mensagem orienta os caminhos alternativos,
 em vez de fingir que a importação ocorreu.
 
+## 3F. Entregáveis e SVG do caminho crítico (F1-39/ADR-0030)
+
+Além dos cinco documentos Markdown, a geração grava `caminho-critico.svg` e o inclui no `manifest.json`: são seis entradas em `documents` e sete arquivos no total, contando o manifest. O SVG ordena os estágios por sequência e ID, valida as arestas, neutraliza caracteres invisíveis e escapa texto para XML 1.0. Não contém JavaScript nem recursos externos; `<title>` e `<desc>` preservam uma alternativa textual integral, inclusive quando não há estágios. Payload inválido, ID duplicado ou aresta sem origem/destino fazem a geração falhar com diagnóstico, em vez de produzir um grafo incompleto.
+
+A pré-visualização continua mostrando os cinco Markdown e não grava nem assina arquivos. O SVG é uma representação exportada dos dados atuais; seu teste headless não comprova renderização em navegador, X11 ou tecnologia assistiva.
+
 ## 4. O que este documento não cobre
 
 Bundle assinado, preflight e health/smoke automáticos, e `.dfirpkg` são Fase 4 (ADR-0018). Importar CSV/JSONL (rede, SIEM, dispositivos de segurança) foi adiado por decisão do operador (ADR-0025).

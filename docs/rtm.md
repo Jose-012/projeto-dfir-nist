@@ -65,7 +65,7 @@ A implementação abaixo pertence à base já concluída e não redefine os `RF-
 | F1-36 | RF-004, RF-029 | Âncora de cabeça/contagem da custódia | IMPLEMENTED (2026-11-20, ADR-0030; migration 0013, append transacional e verificação fail-closed; Before válido reproduziu remoção da cauda aceita e After focado passou 7/7 com 421 skipped; `just verify` e E2E comuns PENDING; limitações de remoção pré-migration e alteração coordenada banco+âncora em `docs/OPERATION.md`) |
 | F1-37 | RF-046 | Breadcrumbs contextuais | IMPLEMENTED (2026-11-20, ADR-0030; trilha derivada de tela, evidência, incidente e aba; focado independente 2/2 com 430 skipped; `just verify` e fluxo X11 PENDING, sem alegação AT-SPI) |
 | F1-38 | RF-037, RF-041, RF-042 | Cancelamento explícito de job | PLANNED (ADR-0030, ativado pelo operador em 2026-11-20) |
-| F1-39 | RF-018, RF-046 | Grafo SVG do caminho crítico | PLANNED (ADR-0030, ativado pelo operador em 2026-11-20; alocado à Fase 2 do roadmap) |
+| F1-39 | RF-018, RF-046 | Grafo SVG do caminho crítico | IMPLEMENTED (2026-11-20, ADR-0030; renderer puro com ordem sequência/ID, escaping XML 1.0, arestas fail-closed e alternativa `<desc>`; focado 4/4 com 432 skipped e integração de entregáveis 41/41 com 395 skipped; SVG é o sétimo arquivo e tem hash no manifest/auditoria; `just verify` e E2E comuns PENDING, sem alegação de renderização nativa) |
 | F1-40 | RF-013, RF-015, RF-038 | Assinatura destacada dos entregáveis | PLANNED (ADR-0030, ativado pelo operador em 2026-11-20; alocado à Fase 3 do roadmap) |
 
 Backlog detalhado: `docs/FASE1_BACKLOG.md`. Tickets locais: `.scratch/fase1-backlog/issues/`. Rastreabilidade demanda → RF → ticket: `docs/DEMAND_TRACE.md`.

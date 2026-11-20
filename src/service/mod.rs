@@ -13,6 +13,7 @@
 //! para servir uma requisição HTTP foi substituída por uma que os orquestra
 //! para servir uma ação da interface.
 
+pub mod critical_path_svg;
 pub mod deliverables;
 pub mod demo;
 pub mod detection;
