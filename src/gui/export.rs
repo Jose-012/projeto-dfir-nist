@@ -55,13 +55,21 @@ impl ExportState {
                 }
                 None => {}
             },
-            Some(Picked::Nothing) if self.picker_for.take().as_deref() == Some(incident_id) => {
-                self.hint = Some(
-                    "Nenhum destino escolhido. Se o seletor não abriu, informe o caminho no campo abaixo."
-                        .into(),
-                );
+            Some(Picked::Cancelled) if self.picker_for.take().as_deref() == Some(incident_id) => {
+                self.hint =
+                    Some("Nenhum destino escolhido; nenhuma exportação foi iniciada.".into());
             }
-            Some(Picked::Nothing) | None => {}
+            Some(Picked::Unavailable(message)) => {
+                if self.picker_for.take().as_deref() == Some(incident_id) {
+                    self.hint = Some(message);
+                }
+            }
+            Some(Picked::Failed(message)) => {
+                if self.picker_for.take().as_deref() == Some(incident_id) {
+                    self.hint = Some(message);
+                }
+            }
+            Some(Picked::Cancelled) | None => {}
         }
         let clicked = ui
             .add_enabled(
@@ -71,12 +79,15 @@ impl ExportState {
             .clicked();
         if clicked {
             self.picker_for = Some(incident_id.to_string());
-            if let Err(message) = self.picker.open(Request::SaveFile {
-                title: "Salvar achados do incidente".into(),
-                file_name: format!("incidente-{incident_id}-achados.json"),
-                filter_name: "JSON".into(),
-                extensions: vec!["json".into()],
-            }) {
+            if let Err(message) = self.picker.open(
+                Request::SaveFile {
+                    title: "Salvar achados do incidente".into(),
+                    file_name: format!("incidente-{incident_id}-achados.json"),
+                    filter_name: "JSON".into(),
+                    extensions: vec!["json".into()],
+                },
+                ui.ctx().clone(),
+            ) {
                 self.picker_for = None;
                 self.hint = Some(message);
             }
@@ -152,7 +163,7 @@ impl ExportState {
 mod tests {
     use super::ExportState;
     use crate::gui::backend::{Backend, Command};
-    use crate::gui::file_dialog::FilePicker;
+    use crate::gui::file_dialog::{FilePicker, Picked};
     use crate::gui::test_harness::drain;
     use egui_kittest::{Harness, kittest::Queryable};
     use std::path::PathBuf;
@@ -249,7 +260,9 @@ mod tests {
         let (backend, mut commands) = Backend::for_test();
         let mut harness = harness(state, backend);
         harness.step();
-        sender.send(None).expect("cancelamento sintético");
+        sender
+            .send(Picked::Cancelled)
+            .expect("cancelamento sintético");
         harness.step();
 
         harness.get_by_label_contains("Nenhum destino escolhido");
@@ -291,7 +304,7 @@ mod tests {
         let (backend, mut commands) = Backend::for_test();
         let mut harness = harness_for_incident(state, backend, "inc-2");
         sender
-            .send(Some(PathBuf::from("/tmp/destino-de-inc-1.json")))
+            .send(Picked::Path(PathBuf::from("/tmp/destino-de-inc-1.json")))
             .expect("escolha sintética");
         harness.step();
 
@@ -337,7 +350,9 @@ mod tests {
 
         let mut harness = harness(state, backend);
         sender
-            .send(Some(PathBuf::from("/synthetic/selecionado-depois.json")))
+            .send(Picked::Path(PathBuf::from(
+                "/synthetic/selecionado-depois.json",
+            )))
             .expect("resposta tardia sintética");
         harness.step();
         assert!(

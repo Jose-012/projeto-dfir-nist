@@ -148,3 +148,27 @@ aplicação local
 ```
 
 A evidência original é preservada. A cadeia de auditoria é tamper-evident e serializa writers com `BEGIN IMMEDIATE`. Importação, evento `EVIDENCE_IMPORTED` e primeira custódia são gravados na mesma transação. A destruição governada preserva a auditoria e a custódia.
+
+### Preferências da interface
+
+A janela **Preferências da interface**, aberta pela navegação lateral, oferece:
+
+- presets Light, Dark, **Vento Áureo** e Custom;
+- pré-visualização imediata das alterações;
+- **Cancelar** para descartar o rascunho e restaurar o tema salvo;
+- **Salvar preferências** para persistir preset, acento customizado e movimento reduzido;
+- **Reduzir movimento** para concluir transições imediatamente.
+
+Em larguras menores, a navegação fica compacta e mantém os nomes acessíveis **Evidências** e **Incidentes**. O roteiro manual correspondente está em `docs/DEMO.md`; o exercício manual não é, por si só, evidência de aceite visual.
+
+### Seletor de arquivos
+
+`DFIR_FILE_DIALOG_BACKEND` aceita `auto`, `zenity` e `rfd`. No Linux, `auto` faz uma sonda curta fora da UI e usa Zenity quando disponível; `rfd` conserva a limitação legada de não distinguir cancelamento de falha do seletor. O caminho escolhido continua sendo validado, e indisponibilidade/falha preserva diagnóstico específico.
+
+Detalhes de operação, alternativas ao seletor e limitações estão em `docs/OPERATION.md`.
+
+---
+
+## Interface
+
+A interface usa `eframe`/`egui`/`egui_extras` e roda na thread principal. SQLite e subprocessos ficam na thread de backend (`docs/NATIVE_UI_ARCHITECTURE.md`). O seletor nativo de arquivos é apenas a entrada interativa do caminho, que continua sendo validado.

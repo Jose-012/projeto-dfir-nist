@@ -138,10 +138,16 @@ Desde a migration 0013 (F1-36/ADR-0030), `custody_state` mantém por evidência 
 ## 3D. Diálogo nativo de arquivos no Linux (GUI-01)
 
 O aplicativo **não precisa** de portal nem de `zenity` para iniciar e analisar evidência. O
-diálogo "Importar evidência…", porém, usa o `rfd` e, no Linux, tenta o
-`xdg-desktop-portal` por D-Bus e depois o `zenity`. Quando nenhum dos dois responde, o
-seletor pode demorar o tempo limite do D-Bus (~25 s) e devolver "nada escolhido"; a janela
-**não congela**, porque o diálogo roda em uma thread própria (`src/gui/file_dialog.rs`).
+seletor "Importar evidência…" usa o `file_dialog.rs` que escolhe o backend via
+variável de ambiente `DFIR_FILE_DIALOG_BACKEND`:
+
+- `auto` (padrão): no Linux, sonda curta e cacheada (executa `zenity --version` **fora da UI**) escolhe `zenity` quando disponível; caso contrário, cai para `rfd`. Nas demais plataformas, sempre `rfd`.
+- `zenity`: sempre o `zenity` direto via `std::process::Command` (sem shell, **sem timeout enquanto o operador escolhe**, saída limitada). Em outra plataforma, devolve `Picked::Unavailable` com diagnóstico explícito.
+- `rfd`: sempre o caminho legado `rfd` (portal primeiro no Linux), com a limitação residual de não distinguir cancelamento de falha do seletor.
+
+Um valor **inválido** devolve erro específico (mesma régua de `DFIR_ENGINE_SANDBOX`), para que erro de digitação não pareça configuração padrão.
+
+No caminho `rfd` legado, quando o portal não responde (D-Bus ~25 s), o seletor devolve "nada escolhido" por limitação da API; o Zenity distingue indisponibilidade e falha. A janela **não congela**, porque o diálogo roda em uma thread própria (`src/gui/file_dialog.rs`).
 
 Instalação de referência em Debian/Ubuntu (a versão exata depende da distribuição):
 
@@ -163,7 +169,7 @@ Se o seletor não abrir, há dois caminhos que não dependem dele: digitar o cam
 "Ou informe o caminho:" e usar "Importar caminho", ou **arrastar o arquivo** para a janela.
 O aplicativo trata os três caminhos pela mesma validação (`request_import`): caminho vazio,
 pasta ou importação já em andamento são recusados com uma mensagem na tela; vários arquivos
-soltos importam o primeiro e avisam quantos ficaram de fora. O `rfd` não distingue
+soltos importam o primeiro e avisam quantos ficaram de fora. O `rfd` legado não distingue
 "cancelado" de "seletor indisponível"; por isso a mensagem orienta os caminhos alternativos,
 em vez de fingir que a importação ocorreu.
 

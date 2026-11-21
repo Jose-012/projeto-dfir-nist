@@ -8,7 +8,7 @@
 //! requisição HTTP já era, por natureza, uma chamada assíncrona isolada. A
 //! interface nativa não tem esse ponto de entrada por requisição — daí a
 //! fila explícita. Ver `docs/adrs/ADR-0017-interface-nativa-eframe-egui.md`.
-
+use super::runtime::UiWake;
 use crate::{
     application::engine::EngineRunnerConfig,
     config::AppConfig,
@@ -562,6 +562,7 @@ fn msg(error: AppError) -> String {
 pub struct Backend {
     command_tx: tokio::sync::mpsc::UnboundedSender<Command>,
     event_rx: std::sync::mpsc::Receiver<Event>,
+    wake: UiWake,
     max_upload_bytes: u64,
     _thread: std::thread::JoinHandle<()>,
 }
@@ -576,10 +577,17 @@ impl Backend {
         let backend = Self {
             command_tx,
             event_rx,
+            wake: UiWake::default(),
             max_upload_bytes: 0,
             _thread: std::thread::spawn(|| {}),
         };
         (backend, command_rx)
+    }
+
+    /// Anexa o contexto depois da criação do eframe; eventos anteriores ficam
+    /// pendentes e disparam o primeiro repaint ao anexar.
+    pub fn set_context(&self, context: egui::Context) {
+        self.wake.set_context(context);
     }
 
     pub fn send(&self, command: Command) {
@@ -599,6 +607,7 @@ impl Backend {
     /// Drena todos os eventos pendentes sem bloquear — chamado uma vez por
     /// quadro em `App::update`.
     pub fn drain_events(&self) -> Vec<Event> {
+        self.wake.acknowledge();
         let mut events = Vec::new();
         while let Ok(event) = self.event_rx.try_recv() {
             events.push(event);
@@ -612,6 +621,8 @@ pub fn spawn(config: AppConfig, paths: StoragePaths) -> Result<Backend, AppError
     let (event_tx, event_rx) = std::sync::mpsc::channel::<Event>();
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), AppError>>();
     let max_upload_bytes = config.max_upload_bytes as u64;
+    let wake = UiWake::default();
+    let backend_wake = wake.clone();
 
     let thread = std::thread::Builder::new()
         .name("dfir-backend".into())
@@ -673,6 +684,7 @@ pub fn spawn(config: AppConfig, paths: StoragePaths) -> Result<Backend, AppError
                 while let Some(command) = command_rx.recv().await {
                     let services = services.clone();
                     let event_tx = event_tx.clone();
+                    let wake = backend_wake.clone();
                     let panic_event = command.panic_event();
                     tokio::spawn(async move {
                         let event =
@@ -681,6 +693,8 @@ pub fn spawn(config: AppConfig, paths: StoragePaths) -> Result<Backend, AppError
                         // registrar em vez de engolir.
                         if event_tx.send(event).is_err() {
                             tracing::debug!("event dropped: UI channel closed");
+                        } else {
+                            wake.notify();
                         }
                     });
                 }
@@ -701,6 +715,7 @@ pub fn spawn(config: AppConfig, paths: StoragePaths) -> Result<Backend, AppError
     Ok(Backend {
         command_tx,
         event_rx,
+        wake,
         max_upload_bytes,
         _thread: thread,
     })
@@ -1332,6 +1347,37 @@ async fn write_export_json(save_path: &std::path::Path, json: &str) -> Result<()
 mod tests {
     use super::{BACKEND_TASK_PANIC, Command, Event, complete_command, write_export_json};
     use crate::error::AppError;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[test]
+    fn for_test_backend_wakes_the_attached_ui_context_on_notify() {
+        let (backend, _command_rx) = super::Backend::for_test();
+        let context = egui::Context::default();
+        let repaint_count = Arc::new(AtomicUsize::new(0));
+        let observed = repaint_count.clone();
+        context.set_repaint_observer(move |_info| {
+            observed.fetch_add(1, Ordering::SeqCst);
+        });
+
+        backend.set_context(context);
+        backend.wake.notify();
+
+        assert_eq!(
+            repaint_count.load(Ordering::SeqCst),
+            1,
+            "backend event must notify the UI repaint observer without focus"
+        );
+    }
+
+    #[test]
+    fn for_test_backend_without_context_does_not_break_on_notify() {
+        let (backend, _command_rx) = super::Backend::for_test();
+        // Sem `set_context`: o evento fica pendente, sem panic nem travar.
+        backend.wake.notify();
+    }
 
     #[tokio::test]
     async fn a_panicking_task_returns_the_originating_commands_error_event() {

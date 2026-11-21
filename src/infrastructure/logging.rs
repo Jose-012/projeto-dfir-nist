@@ -13,13 +13,130 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
-use tracing_subscriber::{fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    Layer as _,
+    fmt::MakeWriter,
+    layer::{Filter, SubscriberExt},
+    util::SubscriberInitExt,
+};
 
 pub const LOG_FILE_NAME: &str = "dfir.log";
 const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
 const KEEP_FILES: usize = 5;
+
+static SUPPRESSED_EGL_PROBES: AtomicUsize = AtomicUsize::new(0);
+static SUPPRESSED_XSETTINGS_WARNINGS: AtomicUsize = AtomicUsize::new(0);
+
+/// O driver Mesa emite `ERROR` ao recusar uma configuração EGL antes de o
+/// `wgpu` tentar a próxima (robust access core/ext/none). Essas sondas não são
+/// falha do aplicativo quando um adaptador é obtido. O aviso de XSETTINGS tem
+/// escopo semelhante em sessões sem o serviço: o tema da aplicação continua
+/// funcional, só o reload dinâmico de Xft fica indisponível.
+///
+/// A política padrão resume somente as mensagens exatas conhecidas. Qualquer
+/// `RUST_LOG` explícito desativa o resumo e preserva todos os eventos brutos.
+#[derive(Clone, Copy)]
+struct RecoverableProbeFilter {
+    suppress: bool,
+}
+
+impl RecoverableProbeFilter {
+    fn new(suppress: bool) -> Self {
+        Self { suppress }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProbeKind {
+    Egl,
+    Xsettings,
+}
+
+fn recoverable_probe_message(
+    target: &str,
+    level: tracing::Level,
+    message: &str,
+) -> Option<ProbeKind> {
+    if target == "wgpu_hal::gles::egl"
+        && level == tracing::Level::ERROR
+        && matches!(
+            message,
+            "EGL 'eglCreateContext' code 0x3009: eglCreateContext"
+                | "EGL 'eglCreateContext' code 0x3005: eglCreateContext"
+        )
+    {
+        return Some(ProbeKind::Egl);
+    }
+    if target == "winit::platform_impl::linux::x11::xdisplay"
+        && level == tracing::Level::WARN
+        && message == "error setting XSETTINGS; Xft options won't reload automatically"
+    {
+        return Some(ProbeKind::Xsettings);
+    }
+    None
+}
+
+fn recoverable_probe(metadata: &tracing::Metadata<'_>, message: &str) -> Option<ProbeKind> {
+    recoverable_probe_message(metadata.target(), *metadata.level(), message)
+}
+
+#[derive(Default)]
+struct MessageVisitor(String);
+
+impl tracing::field::Visit for MessageVisitor {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "message" {
+            self.0 = format!("{value:?}");
+        }
+    }
+}
+
+impl<S> Filter<S> for RecoverableProbeFilter {
+    fn enabled(
+        &self,
+        _metadata: &tracing::Metadata<'_>,
+        _cx: &tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
+        true
+    }
+
+    fn event_enabled(
+        &self,
+        event: &tracing::Event<'_>,
+        _cx: &tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
+        if !self.suppress {
+            return true;
+        }
+        let mut visitor = MessageVisitor::default();
+        event.record(&mut visitor);
+        match recoverable_probe(event.metadata(), &visitor.0) {
+            Some(ProbeKind::Egl) => {
+                SUPPRESSED_EGL_PROBES.fetch_add(1, Ordering::Relaxed);
+                false
+            }
+            Some(ProbeKind::Xsettings) => {
+                SUPPRESSED_XSETTINGS_WARNINGS.fetch_add(1, Ordering::Relaxed);
+                false
+            }
+            None => true,
+        }
+    }
+}
+
+/// Contadores para a UI informar, depois de obter um adaptador, que as sondas
+/// recuperáveis foram resumidas. Contagens não contêm dados de evidência.
+pub(crate) fn suppressed_native_probe_counts() -> (usize, usize) {
+    (
+        SUPPRESSED_EGL_PROBES.load(Ordering::Relaxed),
+        SUPPRESSED_XSETTINGS_WARNINGS.load(Ordering::Relaxed),
+    )
+}
 
 struct State {
     dir: PathBuf,
@@ -150,9 +267,11 @@ impl<'a> MakeWriter<'a> for RotatingLog {
 pub fn init(logs_dir: &Path) -> Option<PathBuf> {
     let filter =
         tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+    let suppress_recoverable_probes = std::env::var_os("RUST_LOG").is_none();
     let stderr_layer = tracing_subscriber::fmt::layer()
         .json()
-        .with_writer(std::io::stderr);
+        .with_writer(std::io::stderr)
+        .with_filter(RecoverableProbeFilter::new(suppress_recoverable_probes));
     let (log_path, file_error) = match RotatingLog::open(logs_dir, MAX_LOG_BYTES, KEEP_FILES) {
         Ok(log) => {
             tracing_subscriber::registry()
@@ -162,7 +281,8 @@ pub fn init(logs_dir: &Path) -> Option<PathBuf> {
                     tracing_subscriber::fmt::layer()
                         .json()
                         .with_ansi(false)
-                        .with_writer(log),
+                        .with_writer(log)
+                        .with_filter(RecoverableProbeFilter::new(suppress_recoverable_probes)),
                 )
                 .init();
             (Some(logs_dir.join(LOG_FILE_NAME)), None)
@@ -286,5 +406,68 @@ mod tests {
         );
         let text = fs::read_to_string(dir.path().join(LOG_FILE_NAME)).expect("read");
         assert_eq!(text, "um\ndois\n");
+    }
+
+    #[test]
+    fn only_the_two_known_egl_probe_codes_are_summarized() {
+        for code in ["0x3009", "0x3005"] {
+            let message = format!("EGL 'eglCreateContext' code {code}: eglCreateContext");
+            assert_eq!(
+                recoverable_probe_message("wgpu_hal::gles::egl", tracing::Level::ERROR, &message,),
+                Some(ProbeKind::Egl)
+            );
+        }
+        assert_eq!(
+            recoverable_probe_message(
+                "wgpu_hal::gles::egl",
+                tracing::Level::ERROR,
+                "EGL 'eglCreateContext' code 0x3001: eglCreateContext",
+            ),
+            None
+        );
+        assert_eq!(
+            recoverable_probe_message(
+                "wgpu_hal::gles::egl",
+                tracing::Level::ERROR,
+                "EGL 'eglCreateWindowSurface' code 0x3009: eglCreateWindowSurface",
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn unrelated_targets_levels_and_xsettings_messages_remain_visible() {
+        assert_eq!(
+            recoverable_probe_message(
+                "dfir_app::gui",
+                tracing::Level::ERROR,
+                "EGL 'eglCreateContext' code 0x3009: eglCreateContext",
+            ),
+            None
+        );
+        assert_eq!(
+            recoverable_probe_message(
+                "wgpu_hal::gles::egl",
+                tracing::Level::WARN,
+                "EGL 'eglCreateContext' code 0x3009: eglCreateContext",
+            ),
+            None
+        );
+        assert_eq!(
+            recoverable_probe_message(
+                "winit::platform_impl::linux::x11::xdisplay",
+                tracing::Level::WARN,
+                "error setting XSETTINGS; Xft options won't reload automatically",
+            ),
+            Some(ProbeKind::Xsettings)
+        );
+        assert_eq!(
+            recoverable_probe_message(
+                "winit::platform_impl::linux::x11::xdisplay",
+                tracing::Level::WARN,
+                "another XSETTINGS failure",
+            ),
+            None
+        );
     }
 }

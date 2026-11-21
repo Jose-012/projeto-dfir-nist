@@ -451,10 +451,13 @@ impl EvidenceState {
         self.begin_import(path, backend);
     }
 
-    fn open_picker(&mut self) {
-        if let Err(message) = self.picker.open(Request::OpenFile {
-            title: "Selecionar arquivo de evidência".into(),
-        }) {
+    fn open_picker(&mut self, context: egui::Context) {
+        if let Err(message) = self.picker.open(
+            Request::OpenFile {
+                title: "Selecionar arquivo de evidência".into(),
+            },
+            context,
+        ) {
             self.import_hint = Some(message);
         }
     }
@@ -493,12 +496,12 @@ impl EvidenceState {
         // chamada bloqueante dentro deste quadro (GUI-01).
         match self.picker.poll() {
             Some(Picked::Path(path)) => self.request_import(path, backend),
-            Some(Picked::Nothing) => {
-                self.import_hint = Some(
-                    "Nenhum arquivo escolhido. Se o seletor não abriu, informe o caminho no campo abaixo ou arraste o arquivo para a janela."
-                        .into(),
-                );
+            Some(Picked::Cancelled) => {
+                self.import_hint =
+                    Some("Nenhum arquivo escolhido; nenhuma importação foi iniciada.".into());
             }
+            Some(Picked::Unavailable(message)) => self.import_hint = Some(message),
+            Some(Picked::Failed(message)) => self.import_error = Some(message),
             None => {}
         }
         ui.collapsing(
@@ -518,7 +521,7 @@ impl EvidenceState {
                 )
                 .clicked()
             {
-                self.open_picker();
+                self.open_picker(ui.ctx().clone());
             }
             if self.picker.is_busy() {
                 ui.spinner();

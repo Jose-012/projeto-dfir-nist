@@ -178,13 +178,21 @@ impl DeliverablesState {
                 }
                 None => {}
             },
-            Some(Picked::Nothing) if self.picker_for.take().as_deref() == Some(incident_id) => {
-                self.picker_hint = Some(
-                    "Nenhuma pasta escolhida. Se o seletor não abriu, informe a pasta no campo abaixo."
-                        .into(),
-                );
+            Some(Picked::Cancelled) if self.picker_for.take().as_deref() == Some(incident_id) => {
+                self.picker_hint =
+                    Some("Nenhuma pasta escolhida; nenhuma geração foi iniciada.".into());
             }
-            Some(Picked::Nothing) | None => {}
+            Some(Picked::Unavailable(message)) => {
+                if self.picker_for.take().as_deref() == Some(incident_id) {
+                    self.picker_hint = Some(message);
+                }
+            }
+            Some(Picked::Failed(message)) => {
+                if self.picker_for.take().as_deref() == Some(incident_id) {
+                    self.picker_hint = Some(message);
+                }
+            }
+            Some(Picked::Cancelled) | None => {}
         }
         ui.horizontal(|ui| {
             let preview_loading =
@@ -203,9 +211,12 @@ impl DeliverablesState {
                 .clicked();
             if clicked {
                 self.picker_for = Some(incident_id.to_string());
-                if let Err(message) = self.picker.open(Request::Folder {
-                    title: "Pasta onde gravar os entregáveis".into(),
-                }) {
+                if let Err(message) = self.picker.open(
+                    Request::Folder {
+                        title: "Pasta onde gravar os entregáveis".into(),
+                    },
+                    ui.ctx().clone(),
+                ) {
                     self.picker_for = None;
                     self.picker_hint = Some(message);
                 }
@@ -314,7 +325,7 @@ mod ui_tests {
     use super::DeliverablesState;
     use crate::gui::Loadable;
     use crate::gui::backend::{Backend, Command};
-    use crate::gui::file_dialog::FilePicker;
+    use crate::gui::file_dialog::{FilePicker, Picked};
     use crate::gui::test_harness::drain;
     use crate::service::deliverables::{
         DeliverableSet, GeneratedDeliverables, GeneratedFile, RenderedDocument,
@@ -670,7 +681,9 @@ mod ui_tests {
         let (backend, mut commands) = Backend::for_test();
         let mut harness = harness(state, backend);
         harness.step();
-        sender.send(None).expect("cancelamento sintético");
+        sender
+            .send(Picked::Cancelled)
+            .expect("cancelamento sintético");
         harness.step();
 
         harness.get_by_label_contains("Nenhuma pasta escolhida");
@@ -689,7 +702,7 @@ mod ui_tests {
         let (backend, mut commands) = Backend::for_test();
         let mut harness = harness_for_incident(state, backend, "inc-2");
         sender
-            .send(Some(PathBuf::from("/synthetic/pasta-de-inc-1")))
+            .send(Picked::Path(PathBuf::from("/synthetic/pasta-de-inc-1")))
             .expect("escolha sintética");
         harness.step();
 
@@ -712,7 +725,7 @@ mod ui_tests {
 
         let mut harness = harness(state, backend);
         sender
-            .send(Some(PathBuf::from("/synthetic/selecionada-depois")))
+            .send(Picked::Path(PathBuf::from("/synthetic/selecionada-depois")))
             .expect("resposta tardia sintética");
         harness.step();
         assert!(

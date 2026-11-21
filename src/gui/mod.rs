@@ -7,17 +7,22 @@ pub mod backend;
 pub mod critical_path;
 pub mod deliverables;
 pub mod detection;
+mod effects;
 pub mod evidence;
 pub mod export;
 pub mod file_dialog;
 pub mod findings;
 pub mod gaps;
+mod icons;
 pub mod impact;
 pub mod incidents;
 pub mod iocs;
-pub mod nist;
+mod nist;
 pub mod plan;
+pub mod preferences;
 pub mod recommendations;
+pub mod runtime;
+mod theme;
 mod timeline;
 
 #[cfg(test)]
@@ -25,13 +30,29 @@ mod id_regression_tests;
 
 use crate::{config::AppConfig, error::AppError, infrastructure::storage::StoragePaths};
 use backend::{Backend, Command, Event};
+use icons::AppIcon;
+use preferences::{PreferenceStore, UiPreferences};
 use std::collections::BTreeSet;
+use theme::{BaseTheme, ThemePreset};
 
 /// Vermelho legível para erros e severidade alta/crítica no tema escuro.
 /// O tom anterior `(200, 60, 60)` tinha somente 3,42:1 no painel padrão.
 pub(crate) const DANGER_TEXT_COLOR: egui::Color32 = egui::Color32::from_rgb(240, 110, 110);
 
 pub fn launch(config: AppConfig, paths: StoragePaths) -> Result<(), AppError> {
+    let preference_store = PreferenceStore::new(&config.data_root);
+    let (preferences, preference_notice) = match preference_store.load() {
+        Ok(preferences) => (preferences, None),
+        Err(error) => (
+            UiPreferences::default(),
+            Some(PreferenceNotice {
+                error: true,
+                text: format!(
+                    "Não foi possível carregar as preferências; usando padrões nesta sessão: {error}"
+                ),
+            }),
+        ),
+    };
     let backend = backend::spawn(config, paths)?;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -45,7 +66,13 @@ pub fn launch(config: AppConfig, paths: StoragePaths) -> Result<(), AppError> {
         options,
         Box::new(move |cc| {
             log_renderer(cc);
-            Ok(Box::new(DfirApp::new(backend)))
+            backend.set_context(cc.egui_ctx.clone());
+            Ok(Box::new(DfirApp::with_preferences(
+                backend,
+                Some(preference_store),
+                preferences,
+                preference_notice,
+            )))
         }),
     )
     .map_err(|error| AppError::Config(format!("failed to launch native UI: {error}")))
@@ -78,6 +105,15 @@ fn log_renderer(cc: &eframe::CreationContext<'_>) {
         candidates = state.available_adapters.len(),
         "native UI GPU adapter"
     );
+    let (egl_probes, xsettings_warnings) =
+        crate::infrastructure::logging::suppressed_native_probe_counts();
+    if egl_probes > 0 || xsettings_warnings > 0 {
+        tracing::info!(
+            egl_probes,
+            xsettings_warnings,
+            "recoverable native UI probes summarized; set RUST_LOG for raw driver diagnostics"
+        );
+    }
 }
 
 /// Estado de uma consulta/ação assíncrona no backend. Toda tela de lista ou
@@ -317,10 +353,34 @@ pub struct DfirApp {
     screen: Screen,
     evidence: evidence::EvidenceState,
     incidents: incidents::IncidentsState,
+    preferences: UiPreferences,
+    preference_store: Option<PreferenceStore>,
+    preference_draft: Option<UiPreferences>,
+    preference_notice: Option<PreferenceNotice>,
+    theme_dirty: bool,
+    active_tokens: theme::ThemeTokens,
+    theme_transition: Option<theme::ThemeTransition>,
+    selection_fx: effects::Crossfade,
+}
+
+struct PreferenceNotice {
+    error: bool,
+    text: String,
 }
 
 impl DfirApp {
+    #[cfg(test)]
     fn new(backend: Backend) -> Self {
+        Self::with_preferences(backend, None, UiPreferences::default(), None)
+    }
+
+    fn with_preferences(
+        backend: Backend,
+        preference_store: Option<PreferenceStore>,
+        preferences: UiPreferences,
+        preference_notice: Option<PreferenceNotice>,
+    ) -> Self {
+        let active_tokens = preferences.tokens();
         backend.send(Command::ListEvidence);
         backend.send(Command::ListIncidents);
         Self {
@@ -328,31 +388,251 @@ impl DfirApp {
             screen: Screen::Evidence,
             evidence: evidence::EvidenceState::default(),
             incidents: incidents::IncidentsState::default(),
+            preferences,
+            preference_store,
+            preference_draft: None,
+            preference_notice,
+            theme_dirty: true,
+            active_tokens,
+            theme_transition: None,
+            selection_fx: effects::Crossfade::new(),
+        }
+    }
+
+    fn transition_theme(&mut self, context: &egui::Context, target: theme::ThemeTokens) {
+        if target.motion.is_zero() || self.active_tokens.motion.is_zero() {
+            self.theme_transition = None;
+            self.active_tokens = target;
+            target.apply(context);
+            return;
+        }
+        if self
+            .theme_transition
+            .as_ref()
+            .is_some_and(|transition| transition.target() == target)
+        {
+            return;
+        }
+        if self.active_tokens == target && self.theme_transition.is_none() {
+            return;
+        }
+        self.theme_transition = Some(theme::ThemeTransition::new(
+            context,
+            self.active_tokens,
+            target,
+        ));
+        context.request_repaint();
+    }
+
+    fn update_theme(&mut self, context: &egui::Context) {
+        let mut finished = false;
+        if let Some(transition) = &mut self.theme_transition {
+            let (tokens, active) = transition.apply(context);
+            self.active_tokens = tokens;
+            finished = !active;
+        }
+        if finished {
+            self.theme_transition = None;
+        }
+    }
+
+    fn nav_item(&mut self, ui: &mut egui::Ui, target: Screen, icon: AppIcon, compact: bool) {
+        let selected = self.screen == target;
+        let (rect, response) =
+            ui.allocate_exact_size(egui::vec2(ui.available_width(), 34.0), egui::Sense::click());
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::Button, response.enabled(), icon.nav_label())
+        });
+        let response = response.on_hover_text(icon.label());
+        let tokens = self.active_tokens;
+        let visuals = *ui.style().interact(&response);
+        let fill = if selected {
+            tokens.selection
+        } else {
+            visuals.bg_fill
+        };
+        ui.painter().rect(
+            rect,
+            tokens.radius.control,
+            fill,
+            visuals.bg_stroke,
+            egui::StrokeKind::Inside,
+        );
+        let icon_rect = egui::Rect::from_center_size(
+            egui::pos2(rect.left() + 20.0, rect.center().y),
+            egui::vec2(18.0, 18.0),
+        );
+        icons::paint_icon(ui.painter(), icon_rect, icon, visuals.fg_stroke.color);
+        if !compact {
+            ui.painter().text(
+                egui::pos2(rect.left() + 42.0, rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                icon.nav_label(),
+                egui::FontId::proportional(14.0),
+                visuals.fg_stroke.color,
+            );
+        }
+        let effect_id = ui.scope_id().with(("nav-selection", icon.label()));
+        if selected {
+            let effect = self.selection_fx.update(
+                ui.ctx(),
+                effect_id,
+                tokens.motion,
+                self.active_tokens.motion.is_zero(),
+            );
+            let alpha = (170.0 * effect.progress).round() as u8;
+            let color = egui::Color32::from_rgba_unmultiplied(
+                tokens.accent.r(),
+                tokens.accent.g(),
+                tokens.accent.b(),
+                alpha,
+            );
+            ui.painter().add(effects::selection_gradient(
+                rect,
+                color,
+                54.0,
+                f32::from(tokens.radius.control),
+            ));
+        } else {
+            self.selection_fx.clear(ui.ctx(), effect_id);
+        }
+        if response.clicked() {
+            self.screen = target;
         }
     }
 
     fn navigation(&mut self, ui: &mut egui::Ui) {
+        let compact = ui.available_width() < 1040.0;
         egui::Panel::left("dfir_nav")
             .resizable(false)
-            .min_size(180.0)
+            .min_size(if compact { 64.0 } else { 188.0 })
             .show(ui, |ui| {
                 ui.add_space(8.0);
-                ui.heading("DFIR");
-                ui.label(egui::RichText::new("Local · offline · operador único").weak());
+                if compact {
+                    ui.label(egui::RichText::new("DFIR").strong());
+                } else {
+                    ui.heading("DFIR");
+                    ui.label(egui::RichText::new("Local · offline · operador único").weak());
+                }
                 ui.separator();
+                self.nav_item(ui, Screen::Evidence, AppIcon::Evidence, compact);
+                self.nav_item(ui, Screen::Incidents, AppIcon::Incidents, compact);
+                ui.add_space(8.0);
                 if ui
-                    .selectable_label(self.screen == Screen::Evidence, "Evidência")
+                    .button(if compact { "Prefs" } else { "Preferências" })
+                    .on_hover_text("Preferências da interface")
                     .clicked()
                 {
-                    self.screen = Screen::Evidence;
+                    self.preference_draft = Some(self.preferences.clone());
                 }
-                if ui
-                    .selectable_label(self.screen == Screen::Incidents, "Incidentes")
-                    .clicked()
-                {
-                    self.screen = Screen::Incidents;
-                }
+                let rect = ui.max_rect();
+                ui.painter().add(effects::masked_edge(
+                    rect,
+                    egui::Color32::from_black_alpha(28),
+                    10.0,
+                ));
             });
+    }
+
+    fn preferences_window(&mut self, context: &egui::Context) {
+        let Some(mut draft) = self.preference_draft.clone() else {
+            return;
+        };
+        let mut open = true;
+        let mut save = false;
+        let mut cancel = false;
+        let mut changed = false;
+        egui::Window::new("Preferências da interface")
+            .collapsible(false)
+            .resizable(false)
+            .open(&mut open)
+            .show(context, |ui| {
+                egui::ComboBox::new("theme-preset", "Tema")
+                    .selected_text(draft.theme.label())
+                    .show_ui(ui, |ui| {
+                        for preset in ThemePreset::ALL {
+                            changed |= ui
+                                .selectable_value(&mut draft.theme, preset, preset.label())
+                                .changed();
+                        }
+                    });
+                if draft.theme == ThemePreset::Custom {
+                    egui::ComboBox::new("custom-base", "Base")
+                        .selected_text(draft.custom.base.label())
+                        .show_ui(ui, |ui| {
+                            for base in BaseTheme::ALL {
+                                changed |= ui
+                                    .selectable_value(&mut draft.custom.base, base, base.label())
+                                    .changed();
+                            }
+                        });
+                    changed |= ui
+                        .add(
+                            egui::Slider::new(&mut draft.custom.hue_degrees, 0.0..=360.0)
+                                .text("Matiz do acento"),
+                        )
+                        .changed();
+                    changed |= ui
+                        .add(
+                            egui::Slider::new(&mut draft.custom.chroma, 0.0..=0.32)
+                                .text("Croma do acento"),
+                        )
+                        .changed();
+                }
+                changed |= ui
+                    .checkbox(&mut draft.reduced_motion, "Reduzir movimento")
+                    .changed();
+                ui.label(
+                    egui::RichText::new(
+                        "A alteração é visualizada imediatamente. Cancelar restaura o tema salvo.",
+                    )
+                    .weak(),
+                );
+                ui.horizontal(|ui| {
+                    save = ui.button("Salvar preferências").clicked();
+                    cancel = ui.button("Cancelar").clicked();
+                });
+            });
+
+        if save {
+            match draft
+                .validate()
+                .map_err(|error| error.to_string())
+                .and_then(|()| match self.preference_store.as_ref() {
+                    Some(store) => store.save(&draft),
+                    None => Ok(()),
+                }) {
+                Ok(()) => {
+                    self.preferences = draft;
+                    self.preference_draft = None;
+                    self.theme_dirty = false;
+                    self.preference_notice = Some(PreferenceNotice {
+                        error: false,
+                        text: if self.preference_store.is_some() {
+                            "Preferências salvas.".into()
+                        } else {
+                            "Preferências aplicadas nesta sessão.".into()
+                        },
+                    });
+                }
+                Err(error) => {
+                    self.preference_draft = Some(draft.clone());
+                    self.preference_notice = Some(PreferenceNotice {
+                        error: true,
+                        text: format!("Não foi possível salvar as preferências: {error}"),
+                    });
+                }
+            }
+        } else if cancel || !open {
+            self.preference_draft = None;
+            self.theme_dirty = false;
+            self.transition_theme(context, self.preferences.tokens());
+        } else {
+            if changed {
+                self.transition_theme(context, draft.tokens());
+            }
+            self.preference_draft = Some(draft);
+        }
     }
 
     /// Trilha derivada do mesmo estado que renderiza a tela e os detalhes.
@@ -384,6 +664,14 @@ impl DfirApp {
         egui::CentralPanel::default().show(ui, |ui| {
             ui.label(self.breadcrumb_text());
             ui.separator();
+            if let Some(notice) = &self.preference_notice {
+                if notice.error {
+                    error_banner(ui, &notice.text);
+                } else {
+                    hint_banner(ui, &notice.text);
+                }
+                ui.separator();
+            }
             match self.screen {
                 Screen::Evidence => self.evidence.ui(ui, &self.backend, self.incidents.items()),
                 Screen::Incidents => self.incidents.ui(ui, &self.backend),
@@ -692,6 +980,14 @@ impl eframe::App for DfirApp {
     // foi unificado em `Panel` e `show_inside` virou `show`), mesmo padrão já
     // usado por `gui/incidents.rs` para os painéis internos daquela tela.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        if self.theme_dirty {
+            let tokens = self.preferences.tokens();
+            self.active_tokens = tokens;
+            self.theme_transition = None;
+            tokens.apply(ui.ctx());
+            self.theme_dirty = false;
+        }
+        self.update_theme(ui.ctx());
         for event in self.backend.drain_events() {
             self.apply_event(event);
         }
@@ -713,11 +1009,10 @@ impl eframe::App for DfirApp {
         }
 
         self.main_panels(ui);
+        self.preferences_window(ui.ctx());
 
-        // Ações em voo (análise, importação) terminam na thread de backend;
-        // sem isto a tela só seria redesenhada em resposta a input do SO.
-        ui.ctx()
-            .request_repaint_after(std::time::Duration::from_millis(150));
+        // Backend, seletores e animações pedem repaint na origem. Em idle não
+        // existe timer periódico do aplicativo.
     }
 }
 
@@ -783,8 +1078,10 @@ mod presentation_tests {
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::{Backend, DfirApp};
+    use super::{Backend, DfirApp, ThemePreset};
+    use crate::gui::preferences::UiPreferences;
     use crate::service::{EvidenceResponse, IncidentResponse};
+    use egui::{Role, Theme};
     use egui_kittest::kittest::Queryable;
 
     fn evidence(id: &str, filename: &str) -> EvidenceResponse {
@@ -825,12 +1122,66 @@ mod navigation_tests {
         let app = DfirApp::new(backend);
         // Mantém o default estrito do kittest: um glifo ausente no caminho
         // real da navegação faz o teste falhar.
-        let mut harness = egui_kittest::HarnessBuilder::default()
+        let mut harness = crate::gui::test_harness::builder()
             .with_size(egui::vec2(240.0, 320.0))
             .build_ui_state(|ui, app: &mut DfirApp| app.navigation(ui), app);
         harness.run();
-        harness.get_by_label("Evidência");
+        harness.get_by_label("Evidências");
         harness.get_by_label("Incidentes");
+    }
+
+    #[test]
+    fn rapid_navigation_click_survives_pointer_exit_after_release() {
+        let (backend, _commands) = Backend::for_test();
+        let app = DfirApp::new(backend);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1280.0, 900.0))
+            .build_ui_state(|ui, app: &mut DfirApp| app.main_panels(ui), app);
+        harness.step();
+
+        harness.get_by_label("Incidentes").click();
+        harness.event(egui::Event::PointerMoved(egui::pos2(900.0, 500.0)));
+        harness.step();
+        harness.get_by_label("Selecione ou crie um incidente à esquerda.");
+    }
+
+    #[test]
+    fn rapid_preferences_click_survives_pointer_exit_after_release() {
+        let (backend, _commands) = Backend::for_test();
+        let app = DfirApp::new(backend);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1280.0, 900.0))
+            .build_ui_state(
+                |ui, app: &mut DfirApp| {
+                    app.main_panels(ui);
+                    app.preferences_window(ui.ctx());
+                },
+                app,
+            );
+        harness.step();
+
+        harness.get_by_label("Preferências").click();
+        harness.event(egui::Event::PointerMoved(egui::pos2(900.0, 500.0)));
+        harness.step();
+        harness.get_by_label("Preferências da interface");
+    }
+
+    #[test]
+    fn reduced_motion_theme_change_is_immediate() {
+        let (backend, _commands) = Backend::for_test();
+        let mut app = DfirApp::new(backend);
+        let context = egui::Context::default();
+        let target = UiPreferences {
+            theme: ThemePreset::Light,
+            reduced_motion: true,
+            ..Default::default()
+        }
+        .tokens();
+
+        app.transition_theme(&context, target);
+        assert!(app.theme_transition.is_none());
+        assert_eq!(app.active_tokens, target);
+        assert_eq!(context.theme(), Theme::Light);
     }
 
     #[test]
@@ -846,7 +1197,7 @@ mod navigation_tests {
             .build_ui_state(|ui, app: &mut DfirApp| app.main_panels(ui), app);
         harness.step();
 
-        harness.get_by_label("Evidências");
+        harness.get_by_role_and_label(Role::Label, "Evidências");
         assert!(
             harness
                 .query_by_label("Evidências > fixture-alpha.evtx")
@@ -875,7 +1226,7 @@ mod navigation_tests {
             .evidence
             .on_destroyed("ev-fixture-b", Ok(()));
         harness.step();
-        harness.get_by_label("Evidências");
+        harness.get_by_role_and_label(Role::Label, "Evidências");
         assert!(
             harness
                 .query_by_label("Evidências > fixture-beta.evtx")
@@ -927,9 +1278,10 @@ mod navigation_tests {
                 .is_none()
         );
 
-        harness.get_by_label("Evidência").click();
+        let evidencias = harness.query_all_by_label("Evidências").next().unwrap();
+        evidencias.click();
         harness.step();
-        harness.get_by_label("Evidências");
+        harness.get_by_role_and_label(Role::Label, "Evidências");
         assert!(
             harness
                 .query_by_label("Incidentes > Incidente fixture B > Achados")

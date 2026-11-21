@@ -54,6 +54,15 @@ Na interface, abra o incidente `[DEMO]` e percorra as abas (achados, plano, NIST
 
 A matriz de proteção do Entregável 5 traz uma **lacuna deliberada**: as credenciais de serviço só têm item de gestão de chaves, e a matriz a marca como "— (sem item)".
 
+## Exercício manual da interface
+
+Este roteiro usa somente o diretório sanitizado da demonstração e **não registra aceite visual** por si só:
+
+1. Abra `dfir-app` e alterne entre uma janela larga (por exemplo, 1280×820) e uma compacta (960×600). Confirme que **Evidências** e **Incidentes** continuam acessíveis.
+2. Abra **Preferências da interface**, percorra Light, Dark, Vento Áureo e Custom e observe a pré-visualização. Selecione **Cancelar** e confirme que o tema salvo foi restaurado.
+3. Reabra a janela, escolha um preset, ative **Reduzir movimento** e salve. Reabra a aplicação no mesmo `DFIR_DATA_ROOT` sanitizado e confirme que as preferências persistiram.
+4. Se o seletor de arquivos for exercitado, registre separadamente backend e comportamento observado. A meta de latência nativa e `EVD-050` não são validadas por este roteiro.
+
 ## O que já foi verificado
 
 `just e2e caminho/arquivo.evtx` roda este roteiro com o engine e o `.evtx` reais e confere, entre outros pontos: contagens do cenário, rótulo DEMO nos cinco documentos, hashes do `manifest.json` contra os arquivos, tabelas bem formadas, ausência de seção vazia, mascaramento (IP, e-mail e nome fictícios somem; marcadores aparecem), geração sem máscara, determinismo byte a byte entre duas gerações, descarte da evidência (os documentos continuam citando hash e custódia) e `audit-verify`. Os testes unitários de `service/demo.rs` cobrem o mesmo sem engine.
