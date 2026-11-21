@@ -168,6 +168,69 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** `.jcode/skills/dfir-verify/SKILL.md` item 7 exige controle negativo em cópia sanitizada para mudanças de gate/lint/teste de presença e restringe `edit` à fixture em scratch. O diagnóstico e o exit esperado são pós-condições obrigatórias.
 - **Confirmação:** pendente.
 
+### 21. Múltiplos processos Cargo concorrentes sem dono único
+
+- **Classe:** erro de execução.
+- **Fato:** 33 processos `cargo` foram disparados pela mesma lane sem aguardar os comandos anteriores movidos para background. A contenção exigiu `TERM` após confirmação do CWD; todos os resultados dessa concorrência foram descartados como `STALE`.
+- **Risco:** pressão de memória/swap, diagnósticos misturados, espera em locks e evidência que não corresponde a uma árvore estável.
+- **Prevenção:** `dfir-improve` §2 exige dono explícito único para trabalho Rust pesado e `bg wait` no mesmo ID antes de qualquer outro comando Rust. A contenção continua condicionada a progresso, consumo e CWD; relatório de worker não libera outra build.
+- **Confirmação:** confirmada em 2026-11-21: Nautilus aguardou cada teste focado antes do seguinte; Calf executou um único `just verify` sequencial (662/662), e o root confirmou ausência de Cargo/Rustc ao final.
+
+### 22. Logs relativos/ausentes e relatórios sem artefato
+
+- **Classe:** erro de método.
+- **Fato:** caminhos relativos criaram artefatos em `validation/` dentro do checkout, e relatórios posteriores afirmaram a existência de logs que `read` não encontrou. O root rejeitou esses relatórios; texto de worker não foi convertido em evidência.
+- **Risco:** declarar `PASS`/`VERIFIED` sem saída correspondente, commitar artefatos temporários ou perder a ligação entre comando, tree e diagnóstico.
+- **Prevenção:** `dfir-improve` §2 e `dfir-verify` §8 exigem caminhos absolutos fora do checkout e leitura posterior de arquivo, exit, contagens e warnings pelo integrador. Relatório sem artefato localizável não é evidência.
+- **Confirmação:** confirmada em 2026-11-21: o root rejeitou logs inexistentes, moveu artefatos relativos para fora do checkout e leu os logs absolutos de navegação, efeitos, ícones e `just verify`, incluindo warnings e contagens.
+
+### 23. Teste enfraquecido para passar (run→step, plural→singular, API sem conferir assinatura)
+
+- **Classe:** erro de método.
+- **Fato:** um teste de navegação trocou `harness.run()` por `step()` e rótulos plurais por singulares para contornar a falha; a animação também chamou a API do egui como função livre e converteu o resultado para `0/1`, sem confirmar o método/tipo real na fonte da versão locked. O root rejeitou a redução de rigor e exigiu `Context::animate_bool_with_time` com progresso `f32` em segundos.
+- **Risco:** teste verde sem exercitar o caminho real e implementação compilável que elimina o comportamento pretendido.
+- **Prevenção:** `dfir-change` proíbe reduzir rigor para acomodar implementação e exige assinatura, unidade e retorno na fonte da versão do `Cargo.lock`; `dfir-verify` §8 exige leitura dos logs e invalida concorrência. O integrador revisa o diff semântico dos testes junto com o código.
+- **Confirmação:** confirmada em 2026-11-21: a assinatura `Context::animate_bool_with_time(..., bool, f32) -> f32` foi lida no egui 0.37.0; `harness.run()` e rótulos plurais foram restaurados, os testes focados passaram e `just verify` concluiu 662/662 com clippy `-D warnings`.
+
+### 24. Crossfade e navegação: API do egui 0.37.0 e ambiguidade de labels
+
+- **Classe:** erro de método e de execução.
+- **Fato:**
+  - `ctx.memory(|m| m.is_animating(id))` não existe no egui 0.37.0; causaria erro de compilação se não fosse revertido antes do `cargo test`.
+  - `Id::new(...)` está deprecated no egui 0.37.0 (sugere `Id::unique` ou `IdSalt::new`), gerando 5 warnings de `deprecated` nos testes de crossfade.
+  - `let mut harness = Harness::new_ui(...)` com `mut` desnecessário gerou warning `unused_mut`.
+  - `get_by_label("Evidências")` encontrou dois nós (botão de navegação + label do breadcrumb com o mesmo label), gerando panic "Found two or more nodes".
+  - O `nav_label()` de Evidence retorna `"Evidências"` (plural) e de Incidents retorna `"Incidentes"` (plural), mas o teste de breadcrumbs usava singular `"Evidência"`/`"Incidente"`.
+  - `std::thread::sleep` nos testes de crossfade não é determinístico para tempo egui; substitui por `Harness::run()`/`step()`.
+  - Imports não usados: `UiPreferences` nos testes de navegação e `kittest::Queryable` nos testes de crossfade.
+- **Risco:** código com warnings (não limpo para `clippy -D warnings`), testes flaky por tempo real, panic por ambiguidade de labels, testes com rigor enfraquecido (singular em vez do plural real da UI).
+- **Prevenção:** consultar fontes do egui 0.37.0 (`grep is_animating`, `grep deprecated`) antes de usar APIs; desambiguar queries por `Role` (`get_by_role_and_label`) ou `query_all_by_label(...).next()` quando houver colisão de labels; usar `nav_label()` (plural) para rótulos visíveis de navegação; evitar `sleep` em testes de UI egui — usar `Harness` para avançar frames; revisar warnings do `cargo test` antes de considerar o gate concluído.
+- **Confirmação:** confirmada em 2026-11-21: `navigation_tests4.log` preserva oito warnings anteriores às correções; `effects_tests2.log` e `icons_tests.log` passaram sem warnings nesses dois logs. A execução integrada posterior `final-calf-verify.txt` confirma 662/662, doctest e clippy `-D warnings` sem warnings. O registro anterior não foi reescrito como execução limpa.
+
+### 25. Procedimento substituído por relatório de lane sem falhar o doc-gate
+
+- **Classe:** erro de execução e lacuna de gate.
+- **Fato:** `docs/SESSION_IMPROVEMENT.md` foi substituído por um relatório de lane, removendo metadados, loop e procedimento obrigatório; `just doc-gate` ainda terminou com `PASS`. O root restaurou o conteúdo da autoridade e rejeitou o relatório como substituto do procedimento.
+- **Risco:** perda silenciosa das instruções de fechamento com aparência de documentação válida.
+- **Prevenção:** `scripts/doc_gate.py` exige o `doc-type`, título, loop, três seções do procedimento, formato de lição e antipadrões. Uma cópia sanitizada sem um marcador deve falhar com diagnóstico específico antes do PASS no checkout.
+- **Confirmação:** confirmada em 2026-11-21: a cópia válida passou (`doc-gate-preservation-positive.txt`); removendo somente `## Formato mínimo de uma lição`, a cópia falhou com exit 1 e `missing session-improvement instruction` para esse marcador (`doc-gate-preservation-negative.txt`).
+
+### 26. Uso de MCPs e tools: nomes de ação, batched e seleção por tipagem
+
+- **Classe:** lição de execução e seleção de ferramenta.
+- **Fato:** em 2026-11-21, um benchmark de 11 casos usou os 3 MCP servers (jcodemunch 6 tools, lean-ctx 12 tools, context7 2 tools) juntos e separados, com tipagem estática/dinâmica e estruturas complexa-mista/simples/híbrida. Duas chamadas `order` falharam usando `order` como nome de action (o front-door recusa a própria action); uma chamada `ctx_callgraph` falhou porque `callgraph` não é ação válida (válidas: `callers`, `callees`, `trace`, `risk`). Chamadas batched reduziram round-trips de N para 1. `ctx_read mode=full` em arquivo >2000 linhas gerou budget warning (37829/20000 tok). `agentgrep paths_only=true` foi a requisição mais barata (apenas caminhos, sem conteúdo).
+- **Risco:** usar nomes incorretos de action, consumir o orçamento com arquivos grandes em modo full, confiar em saída truncada como completa, ou repetir a mesma chamada inválida sem mudança de método.
+- **Prevenção:** antes de `mcp action=call`, conferir o schema da action via `menu`/`route`; não usar `order` nem `callgraph` como nomes de ação; priorizar chamadas batched para poupar requisições; para arquivos grandes, evitar `mode=full` e usar `mode=symbol/anchored` com ranges ou `get_ranked_context` com `compress=true` e `token_budget`; para descoberta sem alvo conhecido, `ctx_search semantic` com `top_k` baixo; requerer ação explícita (`action` em `skill_manage`, `arguments.{action,args}` no dispatcher MCP) e saída completa antes de considerar o caso concluído.
+- **Confirmação:** pendente (benchmark executado em 2026-11-21; os erros de ação foram corrigidos na mesma rodada e os casos A1/A2/B1/B2/C1/C2/D1/D2/E1/E2 concluíram com saída válida).
+
+### 27. Codemode (JS sandbox): tipagem, store/load, paralelo vs sequencial e try/catch
+
+- **Classe:** lição de execução e seleção de ferramenta.
+- **Fato:** em 2026-11-21, um benchmark de 12 casos executou codemode (JavaScript sandbox) com tipagem estática/dinâmica, estruturas simples/complexas/aninhadas, store/load, paralelo vs sequencial e try/catch, integrando MCPs (jcodemunch, lean-ctx, context7) e tools nativas (agentgrep). Resultados: C1 static simples 1 chamada/12 ms; C2 static complexo 2 chamadas/281 ms (acesso a propriedades aninhadas); D1 dynamic simples 1 chamada/12 ms; D2 dynamic complexo 2 chamadas/2648 ms (JSON.stringify para busca semântica); M1 complex misturado 3 chamadas/1914 ms (filter/map sobre array tipagem mista); M2 complex aninhado 3 chamadas/1653 ms (report.incident.profile.type); S1 simple individual 1 chamada/13 ms; S2 simples mínimo 1 chamada/1531 ms; H1 store/load 2 chamadas/124 ms (funcionou); H2 paralelo 2626 ms vs sequencial 3876 ms com 4 MCPs (paralelo ~32% mais rápido); H3 try/catch capturou TypeError de JS e erro retornado por tool, ambos recuperáveis. Total: 24 chamadas.
+- **Risco:** confiar em codemode para chamadas independentes (não traz vantagem sobre batch), não usar store/load quando precisar de estado entre chamadas, não tratar erro retornado por tool (não é throw) nem erro real de JS, e presumir que o sandbox do codemode conecta servidores MCP locais por stdio (não conecta `lean-ctx` com `ctx_read`/`ctx_search`; o erro é de conexão do sandbox, não de parâmetros nem de servidor remoto).
+- **Prevenção:** usar batch para chamadas MCP independentes (fewest requests, menor tempo); usar codemode apenas quando houver store/load intermediário, encadeamento onde o resultado de um passo alimenta o próximo, ou necessidade de try/catch com lógica condicional de JS; para chamadas MCP locais (ex.: `lean-ctx`), usar `batch` ou chamadas diretas fora do `codemode`; acessar propriedades aninhadas com cuidado (tipos podem ser undefined/null); para erros de tool, verificar objeto de retorno (não apenas catch); validar schema da action via menu/route antes de callTool.
+- **Confirmação:** confirmada em 2026-11-21: benchmark de casos A–D executado; `codemode` falhou ao conectar `lean_ctx` no sandbox (erro de conexão, corrigido por `batch` com chamadas diretas); `jcodemunch` respondeu via `order`; todos os casos concluíram com saída válida.
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.

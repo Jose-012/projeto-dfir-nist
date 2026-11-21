@@ -130,6 +130,10 @@ Preserve IDs normativos e de evidência. Não reutilize IDs existentes.
 - Ao concluir, apresente os arquivos alterados, os gates realmente executados e qualquer verificação pendente.
 - Revise o diff semântico, confirme pós-condições além dos exits e atualize `docs/SESSION_LEARNINGS.md` apenas para lição nova, recorrência ou confirmação observada. Não crie retrospectiva permanente por rotina.
 
+## Nomenclatura de servidores MCP
+
+O servidor MCP se chama `lean-ctx` (com hífen). As tool names expostas usam prefixo `mcp__lean_ctx__*` (com underline). Não misturar os dois formatos ao referenciar o servidor.
+
 ## Swarm, skills e MCPs
 
 Siga `AGENTS.md` §17. A aplicação prática neste repositório é:
