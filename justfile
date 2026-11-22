@@ -101,10 +101,17 @@ release-tools:
 
 # Documentation checks intentionally remain lightweight; runtime/build gates remain authoritative.
 test-coordination-playbook:
-    {{python}} -m unittest tests/fixtures/coordination_playbook/test_exhaustive.py -v
+    {{python}} -m unittest tests/fixtures/coordination_playbook/test_exhaustive.py tests/fixtures/coordination_playbook/test_adversarial.py tests/fixtures/coordination_playbook/test_repo_audit.py tests/fixtures/coordination_playbook/test_benchmark.py -v
+
+test-coordination-playbook-all:
+    {{python}} -m unittest tests/fixtures/coordination_playbook/test_gate.py tests/fixtures/coordination_playbook/test_exhaustive.py tests/fixtures/coordination_playbook/test_adversarial.py tests/fixtures/coordination_playbook/test_repo_audit.py tests/fixtures/coordination_playbook/test_benchmark.py -v
+
+benchmark-coordination-playbook:
+    {{python}} scripts/coordination_playbook_benchmark.py
 
 doc-gate:
     {{python}} scripts/validate_fase0.py
     {{python}} scripts/doc_gate.py
     {{python}} scripts/coordination_playbook_gate.py
+    {{python}} scripts/coordination_playbook_repo_audit.py
     just test-coordination-playbook
