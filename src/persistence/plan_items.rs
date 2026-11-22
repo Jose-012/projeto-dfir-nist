@@ -288,6 +288,12 @@ pub struct NewPlanItem<'a> {
     /// Item anterior que este revisa (mesma `correlation_key`).
     pub supersedes: Option<&'a str>,
     pub actor_id: Option<&'a str>,
+    /// Fonte da recomendação: OBSERVED (a partir de achado/evidência),
+    /// INFERRED (derivação do analista), NOT_VERIFIED ou RECOMMENDED.
+    /// Sem fonte explícita, não se confunde com fato sobre o cliente.
+    pub source: Option<&'a str>,
+    /// Estado de confiança na recomendação (opcional; LOW/MEDIUM/HIGH/CONFIRMED).
+    pub confidence: Option<&'a str>,
 }
 
 fn require_text(value: &str, what: &str) -> Result<(), sqlx::Error> {
@@ -295,6 +301,14 @@ fn require_text(value: &str, what: &str) -> Result<(), sqlx::Error> {
         return Err(validation_error(format!("a plan item requires {what}")));
     }
     Ok(())
+}
+
+/// Estados de confiança aceitos para uma recomendação de plano.
+const CONFIDENCE_OPTIONS: [&str; 4] = ["LOW", "MEDIUM", "HIGH", "CONFIRMED"];
+
+/// Confirma que `value` é um estado de confiança conhecido quando presente.
+pub fn is_valid_confidence(value: &str) -> bool {
+    CONFIDENCE_OPTIONS.contains(&value)
 }
 
 /// Dependências diretas de um item vigente, lidas do payload.
@@ -359,7 +373,26 @@ pub async fn insert_plan_item(
     require_text(input.title, "a title")?;
     require_text(input.rationale, "a rationale")?;
     require_text(input.verification, "a way to verify it (verification)")?;
+    require_text(input.precondition, "a precondition")?;
+    require_text(input.postcondition, "a postcondition")?;
+    require_text(input.source.unwrap_or(""), "a source (OBSERVED / INFERRED / NOT_VERIFIED / RECOMMENDED)")?;
+    require_text(input.confidence.unwrap_or(""), "a confidence (LOW / MEDIUM / HIGH / CONFIRMED)")?;
 
+    if !matches!(
+        input.source.unwrap_or(""),
+        "OBSERVED" | "INFERRED" | "NOT_VERIFIED" | "RECOMMENDED"
+    ) {
+        return Err(validation_error(format!(
+            "invalid plan item source: {}",
+            input.source.unwrap_or("")
+        )));
+    }
+    if !is_valid_confidence(input.confidence.unwrap_or("")) {
+        return Err(validation_error(format!(
+            "invalid plan item confidence: {}",
+            input.confidence.unwrap_or("")
+        )));
+    }
     match (&input.crypto, input.domain.needs_crypto_detail()) {
         (None, true) => {
             return Err(validation_error(format!(
@@ -464,6 +497,8 @@ pub async fn insert_plan_item(
         "depends_on": input.depends_on,
         "support_kind": support_kind,
         "crypto": crypto,
+        "source": input.source,
+        "confidence": input.confidence,
     })
     .to_string();
     let provenance_json = serde_json::json!({
@@ -606,6 +641,8 @@ mod tests {
             crypto: None,
             supersedes: None,
             actor_id: None,
+            source: None,
+            confidence: None,
         }
     }
 
@@ -951,6 +988,122 @@ mod tests {
             .expect("A history count");
             assert_eq!(a_versions, 1, "no A revision allowed for {case}");
         }
+    }
+
+    #[tokio::test]
+    async fn item_requires_precondition_and_postcondition() {
+        let pool = test_pool().await;
+        seed_incident(&pool, "inc-precond").await;
+        assert!(
+            insert_plan_item(
+                &pool,
+                NewPlanItem {
+                    precondition: "  ",
+                    postcondition: "post ok",
+                    ..item("inc-precond", "sem pré-condição")
+                },
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            insert_plan_item(
+                &pool,
+                NewPlanItem {
+                    postcondition: "",
+                    ..item("inc-precond", "sem pós-condição")
+                },
+            )
+            .await
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn plan_item_validates_source_and_confidence() {
+        let pool = test_pool().await;
+        seed_incident(&pool, "inc-source").await;
+        let finding = seed_finding(&pool, "inc-source").await;
+        let finding_ids = [finding.as_str()];
+
+        // Fonte válida e confiança válida são aceitas.
+        let id = insert_plan_item(
+            &pool,
+            NewPlanItem {
+                source: Some("OBSERVED"),
+                confidence: Some("MEDIUM"),
+                finding_ids: &finding_ids,
+                ..item("inc-source", "fonte e confiança válidas")
+            },
+        )
+        .await
+        .expect("item válido");
+        let payload = payload_of(&pool, &id).await;
+        assert_eq!(payload["source"], "OBSERVED");
+        assert_eq!(payload["confidence"], "MEDIUM");
+
+        // Fonte inválida é recusada.
+        assert!(
+            insert_plan_item(
+                &pool,
+                NewPlanItem {
+                    source: Some("NAO_ESTA_NA_LISTA"),
+                    confidence: Some("MEDIUM"),
+                    ..item("inc-source", "fonte invalida")
+                },
+            )
+            .await
+            .is_err()
+        );
+        // Confiança inválida é recusada.
+        assert!(
+            insert_plan_item(
+                &pool,
+                NewPlanItem {
+                    source: Some("OBSERVED"),
+                    confidence: Some("CRITICA"),
+                    ..item("inc-source", "confiança invalida")
+                },
+            )
+            .await
+            .is_err()
+        );
+        // Fonte ausente é rejeitada (campo obrigatório).
+        assert!(
+            insert_plan_item(
+                &pool,
+                NewPlanItem {
+                    source: None,
+                    confidence: Some("MEDIUM"),
+                    ..item("inc-source", "sem fonte")
+                },
+            )
+            .await
+            .is_err()
+        );
+        // Confiança ausente é rejeitada (campo obrigatório).
+        assert!(
+            insert_plan_item(
+                &pool,
+                NewPlanItem {
+                    source: Some("OBSERVED"),
+                    confidence: None,
+                    ..item("inc-source", "sem confiança")
+                },
+            )
+            .await
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn is_valid_confidence_accepts_only_the_four_states() {
+        assert!(is_valid_confidence("LOW"));
+        assert!(is_valid_confidence("MEDIUM"));
+        assert!(is_valid_confidence("HIGH"));
+        assert!(is_valid_confidence("CONFIRMED"));
+        assert!(!is_valid_confidence(""));
+        assert!(!is_valid_confidence("BAIXA"));
     }
 
     #[tokio::test]

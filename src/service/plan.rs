@@ -40,6 +40,10 @@ pub struct PlanItemInput {
     pub depends_on: Vec<String>,
     pub crypto: Option<CryptoInput>,
     pub supersedes: Option<String>,
+    /// Fonte da recomendação: OBSERVED / INFERRED / NOT_VERIFIED / RECOMMENDED.
+    pub source: Option<String>,
+    /// Estado de confiança: LOW / MEDIUM / HIGH / CONFIRMED.
+    pub confidence: Option<String>,
 }
 
 fn invalid(what: &str, value: &str) -> AppError {
@@ -100,6 +104,8 @@ pub async fn create_plan_item(
             depends_on: depends_on.as_slice(),
             crypto,
             supersedes: non_blank(&input.supersedes),
+            source: non_blank(&input.source),
+            confidence: non_blank(&input.confidence),
             actor_id: None,
         },
     )
@@ -159,6 +165,56 @@ fn validate_plan_payload(item: &AnalyticalResultResponse) -> AppResult<()> {
             )));
         }
     }
+    // source e confiança são obrigatórios nos itens novos: rejeita ausência
+    // ou valores inválidos no payload armazenado.
+    let Some(source_value) = item.payload.get("source") else {
+        return Err(AppError::Config(format!(
+            "stored plan item {} is missing source",
+            item.id
+        )));
+    };
+    if source_value.is_null() || !source_value.is_string() {
+        return Err(AppError::Config(format!(
+            "stored plan item {} source is not a string",
+            item.id
+        )));
+    }
+    let Some(source) = source_value.as_str() else {
+        return Err(AppError::Config(format!(
+            "stored plan item {} source is not a string",
+            item.id
+        )));
+    };
+    if !matches!(source, "OBSERVED" | "INFERRED" | "NOT_VERIFIED" | "RECOMMENDED") {
+        return Err(AppError::Config(format!(
+            "stored plan item {} source is not valid: {source}",
+            item.id
+        )));
+    }
+    let Some(confidence_value) = item.payload.get("confidence") else {
+        return Err(AppError::Config(format!(
+            "stored plan item {} is missing confidence",
+            item.id
+        )));
+    };
+    if confidence_value.is_null() || !confidence_value.is_string() {
+        return Err(AppError::Config(format!(
+            "stored plan item {} confidence is not a string",
+            item.id
+        )));
+    }
+    let Some(confidence) = confidence_value.as_str() else {
+        return Err(AppError::Config(format!(
+            "stored plan item {} confidence is not a string",
+            item.id
+        )));
+    };
+    if !matches!(confidence, "LOW" | "MEDIUM" | "HIGH" | "CONFIRMED") {
+        return Err(AppError::Config(format!(
+            "stored plan item {} confidence is not valid: {confidence}",
+            item.id
+        )));
+    }
     Ok(())
 }
 
@@ -210,7 +266,11 @@ mod tests {
             effort: "M".into(),
             cost_class: "LOW".into(),
             phase: "SHORT_TERM".into(),
+            precondition: "ambiente acessível para verificação".into(),
+            postcondition: "controle aplicado e verificável".into(),
             verification: "checagem objetiva".into(),
+            source: Some("OBSERVED".into()),
+            confidence: Some("MEDIUM".into()),
             ..PlanItemInput::default()
         }
     }
@@ -301,6 +361,130 @@ mod tests {
                     );
                     assert!(error.to_string().contains(field), "{name}: {error}");
                 }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn plan_view_rejects_invalid_source_and_confidence() {
+        let fx = fixture().await;
+        let incident = crate::service::create_incident(&fx.services, "incidente")
+            .await
+            .expect("incident");
+        let item = create_plan_item(
+            &fx.services,
+            &incident.id,
+            &plan_input("OS_HARDENING", "baseline", "P1"),
+        )
+        .await
+        .expect("valid plan item");
+        let record = crate::persistence::analytical_results::get(&fx.services.db, &item)
+            .await
+            .expect("get plan item")
+            .expect("plan item exists");
+        // source e confiança são obrigatórios: remover um deles falha.
+        let mut payload: serde_json::Value =
+            serde_json::from_str(&record.payload).expect("valid payload");
+        payload.as_object_mut().expect("payload object").remove("source");
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('bad-plan-source-missing','analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+            .bind(&record.correlation_key)
+            .bind(&incident.id)
+            .bind(payload.to_string())
+            .bind(record.provenance.to_string())
+            .bind(&item)
+            .execute(&fx.services.db)
+            .await
+            .expect("malformed source-missing plan item");
+        match plan_view(&fx.services, &incident.id).await {
+            Ok(view) => panic!(
+                "missing source was accepted by plan_view: items={:?}",
+                view.items.len()
+            ),
+            Err(error) => {
+                assert!(
+                    error.to_string().contains("bad-plan-source-missing"),
+                    "{error}"
+                );
+                assert!(error.to_string().contains("source"), "{error}");
+            }
+        }
+
+        // Confiança inválida é recusada.
+        let mut payload: serde_json::Value =
+            serde_json::from_str(&record.payload).expect("valid payload");
+        payload["confidence"] = serde_json::json!("CRITICA");
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('bad-plan-confidence','analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+            .bind(&record.correlation_key)
+            .bind(&incident.id)
+            .bind(payload.to_string())
+            .bind(record.provenance.to_string())
+            .bind(&item)
+            .execute(&fx.services.db)
+            .await
+            .expect("malformed confidence plan item");
+        match plan_view(&fx.services, &incident.id).await {
+            Ok(view) => panic!(
+                "invalid confidence was accepted by plan_view: items={:?}",
+                view.items.len()
+            ),
+            Err(error) => {
+                assert!(
+                    error.to_string().contains("bad-plan-confidence"),
+                    "{error}"
+                );
+                assert!(error.to_string().contains("confidence"), "{error}");
+            }
+        }
+        // Fonte inválida (fora do vocabulário inglês) é recusada.
+        let mut payload: serde_json::Value =
+            serde_json::from_str(&record.payload).expect("valid payload");
+        payload["source"] = serde_json::json!("NAO_ESTA_NA_LISTA");
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('bad-plan-source','analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+            .bind(&record.correlation_key)
+            .bind(&incident.id)
+            .bind(payload.to_string())
+            .bind(record.provenance.to_string())
+            .bind(&item)
+            .execute(&fx.services.db)
+            .await
+            .expect("malformed source plan item");
+        match plan_view(&fx.services, &incident.id).await {
+            Ok(view) => panic!(
+                "invalid source was accepted by plan_view: items={:?}",
+                view.items.len()
+            ),
+            Err(error) => {
+                assert!(
+                    error.to_string().contains("bad-plan-source"),
+                    "{error}"
+                );
+                assert!(error.to_string().contains("source"), "{error}");
+            }
+        }
+        // Fonte numérica é rejeitada.
+        let mut payload: serde_json::Value =
+            serde_json::from_str(&record.payload).expect("valid payload");
+        payload["source"] = serde_json::json!(42);
+        sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('bad-plan-source-numeric','analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+            .bind(&record.correlation_key)
+            .bind(&incident.id)
+            .bind(payload.to_string())
+            .bind(record.provenance.to_string())
+            .bind(&item)
+            .execute(&fx.services.db)
+            .await
+            .expect("malformed numeric source plan item");
+        match plan_view(&fx.services, &incident.id).await {
+            Ok(view) => panic!(
+                "numeric source was accepted by plan_view: items={:?}",
+                view.items.len()
+            ),
+            Err(error) => {
+                assert!(
+                    error.to_string().contains("bad-plan-source-numeric"),
+                    "{error}"
+                );
+                assert!(error.to_string().contains("source"), "{error}");
             }
         }
     }

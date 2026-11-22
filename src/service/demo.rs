@@ -909,6 +909,8 @@ fn item(
     pre: &str,
     post: &str,
     verification: &str,
+    source: &str,
+    confidence: &str,
 ) -> PlanItemInput {
     PlanItemInput {
         domain: domain.into(),
@@ -921,6 +923,8 @@ fn item(
         precondition: pre.into(),
         postcondition: post.into(),
         verification: verification.into(),
+        source: Some(source.into()),
+        confidence: Some(confidence.into()),
         ..PlanItemInput::default()
     }
 }
@@ -958,6 +962,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Inventário das contas de e-mail e de acesso remoto; autenticadores FIDO2 adquiridos para o financeiro.",
         "Todas as contas do financeiro e dos administradores exigem segundo fator resistente a phishing.",
         "Tentar entrar com senha apenas numa conta de teste e confirmar o bloqueio; conferir o relatório de autenticadores cadastrados.",
+        "OBSERVED",
+        "MEDIUM",
     );
     mfa.framework_reference = Some("NIST SP 800-63B (AAL2 ou superior)".into());
     mfa.regulatory_reference = Some("LGPD art. 46 (medidas de segurança)".into());
@@ -976,6 +982,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Acesso administrativo ao serviço de e-mail.",
         "Encaminhamento externo bloqueado por política; regras existentes revisadas e removidas quando indevidas.",
         "Criar uma regra de teste com destino externo e confirmar que o serviço a recusa.",
+        "OBSERVED",
+        "HIGH",
     );
     forwarding.nist_subcategory_ids = own(&["PR.AA-05", "DE.CM-03"]);
     forwarding.finding_ids = pick(f, &[fnd::FORWARDING]);
@@ -992,6 +1000,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Mapa das conexões RDP legítimas; gateway administrativo definido.",
         "Servidores só aceitam RDP do gateway; estações não se conectam entre si.",
         "Tentar RDP de uma estação comum para o servidor e confirmar a recusa no firewall.",
+        "OBSERVED",
+        "HIGH",
     );
     rdp.framework_reference = Some("CIS Controls v8, controles 4 e 12".into());
     rdp.nist_subcategory_ids = own(&["PR.IR-01", "PR.AA-05"]);
@@ -1009,6 +1019,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Servidor de arquivos em janela de manutenção aprovada.",
         "Baseline aplicado; registro de blocos de script ativo e enviado ao coletor.",
         "Executar um script de teste e localizar o registro do bloco no coletor; rodar a verificação do baseline.",
+        "OBSERVED",
+        "MEDIUM",
     );
     hardening.framework_reference = Some("CIS Benchmarks para Windows Server (nível 1)".into());
     hardening.nist_subcategory_ids = own(&["PR.PS-01"]);
@@ -1026,6 +1038,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Regras de caixa auditadas (item de encaminhamento concluído); logs chegando ao coletor.",
         "Três alertas ativos, com responsável e prazo de triagem definidos.",
         "Simular cada um dos três sinais em ambiente de teste e confirmar que o alerta chega ao responsável.",
+        "OBSERVED",
+        "HIGH",
     );
     alerts.nist_subcategory_ids = own(&["DE.AE-02", "DE.CM-03"]);
     alerts.finding_ids = pick(f, &[fnd::NO_MFA, fnd::FORWARDING, fnd::NO_POWERSHELL_ALERT]);
@@ -1042,6 +1056,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Alertas em operação, para dimensionar o volume de logs.",
         "E-mail, proxy e controlador de domínio enviam logs a um repositório central com 12 meses de retenção.",
         "Consultar um evento com 11 meses de idade em cada fonte.",
+        "INFERRED",
+        "MEDIUM",
     );
     retention.framework_reference = Some("NIST SP 800-92 (gestão de logs)".into());
     retention.nist_subcategory_ids = own(&["PR.PS-04"]);
@@ -1059,6 +1075,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Backup verificado do volume; chaves e cofre definidos.",
         "Volume e diretório financeiro criptografados; backups também.",
         "Ler o volume fora do sistema e confirmar que o conteúdo está ilegível; restaurar um backup de teste.",
+        "OBSERVED",
+        "MEDIUM",
     );
     at_rest.framework_reference =
         Some("NIST SP 800-57 Parte 1 (algoritmos e tamanhos de chave)".into());
@@ -1085,6 +1103,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Inventário de serviços e clientes; certificados disponíveis.",
         "TLS 1.2 ou superior nos serviços; SMB 3 com criptografia e assinatura; RDP só com NLA.",
         "Capturar tráfego de teste entre estação e servidor e confirmar que o conteúdo não é legível.",
+        "OBSERVED",
+        "MEDIUM",
     );
     in_transit.framework_reference = Some("NIST SP 800-52 Rev. 2 (TLS)".into());
     in_transit.nist_subcategory_ids = own(&["PR.DS-02"]);
@@ -1109,6 +1129,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Criptografia de repouso e de trânsito definida (itens anteriores).",
         "Chaves mestras sob responsável nomeado, com uso registrado e recuperação testada.",
         "Simular a perda de uma chave e restaurar a partir da custódia dividida.",
+        "INFERRED",
+        "HIGH",
     );
     keys.framework_reference = Some("NIST SP 800-57 Parte 2 (gestão de chaves)".into());
     keys.nist_subcategory_ids = own(&["PR.DS-01", "PR.DS-02"]);
@@ -1135,6 +1157,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Inventário das contas de serviço e de onde guardam suas senhas.",
         "Credenciais de serviço no cofre, com rotação e registro de uso.",
         "Listar as contas de serviço e confirmar que nenhuma tem segredo fora do cofre.",
+        "INFERRED",
+        "LOW",
     );
     secrets.nist_subcategory_ids = own(&["PR.AA-01"]);
     secrets.finding_ids = pick(f, &[fnd::FLAT_RDP]);
@@ -1158,6 +1182,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Contatos do financeiro, do banco e do provedor de e-mail levantados.",
         "Playbook aprovado, com papéis, prazos e decisão de comunicação.",
         "Ler o playbook com o financeiro e conferir que cada passo tem responsável e prazo.",
+        "RECOMMENDED",
+        "MEDIUM",
     );
     playbook.framework_reference = Some("NIST SP 800-61 Rev. 3".into());
     playbook.regulatory_reference =
@@ -1177,6 +1203,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Playbook aprovado.",
         "Exercício realizado e ajustes do playbook registrados.",
         "Ata do exercício com as falhas encontradas e os prazos de correção.",
+        "RECOMMENDED",
+        "LOW",
     );
     tabletop.nist_subcategory_ids = own(&["RS.MA-01"]);
     tabletop.finding_ids = pick(f, &[fnd::NO_TRAINING]);
@@ -1193,6 +1221,8 @@ async fn seed_plan(services: &AppServices, incident_id: &str, f: &[String]) -> A
         "Canal de reporte de e-mail suspeito definido.",
         "Financeiro treinado a cada 6 meses, com simulação e taxa de reporte medida.",
         "Resultado da simulação de phishing e taxa de reporte do último ciclo.",
+        "RECOMMENDED",
+        "MEDIUM",
     );
     training.nist_subcategory_ids = own(&["PR.AT-01"]);
     training.finding_ids = pick(f, &[fnd::NO_TRAINING]);

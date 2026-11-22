@@ -2207,6 +2207,8 @@ mod tests {
                 phase: "IMMEDIATE".into(),
                 verification: "varredura externa".into(),
                 finding_ids: vec![finding.clone()],
+                source: Some("OBSERVED".into()),
+                confidence: Some("MEDIUM".into()),
                 ..Default::default()
             },
         )

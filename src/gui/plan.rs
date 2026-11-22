@@ -8,9 +8,9 @@
 
 use super::backend::{Backend, Command};
 use super::{
-    Loadable, PLAN_COST_OPTIONS, PLAN_DOMAIN_OPTIONS, PLAN_EFFORT_OPTIONS, PLAN_PHASE_OPTIONS,
-    PLAN_PRIORITY_OPTIONS, enum_combo, error_banner, non_empty, split_ids, str_field, string_list,
-    toggle,
+    CONFIDENCE_OPTIONS, Loadable, PLAN_COST_OPTIONS, PLAN_DOMAIN_OPTIONS, PLAN_EFFORT_OPTIONS,
+    PLAN_PHASE_OPTIONS, PLAN_PRIORITY_OPTIONS, enum_combo, error_banner, non_empty, split_ids,
+    str_field, string_list, toggle,
 };
 use crate::persistence::plan_items::{DomainCoverage, PlanDomain};
 use crate::service::AnalyticalResultResponse;
@@ -34,6 +34,8 @@ struct PlanForm {
     nist_ids: String,
     finding_ids: BTreeSet<String>,
     depends_on: BTreeSet<String>,
+    source: String,
+    confidence: String,
     data_class: String,
     location: String,
     mechanism: String,
@@ -201,6 +203,8 @@ fn show_items(ui: &mut egui::Ui, items: &[AnalyticalResultResponse]) {
                 "Regulatório / política interna",
                 str_field(payload, "regulatory_reference"),
             );
+            labelled(ui, "Fonte", str_field(payload, "source"));
+            labelled(ui, "Confiança", str_field(payload, "confidence"));
             let nist = string_list(payload, "nist_subcategories");
             if !nist.is_empty() {
                 ui.small(format!("NIST: {}", nist.join(", ")));
@@ -285,6 +289,20 @@ fn form_ui(
         "Subcategorias NIST (opcional, separadas por vírgula)",
         &mut form.nist_ids,
     );
+    enum_combo(
+        ui,
+        "plan_source",
+        "Fonte da recomendação",
+        &mut form.source,
+        &["OBSERVED", "INFERRED", "NOT_VERIFIED", "RECOMMENDED"],
+    );
+    enum_combo(
+        ui,
+        "plan_confidence",
+        "Confiança",
+        &mut form.confidence,
+        &CONFIDENCE_OPTIONS,
+    );
 
     if form.needs_crypto_detail() {
         ui.separator();
@@ -338,7 +356,7 @@ fn form_ui(
         *creating = true;
         backend.send(Command::CreatePlanItem {
             incident_id: incident_id.to_string(),
-            input: build_input(form),
+            input: Box::new(build_input(form)),
         });
     }
     if *creating {
@@ -373,6 +391,8 @@ fn build_input(form: &PlanForm) -> PlanItemInput {
             recovery: form.recovery.clone(),
         }),
         supersedes: None,
+        source: non_empty(&form.source),
+        confidence: non_empty(&form.confidence),
     }
 }
 
