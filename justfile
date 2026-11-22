@@ -100,6 +100,11 @@ release-tools:
     cargo install --locked cargo-nextest@0.9.151
 
 # Documentation checks intentionally remain lightweight; runtime/build gates remain authoritative.
+test-coordination-playbook:
+    {{python}} -m unittest tests/fixtures/coordination_playbook/test_exhaustive.py -v
+
 doc-gate:
     {{python}} scripts/validate_fase0.py
     {{python}} scripts/doc_gate.py
+    {{python}} scripts/coordination_playbook_gate.py
+    just test-coordination-playbook
