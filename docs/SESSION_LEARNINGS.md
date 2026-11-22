@@ -250,4 +250,35 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 
 ## Próxima revisão
 
+### 30. Headings do coordination playbook eram contados dentro de fences
+
+- **Classe:** defeito estrutural herdado, corrigido nesta sessão.
+- **Fato:** antes da correção, `CP_HEADING` e `ROLE_HEADING` rodavam no texto bruto e contavam headings CP/papel dentro de blocos ``` e ~~~. Isso contradiz o tratamento de conteúdo literal de fences CommonMark e podia criar `duplicate_cp_id` ou satisfazer `missing_role` indevidamente.
+- **Prevenção:** `_mask_fenced_blocks` mascara backtick/til, comprimento de abertura/fechamento e EOF preservando offsets e CRLF. A máscara é aplicada a headings e duplicação de prosa, não ao scanner de placeholders, que permanece global para não esconder campos não resolvidos em exemplos.
+- **Confirmação:** confirmada nesta sessão por `test_adversarial.py`, incluindo til, fence longo, EOF, papel real removido e offsets CRLF, e pela suíte combinada de 69 testes em `integration-tests-fixed.log`.
+
+### 31. Identidade de módulo em `sys.modules` não é estável entre suítes no mesmo processo
+
+- **Classe:** erro de método evitado.
+- **Fato:** `test_adversarial.py` e `test_exhaustive.py` importam o linter com `spec_from_file_location` e registram o mesmo nome `coordination_playbook_gate` em `sys.modules`. No mesmo processo (suíte combinada), o segundo import sobrescreve a entrada, então `assertIs(sys.modules[name], GATE)` pode falhar mesmo com ambas as suítes corretas.
+- **Risco:** declarar falha de regressão por identidade de objeto quando o contrato real é apenas "módulo registrado com `validate`".
+- **Prevenção:** testes de registro de módulo devem assertar presença em `sys.modules` e existência de `validate()`, não identidade de objeto entre suítes.
+- **Confirmação:** confirmada nesta sessão: `test_module_registered_in_sys_modules` foi reescrito para não exigir `assertIs`; a suíte combinada (40 testes) passou com exit 0.
+
+### 32. `FormatChecker` não verifica `date-time` sem o backend opcional
+
+- **Classe:** limitação de verificação revelada por controle negativo.
+- **Fato:** a primeira execução com `jsonschema 4.26.0` e `FormatChecker` detectou somente dois de três controles por relatório: `generated_at: not-a-date` passou porque `rfc3339-validator` não estava instalado. Depois da instalação isolada de `rfc3339-validator 0.1.4`, um timestamp válido foi aceito, `not-a-date` foi rejeitado e os 12 controles finais foram detectados.
+- **Prevenção:** para cada formato usado, executar um caso válido e um inválido antes de declarar validação completa; registrar implementação, backend, versão e ambiente isolado. `FormatChecker` ativo sem backend não é prova de cobertura do formato.
+- **Confirmação:** confirmada nesta sessão em `schema-validation-final-with-formats.log`, com quatro contratos `PASS` e 12/12 controles negativos detectados.
+
+### 33. Ausência de relatório foi inferida no diretório errado
+
+- **Classe:** erro de execução de inventário, corrigido sem reescrever o histórico.
+- **Fato:** uma revisão anterior registrou `ox-delivery.json` e `rat-delivery.json` como ausentes, mas ambos já existiam no diretório `drafts/` desde antes da integração. Timestamps e hashes confirmaram que não eram escritas atrasadas.
+- **Prevenção:** antes de declarar ausência, enumerar o diretório canônico da entrega, fazer controle positivo em um arquivo conhecido e registrar stat/hash dos artefatos encontrados. Separar original, cópia normalizada e cópia root-repair, sem transformar o erro de lookup em falha do worker.
+- **Confirmação:** confirmada nesta sessão em `contract-inventory.log` e `contract-resolution-audit.log`; os quatro originais foram preservados e suas cópias revisadas passaram JSON Schema completo.
+
+## Próxima revisão
+
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.

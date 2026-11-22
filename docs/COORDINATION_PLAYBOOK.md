@@ -844,6 +844,9 @@ A validação estrutural do root deve, no mínimo:
 4. rejeitar link de evidência sem path, claim ou `verification_status`;
 5. rejeitar hash fora do formato SHA-256 de 64 hex;
 6. permitir ao root trocar `pending_root_read` por `root_read` ou `root_rejected` e registrar `root_note`.
+7. validar o próprio schema com `Draft202012Validator.check_schema` e cada instância com o dialecto declarado, registrando implementação e versão.
+8. ativar `FormatChecker` somente com os backends exigidos pelos formatos usados e provar um caso válido e um inválido por formato. Para `date-time`, por exemplo, o backend `rfc3339-validator` deve estar presente no ambiente isolado; backend ausente deixa a verificação do formato `PENDING`, nunca a promove a `PASS`.
+9. preservar originais e registrar toda normalização/reparação root em cópia, com ledger de mudanças, hashes e tamanhos recalculados. Schema válido não prova veracidade da claim nem aceite de gate.
 
 ---
 
@@ -1392,6 +1395,22 @@ O linter `scripts/coordination_playbook_gate.py` usa apenas Python stdlib e impl
 
 O linter **não** mede qualidade por linhas, não infere sentido, não valida a verdade factual e **não** declara aceite semântico. O diagnóstico tem path absoluto, linha, regra e mensagem. O caminho válido retorna exit 0; cada mutação negativa isolada retorna exit 1 com a regra esperada.
 
+Headings de CP/papel e parágrafos de duplicação são avaliados após máscara de fences CommonMark com backtick ou til, comprimento mínimo de três, fechamento compatível e tratamento de EOF, preservando offsets e CRLF. Código literal não satisfaz heading nem produz duplicata estrutural. A detecção de `placeholder_field` e `placeholder_token` permanece global, inclusive em fences, para que templates não resolvidos não se escondam em exemplos.
+
+A auditoria complementar `scripts/coordination_playbook_repo_audit.py` separa os contextos do playbook, de `docs/SESSION_LEARNINGS.md` e da `justfile`. Ela faz parse de blocos JSON, verifica referências versionadas em backticks com ou sem sufixo de linha, aceita diretórios existentes, valida a sequência contígua das lições e compara somente a receita `verify` aos seis passos canônicos. Saída detalhada usa `--verbose`; a saída padrão informa contagens.
+
+Comandos de verificação e análise:
+
+```bash
+python3 scripts/coordination_playbook_gate.py
+python3 scripts/coordination_playbook_repo_audit.py
+just test-coordination-playbook
+just test-coordination-playbook-all
+just benchmark-coordination-playbook
+```
+
+A suíte completa exige `JCODE_SCRATCH_DIR` dedicado para os controles subprocessados. O benchmark não integra o gate obrigatório e não é meta universal de desempenho.
+
 ### Staleness e vínculo de tree
 
 | Mudança desde a evidência | Estado | Ação |
@@ -1662,6 +1681,20 @@ Este playbook não fixa contagens de uma sessão. Cada rodada registra seu próp
 - [ ] Ler o artefato final e classificar relatório divergente por claim.
 - [ ] Listar lições registradas e confirmadas com a ação e a sessão que confirmou a prevenção.
 - [ ] Não derivar qualidade de contagem de linhas, bytes ou tamanho do documento.
+
+### Benchmark de robustez e desempenho
+
+`scripts/coordination_playbook_benchmark.py` mede o linter em corpus válidos escaláveis, sem alterar o documento fonte nem usar repetição para inflar casos. O procedimento é:
+
+1. congelar baseline do linter e do corpus por hash;
+2. usar tamanhos ordenados e parágrafos únicos, exigindo zero diagnósticos;
+3. executar warm-up e rodadas com o mesmo interpretador, host e carga registrados;
+4. reportar mediana, desvio, IQR, p95, mínimo/máximo e throughput, não apenas média;
+5. medir pico com `tracemalloc` fora do loop e atribuir custo com `cProfile`;
+6. comparar Before/After pelo mesmo corpus e registrar razões, sem declarar otimização sem evidência;
+7. exportar JSON para análise e manter o benchmark fora do `doc-gate`.
+
+O resultado é descritivo do ambiente e do hash medidos. Não é requisito de negócio, gate de release nem substituto de testes de correção.
 
 ### Saída
 
@@ -2138,6 +2171,11 @@ Casos sanitizados observados nas sessões. As fontes duráveis são `docs/SESSIO
 | E20 | Worker decide risco crítico ou ação externa | Escalar ao root; ação externa exige autorização com ação, alvo e escopo | Registro da decisão e das autorizações na missão | `AGENTS.md` §17 e CP-16 |
 | E21 | Fallback ou patch iniciado a partir de gate antigo | Reproduzir o estado atual e controlar variáveis de ambiente antes de corrigir | Repetir o teste com scratch explícito, log e hash dos insumos | `docs/SESSION_IMPROVEMENT.md` §2 |
 | E22 | Texto anotado por `read` tratado como fonte bruta por automação | Remover numeração de apresentação e validar um controle positivo antes de montar | Falhar fechado se headings obrigatórios não forem extraídos; reler o arquivo escrito | `AGENTS.md` §15 e CP-06 |
+| E23 | Heading CP ou de papel em fence tratado como estrutura | Mascarar fences CommonMark preservando offsets; manter placeholders globais por decisão explícita | `test_adversarial.py` cobre backtick, til, fechamento longo, EOF e CRLF | `docs/SESSION_LEARNINGS.md` lição 30 e `scripts/coordination_playbook_gate.py` |
+| E24 | `FormatChecker` ativo sem backend do formato | Provar formato válido e inválido antes do aceite; registrar backend e versão isolados | Controles `date-time` válido/inválido e 12 mutações de contratos detectadas | `docs/SESSION_LEARNINGS.md` lição 32 e CP-14 |
+| E25 | Artefato declarado ausente por lookup ou diretório incorreto | Enumerar o diretório canônico, fazer controle positivo e registrar stat/hash antes de alegar ausência | Inventário dos quatro relatórios com hashes e validação root independente | `docs/SESSION_LEARNINGS.md` lição 33 e CP-14 |
+| E26 | Auditoria ad hoc mistura playbook, lições e `justfile` | Separar contextos e cobrir repositório real com falsos positivos e negativos | `scripts/coordination_playbook_repo_audit.py` e `test_repo_audit.py` | `scripts/coordination_playbook_repo_audit.py` e CP-21 |
+| E27 | `assertIs` entre módulos recarregados por suítes distintas | Assertar registro e contrato `validate()`, não identidade de objeto entre imports | Suíte combinada no mesmo processo | `docs/SESSION_LEARNINGS.md` lição 31 e `tests/fixtures/coordination_playbook/test_adversarial.py` |
 
 ## Como usar a matriz
 
@@ -2207,7 +2245,7 @@ Revisar somente quando houver mudança de autoridade, nova classe de erro, alter
 1. Cricket define o gatilho e o escopo da revisão.
 2. Fox consolida as mudanças necessárias e as fontes proprietárias.
 3. Especialistas atualizam somente seus blocos e controles.
-4. Ox repete linter, controles negativos, robustez e benchmark; Rat atualiza artefatos; Lobster participa apenas se houver conteúdo visual/documental afetado.
+4. Ox repete linter, auditoria de repositório, controles negativos, propriedades e benchmark; Rat atualiza artefatos; Lobster participa apenas se houver conteúdo visual/documental afetado.
 5. Cricket faz integração final, gates e commit.
 6. Registrar lições novas ou confirmações em `docs/SESSION_LEARNINGS.md`, sem retrospectiva permanente de rotina.
 
