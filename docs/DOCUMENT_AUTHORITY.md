@@ -14,7 +14,7 @@ Este arquivo define a autoridade por domínio e as fronteiras entre documentaç�
 | Estado | `docs/rtm.md` (única matriz de estado de ticket e requisito) | `docs/FASE1_STATUS.md` (somente resumo cronológico; log completo até 2026-10-29 em `docs/archive/FASE1_STATUS_historico_2026-10.md`), `docs/FASE0_STATUS.md` (matriz de capacidades da Fase 0, histórico), prompt, changelog |
 | Rastreabilidade | `docs/rtm.md` | testes, código, ADRs |
 | Gates | `docs/RELEASE_GATE.md` + `docs/EVIDENCE_REGISTER.md` | `justfile`, CI quando existir |
-| Regras LLM | `AGENTS.md` + seção 45 + Apêndice F; escolha de harness de agente: ADR-0027 | `CONVENTIONS.md`, `docs/SESSION_IMPROVEMENT.md`, `docs/SESSION_LEARNINGS.md`, `.jcode/skills/`, `.jcode/swarm-prompt.md` |
+| Regras LLM | `AGENTS.md` + seção 45 + Apêndice F; escolha de harness de agente: ADR-0027 | `CONVENTIONS.md`, `docs/SESSION_IMPROVEMENT.md`, `docs/SESSION_LEARNINGS.md`, `docs/COORDINATION_PLAYBOOK.md`, `.jcode/skills/`, `.jcode/swarm-prompt.md` |
 | Toolchain declarada | `toolchains.toml` + `rust-toolchain.toml` | docs de tooling |
 | Toolchain real | evidência `rustc`, `cargo`, `python3` | manifests de referência |
 
@@ -31,6 +31,7 @@ Documentos que apoiam a mudança somente quando são afetados (`AGENTS.md` §11)
 | `CONVENTIONS.md` | convenções de desenvolvimento para agentes LLM | Regras LLM: `AGENTS.md` |
 | `.jcode/skills/dfir-improve/SKILL.md` | checklist derivado do loop e da seleção de skills | `AGENTS.md` §16/§17 + `docs/SESSION_IMPROVEMENT.md` |
 | `.jcode/swarm-prompt.md` | template derivado para missão, lanes e integração de workers | Regras LLM: `AGENTS.md` §17; não autoriza escopo ou ações externas |
+| `docs/COORDINATION_PLAYBOOK.md` | workflows derivados de coordenação Cricket/Fox/especialistas, ferramentas, evidência e recuperação | Regras LLM: `AGENTS.md` §15-17; não cria requisito, autorização ou aceite |
 | `docs/SESSION_IMPROVEMENT.md` | procedimento obrigatório de aprendizado entre sessões | Regras LLM: `AGENTS.md` §16 |
 | `docs/SESSION_LEARNINGS.md` | registro vivo e sanitizado de lições operacionais, sem estado de release | `AGENTS.md` §16 + `docs/SESSION_IMPROVEMENT.md` |
 | `docs/DEFINITION_OF_READY.md` | ponteiro para o checklist histórico Fase 0 → Fase 1 | Gates: `docs/RELEASE_GATE.md` |

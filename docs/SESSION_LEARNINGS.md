@@ -110,6 +110,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Risco:** churn de coordenação, falsa expectativa de fechamento e perda de tempo sem nova evidência.
 - **Prevenção:** `.jcode/skills/dfir-improve/SKILL.md` exige ler o estado retornado após mutações de todo/swarm/background e aplicar o limite de duas tentativas sem informação nova antes de mudar de método.
 - **Confirmação:** confirmada em 2026-11-20: transições de timeline, NIST e RTK para `completed` e das novas lanes para `in_progress` foram lidas no estado retornado, sem repetição da chamada ineficaz histórica.
+- **Confirmação adicional em 2026-11-22:** após a perda repetida do campo `waiting_on` em chamadas diretas, `codemode` construiu o patch com ID e razão explícitos e o estado retornado confirmou a pausa correta, sem novas tentativas idênticas. Na mesma rodada, antes de um fallback de modelo, o root repetiu a suíte atual com `JCODE_SCRATCH_DIR` explícito; os dois testes, incluindo positivo e oito mutações, passaram e o fallback foi revogado antes de criar trabalho duplicado.
 
 ### 14. Escrita atrasada após parada do worker
 
@@ -133,7 +134,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** em 2026-11-20, uma transferência `read` → `write` gravou os prefixos de numeração apresentados pela leitura no inventário de licenças. A recuperação por Base64 também encontrou o limite de 30.000 caracteres da saída do bash. Leitura direta e `cmp` detectaram o problema; três blocos completos restauraram o texto e o destino ficou byte a byte igual ao scratch validado.
 - **Risco:** um exit 0 de escrita poderia transformar representação anotada ou truncada em documento normativo aparentemente regenerado.
 - **Prevenção:** `docs/SESSION_IMPROVEMENT.md` §2 exige fonte bruta, atenção ao limite do canal e `cmp`/hash entre origem e destino antes do gate; conteúdo parcial não pode ser gravado como completo.
-- **Confirmação:** pendente.
+- **Confirmação:** confirmada em 2026-11-22: uma montagem `read` → `codemode` encontrou zero headings porque a leitura continha prefixos de linha. O controle positivo CP-00/CP-02 falhou antes da escrita; após remover somente a apresentação, os 29 blocos foram extraídos e o canônico foi relido e validado pelo linter. Nenhum prefixo de numeração foi gravado no documento.
 
 ### 17. Envelope MCP incompleto repetido sem nova informação
 
