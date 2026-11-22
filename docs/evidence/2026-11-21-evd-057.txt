@@ -1,0 +1,160 @@
+EVD-057 - F1-35/F1-14: modernização da UI nativa e gates locais
+================================================================
+
+Status: PASS no escopo local Linux x86_64 do código, dos testes, do E2E e do
+fluxo controlado de Preferências descrito abaixo. Não é aceite final do release,
+não valida o fluxo nativo completo, seletor de arquivos, desempenho de repaint,
+Windows, aarch64 ou incidente real. EVD-050 permanece BLOCKED.
+
+Executed-at: 2026-11-21T21:57:04Z..22:12:56Z para verify/E2E/build inicial;
+ 2026-11-21T22:45:22Z..23:31:42Z para a GUI controlada;
+ 2026-11-21T23:58:38Z..23:58:47Z para o build explícito pós-commit;
+ 2026-11-21T23:46:19Z..2026-11-22T00:38:36Z para os gates documentais.
+ Os testes focados e as revisões ocorreram antes nesse mesmo dia e têm logs
+ próprios no scratch.
+Commit-tree: os gates foram executados na árvore de trabalho baseada em
+ a36cfb97c3735982bb0468e0b9b0ee6f29cef07c. Sem nova edição de src, o código foi
+ separado em 3b4265798513be6a884763350f184011fbc3e1ba
+ (tree a7eef55bb9e7e8e02ed5c0899a3ffd437c1d811e). `git diff --exit-code HEAD
+ -- src` terminou com exit 0 após esse commit. Documentação, governança e esta
+ evidência formam o commit documental seguinte.
+Toolchain: rustc/cargo 1.100.0; nextest 0.9.151; CPython 3.13.5;
+ eframe/egui/egui_kittest 0.37.0.
+Ambiente: Linux x86_64, Debian 13; fixture sanitizada versionada; sandbox
+ required no E2E; GUI em X11 com dados sintéticos e raízes isoladas. Adaptador
+ nativo Mesa Intel HD Graphics 2000, backend Gl. Nenhuma dependência nova foi
+ adicionada e Cargo.toml/Cargo.lock não mudaram.
+
+1. Escopo implementado
+----------------------
+
+A UI nativa recebeu tokens e presets Light/Dark/Vento Áureo/Custom, acento
+OKLCH validado, preferências versionadas e persistência local, transição de
+tema de 160 ms, Reduced Motion, crossfade de navegação, gradiente curto de
+seleção nas bordas, ícones vetoriais locais e navegação responsiva. O harness
+temporal usa 1/60 s; Crossfade semeia o primeiro Id e cobre clear/reuso.
+
+O seletor foi separado em backends Zenity/RFD com estados explícitos e caminhos
+alternativos. UiWake coalesce notificações de backend sem timer periódico idle.
+O logging resume somente sondas EGL/XSETTINGS recuperáveis conhecidas quando
+RUST_LOG não está definido, preserva contagens e mantém RUST_LOG explícito como
+caminho de diagnóstico bruto. Nenhum comportamento forense foi alterado neste
+escopo de UI.
+
+2. Testes focados e gate Rust
+-----------------------------
+
+Logs em validation/:
+- theme-focused.log: 8 passed/0 failed, exit 0;
+- laguna-effects-nextest.log e laguna-effects-nextest.summary.json:
+  22 passed/0 failed, incluindo crossfade_reuses_id_after_clear;
+- laguna-navigation-nextest.log e laguna-navigation-nextest.summary.json:
+  6 passed/0 failed.
+
+Comando integrado: just verify
+Log: validation/root-just-verify.log
+Exit: 0 (`__EXIT_CODE__=0`).
+Pós-condições: validate-fase0 0 erros/0 avisos; cargo fmt --check, check
+--workspace --locked --all-targets, doctests e Clippy -D warnings verdes;
+nextest 669 tests run, 669 passed, 1 skipped. Não há warnings no final do log.
+
+3. E2E e builds
+---------------
+
+Comando: just e2e tests/fixtures/senai-demo.evtx
+Log: validation/root-e2e.log
+Exit: 0; 123/123 etapas passaram. O log confirma engine real, fixture
+versionada, sandbox required com no_new_privs/Landlock/seccomp, integridade,
+custódia, cancelamento, assinatura e descarte.
+
+O build inicial terminou com exit 0 em validation/root-final-build.log. O
+binário usado na validação nativa tinha SHA-256
+0cc6cfdc24c8e16f13700e4b73d76b56e49a846820322e6102700a19d184cace.
+
+Depois do commit de código, o comando explícito
+`cargo build --locked -p dfir-app -p dfir-engine` terminou com exit 0 em
+validation/root-post-commit-build.log. Esse segundo build produziu o binário
+SHA-256 691ce10be906e697356ad920c3d4d1d768933e15a47c75497ab662ea7db3866a.
+O segundo binário não foi apresentado como revalidado visualmente; a vinculação
+entre as duas execuções é o mesmo código-fonte confirmado pelo diff vazio em src.
+
+4. Persistência, Reduced Motion e cancelamento nativos
+------------------------------------------------------
+
+A mesma build inicial foi reaberta com DFIR_DATA_ROOT em scratch na raiz
+`data-reopen-control`, contendo Customizado, base golden_wind, matiz 160.0,
+croma 0.3 e reduced_motion=true. O JSON e a captura controlada confirmam esses
+valores após reabertura. O SHA-256 das preferências era
+b7dfa0bf4efb475e0256c65b7e11d9813d448c1ed2bd3c8fee508728dd3df383 antes do
+preview e permaneceu idêntico depois do cancelamento.
+
+No preview Claro com Reduced Motion, três capturas locais amostraram o ponto
+central (900,500) como (22,19,15), (22,19,15) e (244,243,239). Não houve tom
+intermediário nesse ponto e nesses quadros. Isso é uma observação RGB limitada,
+não uma medição de latência nem prova estética ou de todos os pixels.
+
+Um primeiro clique na coordenada estimada de Cancelar não alterou nenhum pixel
+e não foi contado como sucesso nem como defeito da aplicação. O fechamento pelo
+X da barra de título, que entra no ramo `cancel || !open` de preferences_window,
+restaurou a tela principal: controlled-cancelled-via-titlebar.png ficou pixel a
+pixel idêntico a reopen-main.png (0 pixels diferentes em 1280x820). O JSON
+permaneceu inalterado.
+
+A raiz anterior, alterada manualmente pelo usuário para golden_wind com
+reduced_motion=false, foi preservada com SHA-256
+ba61e15dabd7cba3488ec52d20ccad60561ab2f67593fb3572c03d4d53352b2d. Nenhum
+seletor foi aberto. A GUI controlada foi encerrada deliberadamente e não restou
+processo dfir-app dessa build.
+
+5. Revisão visual estruturada
+-----------------------------
+
+O Super VL observou separadamente reopen-main.png e reopen-preferences.png da
+nova raiz controlada. O relatório super-vl-visual-review.json passou no
+validador de schema e tem overall=consistent, observed=true e confidence=high
+nas duas imagens. Confirmou Customizado, base Vento Áureo, matiz/croma e Reduced
+Motion marcado, sem seletor, dados de caso, clipping ou sobreposição indevida.
+Os quadros são estáticos e não provam animação.
+
+A rodada anterior golden-main.png/golden-preferences.png e seu relatório foram
+preservados separadamente: mostram Vento Áureo com Reduced Motion desmarcado e
+não foram reutilizados como prova do cenário controlado. O Nano Omni informou
+limitação de ferramenta, observed=false/overall=uncertain e não produziu OCR;
+não houve retry nem uso desse relatório como evidência visual negativa ou
+positiva. Capturas, imagens e relatórios ficaram fora do Git e do chat principal.
+
+6. Gate documental e controles
+------------------------------
+
+Comando pré-commit: just doc-gate
+Log: root-doc-gate-pre-commit.log
+Exit: 0; Fase 0 com 0 erros/0 avisos e documentation gate PASS.
+
+Comando pós-documentação: just doc-gate
+Log: root-doc-gate-evd-057.log
+Exit: 0; Fase 0 com 0 erros/0 avisos e documentation gate PASS depois de
+EVIDENCE_REGISTER, RTM, FASE0_STATUS, FASE1_STATUS, RELEASE_GATE, DEMO e lições.
+
+Controles em cópia sanitizada do commit de código:
+- validation/doc-gate-control-positive.log: documentation gate PASS;
+- validation/doc-gate-control-negative.log: removendo somente o marcador
+  `## Formato mínimo de uma lição` da cópia de SESSION_IMPROVEMENT.md, o gate
+  retornou exit 1 e `missing session-improvement instruction` com arquivo e
+  marcador. O primeiro wrapper de conferência usou uma substring sem o prefixo
+  do arquivo e terminou exit 1; a leitura posterior do mesmo log original
+  confirmou o diagnóstico completo e `__EXIT_CODE__=1`. Nenhuma falha foi
+  induzida no checkout real.
+
+7. Limites e localização dos artefatos
+--------------------------------------
+
+Supply-chain não foi repetido nesta rodada e permanece em EVD-056. A otimização
+de CPU/repaint não foi realizada; medições históricas não são apresentadas como
+resolvidas. EVD-050 e a latência nativa do seletor continuam BLOCKED. Windows,
+aarch64, incidente real e o fluxo nativo completo continuam PENDING-HUMAN ou nos
+waivers já registrados. Esta evidência não altera esses estados.
+
+Logs externos citados ficam em:
+  /home/jose/.jcode/scratch/dfir-native-final.lkX8Np/
+Os logs de gates e focados estão no subdiretório validation/ desse diretório.
+Nenhuma captura, dado operacional, exportação ou banco foi adicionado ao Git.

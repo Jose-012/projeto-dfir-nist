@@ -139,6 +139,14 @@ session_instruction_needles = {
         "docs/SESSION_LEARNINGS.md",
     ),
     ROOT / "docs" / "SESSION_IMPROVEMENT.md": (
+        "<!-- doc-type: procedure | status: current -->",
+        "# Autoaprimoramento entre sessões",
+        "## Loop obrigatório",
+        "## 1. Início da sessão",
+        "## 2. Durante a execução",
+        "## 3. Fechamento da sessão",
+        "## Formato mínimo de uma lição",
+        "## Antipadrões",
         ".jcode/skills/dfir-improve/SKILL.md",
     ),
 }

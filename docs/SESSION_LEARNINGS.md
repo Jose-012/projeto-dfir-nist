@@ -231,6 +231,22 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** usar batch para chamadas MCP independentes (fewest requests, menor tempo); usar codemode apenas quando houver store/load intermediário, encadeamento onde o resultado de um passo alimenta o próximo, ou necessidade de try/catch com lógica condicional de JS; para chamadas MCP locais (ex.: `lean-ctx`), usar `batch` ou chamadas diretas fora do `codemode`; acessar propriedades aninhadas com cuidado (tipos podem ser undefined/null); para erros de tool, verificar objeto de retorno (não apenas catch); validar schema da action via menu/route antes de callTool.
 - **Confirmação:** confirmada em 2026-11-21: benchmark de casos A–D executado; `codemode` falhou ao conectar `lean_ctx` no sandbox (erro de conexão, corrigido por `batch` com chamadas diretas); `jcodemunch` respondeu via `order`; todos os casos concluíram com saída válida.
 
+### 28. Erros recorrentes de `todo`: fase ausente, nomes duplicados, nomes desconhecidos
+
+- **Classe:** erro de execução recorrente.
+- **Fato:** em 2026-11-21, chamadas `todo add` falharam com `added todo needs phase, or an after todo with membership` (fase não informada); `duplicate todo name` (nome reutilizado sem `rename_to` ou `update`); `unknown todo name` (tentativa de atualizar item não registrado no plano). Os três erros ocorreram na mesma sessão de benchmark.
+- **Risco:** churn de coordenação, perda de rastreamento de tarefas e falsa impressão de progresso sem itens efetivamente registrados no plano.
+- **Prevenção:** antes de `todo add`, sempre informar `phase` ou `after`; antes de `todo update`/`remove`, confirmar que o nome existe no plano atual (ler estado do `todo` primeiro); evitar reutilizar nomes — usar `rename_to` para preservar identidade e dependências. Essa regra é derivada do schema do `todo` (fase ou `after` obrigatórios em `add`; nomes únicos dentro do plano).
+- **Confirmação:** pendente.
+
+### 29. Primeiro `Id` animado e passo temporal padrão do harness
+
+- **Classe:** lição de implementação e de método de teste.
+- **Fato:** no egui 0.37.0, o primeiro `animate_bool_with_time(id, true, ...)` de um `Id` desconhecido retorna `1.0`, podendo saltar a primeira transição se não houver seed de `false`. Além disso, o `step_dt` padrão do `egui_kittest` avança 250 ms por frame, intervalo maior que as transições de 150–180 ms; um teste com o padrão pode terminar em um passo sem medir o progresso intermediário.
+- **Risco:** perder a animação na primeira seleção ou após `clear()`/reutilização do `Id`, e obter testes verdes que não distinguem interpolação de conclusão imediata.
+- **Prevenção:** semear `false` antes do primeiro `true`, cobrir explicitamente `clear()` seguido de reutilização do mesmo `Id` e usar `HarnessBuilder::default().with_step_dt(1.0 / 60.0).with_max_steps(32)` com assertivas de progresso limitado e não decrescente. Não substituir o passo temporal por `sleep` nem enfraquecer a assertiva para acomodar o harness.
+- **Confirmação:** confirmada em 2026-11-21: `crossfade_reuses_id_after_clear` cobre o seed após `clear()` e reuso do mesmo `Id`; efeitos passaram 22/22, tema 8/8 e o `just verify` sequencial terminou com 669/669 testes, 1 skipped, doctests e Clippy `-D warnings` sem warnings. Na amostra central de três quadros da GUI isolada, Reduced Motion apresentou somente as cores inicial e final, sem tons intermediários; essa observação nativa não substitui os testes temporais nem comprova estética por RGB.
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.

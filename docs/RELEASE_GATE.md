@@ -73,9 +73,11 @@ O release é fechado somente com evidência executada.
 
 > **Atualização 2026-11-20 (F1-38/F1-40, ADR-0030).** `EVD-056`: Before reproduziu conclusão tardia sobrescrevendo estado terminal e assinatura ainda não implementada. Depois, cancelamento entre instâncias encerrou o engine sem índice parcial e com cadeias íntegras; assinatura/verificação offline, chave errada, adulterações, ausência e remoção de envelope obsoleto passaram. `just verify` terminou com 573 passed/1 skipped, fmt/check/doc-tests/Clippy verdes; supply-chain verde com 621 dependências e 1555 advisories; E2E 123/123; doc-gates inicial e pós-documentação PASS. Tentativas anteriores falharam na documentação e no Clippy e foram corrigidas sem ocultação. Windows, aarch64, incidente real e fluxo X11 permanecem fora desse PASS; `EVD-050` e os bloqueadores A/F/G continuam.
 
+> **Atualização 2026-11-21 (modernização da UI nativa).** `EVD-057`: temas, Preferências persistentes, Reduced Motion, efeitos limitados, ícones, backends de seletor e wakeup coalescido no commit `3b42657`. `just verify` terminou com 669 passed/1 skipped, fmt/check/doc-tests/Clippy verdes; E2E 123/123 e builds PASS. Na raiz controlada, Customizado+Vento Áureo+Reduced Motion persistiu, o cancelamento restaurou a principal pixel a pixel sem mudar o JSON e o Super VL avaliou as capturas como `consistent`. Supply-chain permanece em `EVD-056`; `EVD-050`, seletor/latência, desempenho de repaint, Windows, aarch64, incidente real e fluxo nativo completo não foram promovidos.
+
 ## Gate documental
 
-Estado: `PASS` em 2026-11-20 (`EVD-056`; anterior `EVD-055`; anteriores `EVD-054`/`EVD-053`/`EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-036`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`/`EVD-049`/`EVD-052`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-21 (`EVD-057`; anterior `EVD-056`; anteriores `EVD-055`/`EVD-054`/`EVD-053`/`EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-036`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`/`EVD-049`/`EVD-052`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -86,7 +88,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-20 (`EVD-056`, nextest 573 passed/1 skipped; anterior local `EVD-052`; CI em `EVD-054`/`EVD-055`, mesma contagem; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-21 (`EVD-057`, nextest 669 passed/1 skipped; anterior local `EVD-056`, 573 passed/1 skipped; CI em `EVD-054`/`EVD-055`, 536 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -156,7 +158,7 @@ A interface é nativa (eframe/egui/egui_extras), parte do próprio binário `dfi
 
 ## Gates de verificação acrescentados (ADR-0019, ADR-0021, ADR-0022)
 
-- **Ponta a ponta com engine real:** `just e2e caminho/arquivo.evtx` (`scripts/e2e_headless.py`) **123/123** em 2026-11-20 com a fixture versionada, incluindo cancelamento tardio, geração assinada, verificação offline, chave errada, adulterações/ausência e remoção de assinatura obsoleta — `PASS` (`EVD-056`). Resultado anterior: 110/110 com o `security.evtx` de referência (`EVD-002`). Qualquer EVTX é aceito; etapas que dependem de conteúdo (candidatos de detecção) são `FAIL` honesto quando o arquivo não contém os sinais.
+- **Ponta a ponta com engine real:** `just e2e caminho/arquivo.evtx` (`scripts/e2e_headless.py`) **123/123** em 2026-11-21 com a fixture versionada, incluindo cancelamento tardio, geração assinada, verificação offline, chave errada, adulterações/ausência e remoção de assinatura obsoleta - `PASS` (`EVD-057`; anterior no mesmo formato em `EVD-056`). Resultado anterior: 110/110 com o `security.evtx` de referência (`EVD-002`). Qualquer EVTX é aceito; etapas que dependem de conteúdo (candidatos de detecção) são `FAIL` honesto quando o arquivo não contém os sinais.
 - **Testes de GUI sem janela:** `cargo test --workspace` inclui os testes com `egui_kittest` — `PASS` (`EVD-001`).
 - **Supply chain executado, não só configurado:** `cargo deny --workspace check` com advisories, bans, licenses e sources verdes (exceção individual e justificada em `deny.toml`) — `PASS` (`EVD-003`).
 - `PASS` **Logs sem dado de evidência:** `dfir-app diagnostics` não contém nome de arquivo nem conteúdo de evento (teste dedicado) — `EVD-005`;

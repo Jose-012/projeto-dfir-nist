@@ -22,6 +22,8 @@ Use esta skill ao alterar código, contratos ou documentação deste repositóri
 
 - Faça a menor mudança suficiente. Não reescreva um arquivo inteiro para uma edição local.
 - Releia o trecho atual antes de editar. Não suponha que uma leitura antiga ainda representa o arquivo.
+- Não reduza o rigor de um teste para acomodar a implementação: trocar `run()` por `step()`, remover espera/pós-condição ou enfraquecer rótulo/assert exige justificativa comportamental e revisão do integrador. Corrija a causa da falha, não a consulta que a revelou.
+- Antes de usar uma API nova ou incerta, confirme assinatura, unidade e tipo de retorno na fonte da versão resolvida pelo `Cargo.lock`; código que compila em outra versão ou conversão de `bool` para `0/1` não prova animação nem comportamento equivalente.
 - Não introduza dependência, serviço, camada, API ou documento permanente sem necessidade.
 - Preserve a interface nativa, o processo separado do engine e o transporte stdin/stdout + JSONL.
 - Não use shell intermediário em subprocessos de produção.
