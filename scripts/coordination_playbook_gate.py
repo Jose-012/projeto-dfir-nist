@@ -62,6 +62,46 @@ def _without_inline_code(text: str) -> str:
     return INLINE_CODE.sub(lambda match: " " * len(match.group(0)), text)
 
 
+def _blank_preserving_newlines(line: str) -> str:
+    return "".join(character if character in "\r\n" else " " for character in line)
+
+
+def _mask_fenced_blocks(text: str) -> str:
+    """Blank CommonMark fenced blocks while preserving offsets and newlines.
+
+    This mask is used for Markdown structure, not for placeholder detection.
+    Placeholder fields remain global so unresolved template examples cannot hide
+    inside a code fence.
+    """
+    masked: list[str] = []
+    fence_character = ""
+    fence_length = 0
+    for line in text.splitlines(keepends=True):
+        if fence_character:
+            masked.append(_blank_preserving_newlines(line))
+            closing = re.match(r"^ {0,3}(`{3,}|~{3,})[ \t]*(?:\r?\n)?$", line)
+            if closing:
+                marker = closing.group(1)
+                if marker[0] == fence_character and len(marker) >= fence_length:
+                    fence_character = ""
+                    fence_length = 0
+            continue
+
+        opening = re.match(r"^ {0,3}(`{3,}|~{3,})([^\r\n]*)", line)
+        if not opening:
+            masked.append(line)
+            continue
+        marker = opening.group(1)
+        info = opening.group(2)
+        if marker[0] == "`" and "`" in info:
+            masked.append(line)
+            continue
+        fence_character = marker[0]
+        fence_length = len(marker)
+        masked.append(_blank_preserving_newlines(line))
+    return "".join(masked)
+
+
 def _non_code_paragraphs(text: str) -> list[tuple[int, str]]:
     paragraphs: list[tuple[int, str]] = []
     in_fence = False
@@ -102,7 +142,8 @@ def _non_code_paragraphs(text: str) -> list[tuple[int, str]]:
 
 def validate(text: str) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
-    headings = list(CP_HEADING.finditer(text))
+    text_without_fences = _mask_fenced_blocks(text)
+    headings = list(CP_HEADING.finditer(text_without_fences))
     heading_ids = [match.group(1) for match in headings]
     heading_lines = {match.group(1): _line_number(text, match.start()) for match in headings}
 
@@ -163,7 +204,9 @@ def validate(text: str) -> list[Diagnostic]:
                 Diagnostic(1, "missing_reference", f"required reference {reference!r} is absent")
             )
 
-    dedicated_role_headings = [match.group(1) for match in ROLE_HEADING.finditer(text)]
+    dedicated_role_headings = [
+        match.group(1) for match in ROLE_HEADING.finditer(text_without_fences)
+    ]
     for role in REQUIRED_ROLES:
         if role not in dedicated_role_headings:
             diagnostics.append(
@@ -174,7 +217,7 @@ def validate(text: str) -> list[Diagnostic]:
                 )
             )
 
-    normalized_paragraphs = _non_code_paragraphs(text)
+    normalized_paragraphs = _non_code_paragraphs(text_without_fences)
     grouped: dict[str, list[int]] = {}
     for line_number, normalized in normalized_paragraphs:
         grouped.setdefault(normalized, []).append(line_number)
