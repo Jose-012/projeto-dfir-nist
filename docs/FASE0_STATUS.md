@@ -28,7 +28,7 @@ Ferramenta forense local/offline. Autenticação, RBAC, sessões e server-mode f
 
 ## Gates e limites de verificação
 
-- `PASS` vigente em Linux x86_64 com Rust/Cargo 1.100.0 e CPython 3.13.5 de QA: validação estática, fmt, check, nextest 669 passed/1 skipped, clippy, doc-tests e e2e 123/123 (`EVD-057`); supply chain vigente permanece verde em `EVD-056`. Anteriores: `EVD-051`/`EVD-052`.
+- `PASS` vigente em Linux x86_64 com Rust/Cargo 1.100.0 e CPython 3.13.5 de QA: validação estática, fmt, check, nextest 669 passed/1 skipped, clippy, doc-tests e e2e 123/123 (`EVD-058`); supply chain vigente verde em `EVD-058` após `url 2.5.9`. Anteriores: `EVD-057`/`EVD-056`/`EVD-051`/`EVD-052`.
 - `WAIVED`: Windows (`WVR-001`), Linux aarch64 (`WVR-002`) e CI automático (`WVR-003`), todos com validade e escopo em `docs/EVIDENCE_REGISTER.md`.
 - `WVR-004`: exceção temporária para `RUSTSEC-2026-0459`, **encerrada em 2026-11-19** após `sqlx 0.9.1` + `libsqlite3-sys 0.40.0`; não é exceção vigente no lock atual (`EVD-051`). O risco aceito histórico nunca equivaleu a verificação de inexploração.
 - `PENDING-HUMAN`: execução sobre incidente real. A fixture sanitizada, o cenário DEMO e os datasets públicos de `EVD-052` não substituem essa verificação. O fluxo nativo completo também permanece pendente (`EVD-050`).

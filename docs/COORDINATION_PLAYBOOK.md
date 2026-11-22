@@ -847,6 +847,9 @@ A validação estrutural do root deve, no mínimo:
 7. validar o próprio schema com `Draft202012Validator.check_schema` e cada instância com o dialecto declarado, registrando implementação e versão.
 8. ativar `FormatChecker` somente com os backends exigidos pelos formatos usados e provar um caso válido e um inválido por formato. Para `date-time`, por exemplo, o backend `rfc3339-validator` deve estar presente no ambiente isolado; backend ausente deixa a verificação do formato `PENDING`, nunca a promove a `PASS`.
 9. preservar originais e registrar toda normalização/reparação root em cópia, com ledger de mudanças, hashes e tamanhos recalculados. Schema válido não prova veracidade da claim nem aceite de gate.
+10. usar `reproduced` somente quando um controle executado tiver comando, exit e diagnóstico compatíveis com a claim. Leitura estática sem execução usa `static_candidate`, mesmo quando o mecanismo parecer óbvio; relatório de worker não é reprodução.
+11. antes de alterar gate ou shell, exercitar a semântica exata com códigos de saída distintos para cada etapa. Uma atribuição executada somente no ramo de falha não pode ser descrita como se fosse executada também no ramo de sucesso.
+12. distinguir estado vigente de histórico cronológico, confirmar a existência do arquivo no inventário rastreado antes de propor remoção e conferir comportamento de API na toolchain efetiva. Catálogos de boas práticas são hipóteses secundárias, não autoridade.
 
 ---
 
@@ -1573,6 +1576,13 @@ Parar quando uma regra negativa não for detectada, o log não puder ser localiz
 3. Se revisão semântica falha → Cricket devolve a Fox com diagnóstico; Fox corrige e reentrega.
 4. Se revisão passa → Cricket executa commits temáticos.
 
+### Code Review e Judge nativos
+
+- `/review` e `/judge` são comandos **solo**, executados pelo usuário em uma sessão finalizada, sem prompt anexado. Eles criam sessões forked; `jcode run "/review ..."` ou `jcode run "/judge ..."` não é substituto aceito.
+- Antes de terminar a resposta que precede o comando, o root informa o pacote consolidado, os findings ainda abertos e o caminho dos artefatos. Se o passo manual não ocorrer, o papel permanece `PENDING-HUMAN`, sem fallback silencioso para outro modelo.
+- Depois do comando, o root confirma a sessão forked e o modelo pelos metadados, preserva o relatório bruto e reconcilia cada finding com a tree e as evidências atuais. Review e Judge não substituem gates, revisão semântica root nem aceite de produção.
+- Review é condicionado a diff material; Judge ocorre uma vez por decisão final ou disputa material. Não repetir qualquer um sem mudança de insumo ou finding novo.
+
 ### Commits (Cricket)
 
 **Regras**:
@@ -2176,6 +2186,7 @@ Casos sanitizados observados nas sessões. As fontes duráveis são `docs/SESSIO
 | E25 | Artefato declarado ausente por lookup ou diretório incorreto | Enumerar o diretório canônico, fazer controle positivo e registrar stat/hash antes de alegar ausência | Inventário dos quatro relatórios com hashes e validação root independente | `docs/SESSION_LEARNINGS.md` lição 33 e CP-14 |
 | E26 | Auditoria ad hoc mistura playbook, lições e `justfile` | Separar contextos e cobrir repositório real com falsos positivos e negativos | `scripts/coordination_playbook_repo_audit.py` e `test_repo_audit.py` | `scripts/coordination_playbook_repo_audit.py` e CP-21 |
 | E27 | `assertIs` entre módulos recarregados por suítes distintas | Assertar registro e contrato `validate()`, não identidade de objeto entre imports | Suíte combinada no mesmo processo | `docs/SESSION_LEARNINGS.md` lição 31 e `tests/fixtures/coordination_playbook/test_adversarial.py` |
+| E28 | Leitura estática marcada como `reproduced`, versão histórica tratada como vigente ou arquivo scratch tratado como rastreado | Exigir controle executado para `reproduced`; testar shell com exits distintos e conferir tabela vigente, inventário rastreado e API da toolchain | Códigos 23/17/17 refutam a alegação de falha mascarada; tabela vigente e controle positivo de lookup impedem patch indevido | `docs/SESSION_LEARNINGS.md` lição 34 e `.jcode/skills/dfir-verify/SKILL.md` |
 
 ## Como usar a matriz
 

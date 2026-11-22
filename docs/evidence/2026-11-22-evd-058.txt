@@ -1,0 +1,131 @@
+EVD-058 - RUSTSEC-2026-0592: atualização mínima de url e gates locais
+=====================================================================
+
+Status: PASS no escopo local Linux x86_64 de supply chain, Gate Rust, E2E e
+gate documental. As execuções documentais inicial e final estão na seção 6.
+Não é aceite final do release nem verificação de Windows, aarch64, incidente
+real ou fluxo nativo completo.
+
+Executed-at: 2026-11-22T21:09:38Z..21:58:04Z para os gates finais e documentação.
+O Before, o grafo reverso, o dry-run e a atualização do lock ocorreram antes
+na mesma data, com logs próprios.
+Commit-tree: os gates finais rodaram na árvore de trabalho baseada em
+ cc091f53c007bf7062837da8c8ad020a291b5f39, com a atualização mínima do lock e
+ as mudanças documentais de processo pendentes. Sem nova edição, o código e o
+ lock foram commitados em 8c11e8669446be0726e77bd1977d64ca4fc781b5
+ (tree 831d1638ff4d00ba40a8b547a7a9d4facc7c56e7). A documentação e esta
+ evidência formam o commit documental seguinte.
+Toolchain: rustc/cargo 1.100.0; nextest 0.9.151; CPython 3.13.5;
+ cargo-audit 0.22.2; cargo-deny 0.20.2.
+Ambiente: Linux x86_64, Debian 13; fixture sanitizada versionada; sandbox
+ required no E2E; nenhum dado de caso ou segredo usado.
+
+1. Before reproduzido
+---------------------
+
+Comando: just supply-chain, dentro da validação sequencial 95380842yr.
+Log: integration/validation.log; SHA-256
+ 5df8520b5a206bb600d88946ac962ad8d81729fafbcceff74fcf30a138bf05d4.
+A validação total terminou com exit 1. Doc-gate e a suíte do playbook passaram,
+mas cargo audit --no-yanked encontrou uma vulnerabilidade:
+  Crate: url 2.5.8
+  ID: RUSTSEC-2026-0592
+  Título: Stack overflow in Url::origin() on nested blob: URLs
+  Solução indicada: Upgrade to >=2.5.9
+O banco carregou 1560 advisories e varreu 621 dependências. Houve também o aviso
+permitido já documentado RUSTSEC-2025-0141 (bincode). cargo deny continuou depois
+do audit e terminou com advisories/bans/licenses/sources ok; a recipe preservou
+a falha do audit. O Before não foi reescrito como PASS.
+
+2. Grafo, dry-run e mudança mínima
+----------------------------------
+
+cargo tree --locked -i url mostrou url 2.5.8 alcançado por sqlx-core/sqlx-sqlite
+e por webbrowser/egui-winit/eframe, sem caminho direto novo no manifest.
+cargo update -p url --precise 2.5.9 --dry-run previu somente:
+  url 2.5.8 -> 2.5.9
+  form_urlencoded 1.2.2 -> 1.2.3
+Log: integration/url-dependency-analysis.log; SHA-256
+ 6b8e2da28d215d19721b3c4fb4214eeea97ea35da0e68dd22d9cae430f2c3363.
+
+Comando efetivo: cargo update -p url --precise 2.5.9.
+Log: integration/url-lock-update.log; SHA-256
+ cfd340838169382a2c91d3244c34b058690acbb19bcf3d888338c98c428c3525.
+O diff alterou somente versão/checksum desses dois pacotes no Cargo.lock.
+Nenhum manifest, ignore de advisory, código Rust ou regra de detecção mudou.
+Novo SHA-256 do Cargo.lock:
+ a17158bcaa3eb0cadc17e80098c206a91b0515e213829542b336dfedbc11b0cc.
+
+cargo metadata --locked --format-version 1 confirmou 621 pacotes, 3 do workspace,
+com url 2.5.9 e form_urlencoded 1.2.3, ambos MIT OR Apache-2.0 e crates.io.
+Artefato: integration/url-license-metadata.json; SHA-256
+ 079241b01cc34994024069b8259b4eecbbd278a9185ba43dab517599fd39e650.
+
+3. Supply chain After
+---------------------
+
+Comando: just supply-chain.
+Log integrado: integration/dependency-gates.log; SHA-256
+ 006929af89bb24e8e97ae872b3cf218b940ac68fb0c0c0dab7f3bdc82bfaf392.
+Exit: 0 para a sequência completa; SUPPLY_CHAIN_SENTINEL_PASS presente.
+cargo audit --no-yanked: 1560 advisories, 621 dependências, nenhuma
+vulnerabilidade e um aviso permitido de bincode. RUSTSEC-2026-0592 não aparece
+no After. cargo deny --workspace check: advisories/bans/licenses/sources ok.
+As duplicatas impressas pelo deny são avisos informativos do grafo, não falha.
+Nenhuma exceção ou waiver novo foi adicionado.
+
+4. Gate Rust e E2E After
+------------------------
+
+Comando: just verify, sequencialmente após supply-chain.
+Exit: 0; VERIFY_SENTINEL_PASS presente no mesmo log.
+Pós-condições: validate-fase0 0 erros/0 avisos; cargo fmt --check, check
+--workspace --locked --all-targets, nextest, doc-tests e clippy -D warnings
+verdes. Nextest: 669 passed/1 skipped. Nenhum teste ou lint foi desabilitado.
+
+Comando: just e2e tests/fixtures/senai-demo.evtx, sequencialmente após verify.
+Exit: 0; E2E_SENTINEL_PASS e DEPENDENCY_GATES_PASS presentes.
+Resultado: 123/123 etapas passaram, incluindo importação, análise real, regras,
+entregáveis, assinatura/adulteração, determinismo, custódia e descarte.
+Nenhum export ou banco operacional entrou no Git.
+
+5. Inventário e rastreabilidade
+-------------------------------
+
+LICENSES_THIRD_PARTY.md mantém 621 pacotes e atualiza somente as duas versões e
+o hash do lock; as expressões SPDX declaradas não mudaram. A conferência é de
+metadata declarada, não parecer jurídico; SBOM permanece fora do escopo.
+A RTM, o backlog e os gates vivos apontam para esta evidência sem apagar os
+registros históricos de EVD-056/EVD-057.
+
+6. Gate documental
+------------------
+
+Execução inicial, 2026-11-22T21:51:58Z..21:52:06Z:
+  just doc-gate
+  just test-coordination-playbook-all
+Log: integration/document-gates-initial.log; SHA-256
+ 51f4eda9e83ed69b4bee3aa92f2fab9a2f31b59430f085d2e10e6bf59293ee4a.
+Exit: 0. Fase 0 com 0 erros/0 avisos; documentation gate, coordination playbook
+gate e repo audit PASS; 73/73 testes do doc-gate e 75/75 na suíte ampliada.
+As cópias da especificação são idênticas e git diff --check terminou limpo.
+
+Confirmação final, 2026-11-22T21:58:01Z..21:58:04Z:
+  just doc-gate
+Log: integration/document-gates-final.log; SHA-256
+ 01af1cd357a05ec768fbb1cbd27f306b6ebd3db59de68eb4c183b45200c46801.
+Exit: 0. Fase 0 com 0 erros/0 avisos; documentation gate, coordination playbook
+gate e repo audit PASS; 73/73 testes. Cópias idênticas e diff-check limpo.
+A suíte ampliada de 75 testes não foi repetida porque playbook e testes não
+mudaram entre as duas execuções; seu resultado inicial permanece válido.
+
+7. Limites
+----------
+
+Windows, Linux aarch64, incidente real, seletor nativo completo e desempenho de
+repaint não foram executados ou promovidos. EVD-050 permanece BLOCKED. A revisão
+estática profunda não prova ausência de todos os defeitos. Não houve push deste
+commit nesta evidência.
+
+Artefatos externos citados ficam em:
+  /home/jose/.jcode/quality-runs/rust-deep-audit-2026-11-22/integration/

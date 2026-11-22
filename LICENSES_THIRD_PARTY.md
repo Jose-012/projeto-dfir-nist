@@ -11,6 +11,8 @@ As dependências devem ser inventariadas a partir do `Cargo.lock` e do inventár
 
 > **Atualização 2026-11-20 (F1-40):** inventário regenerado por `cargo metadata --locked --format-version 1` com cargo/rustc 1.100.0: 621 pacotes, 3 do workspace e 618 de terceiros; SHA-256 do `Cargo.lock` `09116593a6ccba436852821fbbfc09aa55b55a7fefb1784be376587256db2304`. A mudança adiciona `ed25519-dalek 3.0.0` e sua árvore de assinatura Ed25519. Metadata e lock têm as mesmas identidades de pacote. SBOM permanece fora do escopo (ADR-0028).
 
+> **Atualização 2026-11-22 (RUSTSEC-2026-0592):** `cargo metadata --locked --format-version 1` com cargo/rustc 1.100.0 confirma 621 pacotes, 3 do workspace e 618 de terceiros; SHA-256 do `Cargo.lock` `a17158bcaa3eb0cadc17e80098c206a91b0515e213829542b336dfedbc11b0cc`. A correção de `url 2.5.8` para `2.5.9` atualizou também `form_urlencoded 1.2.2` para `1.2.3`; ambos permanecem `MIT OR Apache-2.0`. Nenhum pacote ou expressão SPDX foi adicionado ou removido. SBOM permanece fora do escopo (ADR-0028).
+
 ## Ferramentas explicitamente rejeitadas como componentes do produto
 
 **Hayabusa** e **Chainsaw** não fazem parte do produto e não devem ser adicionados a `Cargo.toml`, inventário de componentes, fixtures ou pacotes distribuídos sem uma nova decisão arquitetural e revisão jurídica aplicável ao modelo efetivo de distribuição.
@@ -253,7 +255,7 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | foreign-types | 0.5.0 | MIT/Apache-2.0 | crates.io |
 | foreign-types-macros | 0.2.4 | MIT/Apache-2.0 | crates.io |
 | foreign-types-shared | 0.3.1 | MIT/Apache-2.0 | crates.io |
-| form_urlencoded | 1.2.2 | MIT OR Apache-2.0 | crates.io |
+| form_urlencoded | 1.2.3 | MIT OR Apache-2.0 | crates.io |
 | funty | 2.0.0 | MIT | crates.io |
 | futures | 0.3.34 | MIT OR Apache-2.0 | crates.io |
 | futures-channel | 0.3.34 | MIT OR Apache-2.0 | crates.io |
@@ -584,7 +586,7 @@ Crate, versão, licença declarada e origem, ordenados por nome.
 | unicode-segmentation | 1.13.3 | MIT OR Apache-2.0 | crates.io |
 | unicode-width | 0.2.3 | MIT OR Apache-2.0 | crates.io |
 | unty | 0.0.4 | MIT OR Apache-2.0 | crates.io |
-| url | 2.5.8 | MIT OR Apache-2.0 | crates.io |
+| url | 2.5.9 | MIT OR Apache-2.0 | crates.io |
 | utf16-simd | 0.2.0 | MIT OR Apache-2.0 | crates.io |
 | utf8_iter | 1.1.0 | Apache-2.0 OR MIT | crates.io |
 | utf8parse | 0.2.2 | Apache-2.0 OR MIT | crates.io |

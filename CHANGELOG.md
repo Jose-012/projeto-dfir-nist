@@ -1,6 +1,13 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-22 - auditoria Rust e atualização de `url` (`EVD-058`)
+
+- A auditoria profunda cobriu 89 arquivos Rust e 55.130 linhas com três lanes e triagem root. Não confirmou novo defeito funcional no código; hipóteses sobre `just supply-chain`, versões históricas e `fs::rename` foram refutadas por controles antes de qualquer patch.
+- `RUSTSEC-2026-0592` foi reproduzido em `url 2.5.8`. A atualização mínima para `url 2.5.9` e `form_urlencoded 1.2.3` não alterou manifests nem adicionou exceções. O inventário conserva 621 pacotes e as mesmas licenças declaradas.
+- Gates After: supply-chain sem vulnerabilidades, `just verify` com 669 passed/1 skipped, fmt/check/doc-tests/Clippy verdes e E2E 123/123. O Before falho e o dry-run foram preservados.
+- Playbook e skills agora distinguem `reproduced` de `static_candidate`, exigem controles com exits distintos e registram a operação solo de `/review` e `/judge`. Não houve aceite de produção nem validação de Windows, aarch64, incidente real ou fluxo nativo completo.
+
 ## Unreleased - 2026-11-20 - cancelamento de jobs e assinatura de entregáveis (`EVD-056`)
 
 - F1-38: migration 0014, estado `CANCELLED`, sinal por job e watcher persistido, kill/recolhimento do engine, indexação/conclusão/auditoria atômicas e comandos na CLI/GUI. Cancelamento entre instâncias encerra o processo sem publicar índice parcial; conclusão tardia preserva o estado terminal.

@@ -1,11 +1,11 @@
 <!-- doc-type: reference | status: current -->
 # Supply-chain gates
 
-## Estado vigente (2026-11-20)
+## Estado vigente (2026-11-22)
 
 > Resumo do estado atual; o histórico cronológico segue abaixo, sem alteração.
 
-- Após a inclusão de `ed25519-dalek 3.0.0` para F1-40, `just supply-chain` passou em Linux x86_64 (`EVD-056`): 1555 advisories carregados, 621 dependências varridas, um aviso permitido de bincode e `advisories/bans/licenses/sources ok`. Nenhuma exceção nova foi necessária.
+- A revisão de 2026-11-22 reproduziu `RUSTSEC-2026-0592` em `url 2.5.8`; a atualização mínima para `url 2.5.9`, acompanhada por `form_urlencoded 1.2.3`, removeu a vulnerabilidade. `just supply-chain` passou em Linux x86_64 (`EVD-058`): 1560 advisories carregados, 621 dependências varridas, um aviso permitido de bincode e `advisories/bans/licenses/sources ok`. Nenhuma exceção nova foi necessária.
 
 - `cargo audit` e `cargo deny --workspace check` foram executados em Linux x86_64 com Rust/Cargo 1.100.0 e estão verdes em `EVD-051`: 1550 advisories carregados, 613 dependências do lock varridas, zero vulnerabilidades e um aviso informativo permitido de bincode; advisories, bans, licenses e sources ok. A parte supply-chain de `EVD-041` ficou `STALE` quando a mesma rotina encontrou oito vulnerabilidades novas de Wasmtime antes desta atualização.
 - O mesmo gate foi repetido no GitHub Actions em `EVD-054` e, após o hardening de disco, em `EVD-055`, na execução 44582760249, com 1550 advisories, 613 dependências, `cargo audit` e `cargo audit --no-yanked` verdes e `cargo deny --workspace check` ok. O CI não elimina a obrigação de revisar advisories novos nem as exceções informativas a cada mudança relevante.
@@ -17,6 +17,7 @@
 | Crate | Versão no lock | Estado e evidência registrados | EVD |
 |---|---|---|---|
 | `ed25519-dalek` | 3.0.0 | assinatura destacada do digest SHA-256 do manifest e verificação offline com a chave pública esperada; `just supply-chain` verde sem exceção nova | `EVD-056` |
+| `url` | 2.5.9 | **`RUSTSEC-2026-0592` resolvido** (`2.5.8` → `2.5.9`); `form_urlencoded 1.2.3` acompanhou a resolução mínima; grafo, dry-run e gates finais registrados | `EVD-058` |
 | `wasmtime` | 48.0.9 | os oito advisories antigos foram resolvidos por 48.0.8; a revisão de 2026-11-19 encontrou `RUSTSEC-2026-0566`..`RUSTSEC-2026-0573` em 48.0.8 e a atualização mínima para 48.0.9 os removeu, sem trocar `yara-x` | `EVD-051` |
 | `yara-x` | 1.22.1 | atualizado de `1.20.0`; destrava `wasmtime >= 48`; repetir `cargo test --workspace` e e2e a cada atualização (seccomp/Landlock validados contra o JIT de cada versão) | `[PENDING-HUMAN]` |
 | `ctutils` | 0.4.7 | `RUSTSEC-2026-0385` resolvido (`0.4.2` → `0.4.7`) | `[PENDING-HUMAN]` |

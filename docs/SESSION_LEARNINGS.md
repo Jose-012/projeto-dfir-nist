@@ -279,6 +279,13 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** antes de declarar ausência, enumerar o diretório canônico da entrega, fazer controle positivo em um arquivo conhecido e registrar stat/hash dos artefatos encontrados. Separar original, cópia normalizada e cópia root-repair, sem transformar o erro de lookup em falha do worker.
 - **Confirmação:** confirmada nesta sessão em `contract-inventory.log` e `contract-resolution-audit.log`; os quatro originais foram preservados e suas cópias revisadas passaram JSON Schema completo.
 
+### 34. Leitura estática foi marcada como `reproduced` sem controle executado
+
+- **Classe:** erro de método de revisão, rejeitado antes de qualquer patch de produto ou gate.
+- **Fato:** uma lane classificou como reproduzida uma alegação de falha mascarada em `just supply-chain`, mas o controle root com etapas 23/0, 0/17 e 23/17 retornou 23/17/17, preservando a última falha. Na mesma entrega, versões antigas do histórico foram descritas como estado vigente, embora a tabela atual já tivesse os valores resolvidos, e um manifesto de scratch foi tratado como arquivo da raiz do checkout. Um candidato root sobre `fs::rename` também foi rejeitado após conferir a documentação da toolchain 1.100, que substitui o destino.
+- **Prevenção:** CP-14 e `dfir-verify` exigem comando, exit e diagnóstico para `reproduced`, reservam `static_candidate` à leitura e testam shell com códigos distintos. Também exigem separar vigente/histórico, confirmar inventário rastreado e registrar hipóteses rejeitadas. `dfir-change` limita catálogos Rust a hipóteses e exige comportamento da API na toolchain efetiva.
+- **Confirmação:** pendente para a próxima sessão que revisar findings ou aplicar regras externas de Rust. Nesta rodada, os controles citados impediram alterações indevidas em `justfile`, `docs/SUPPLY_CHAIN.md` e `src/gui/preferences.rs`.
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.
