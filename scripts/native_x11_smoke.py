@@ -370,6 +370,7 @@ def main() -> int:
     parser.add_argument("--data-root", required=True)
     parser.add_argument("--results", required=True)
     parser.add_argument("--timeout", type=float, default=45.0)
+    parser.add_argument("--import-method", choices=["manual", "zenity"], default="manual")
     parser.add_argument("--evidence-y", type=int, default=80)
     parser.add_argument("--incidents-y", type=int, default=120)
     parser.add_argument("--import-x", type=int, default=443)
@@ -445,11 +446,34 @@ def main() -> int:
         wait_log(log_path, "native UI screen changed", 8.0, detail="Evidence")
         record("navigate_to_evidence", "PASS")
 
-        focus(app_window.window)
-        click(app_window.window, args.path_x, args.path_y)
-        paste_text(str(fixture))
-        key("Tab")
-        key("space")
+        import_method = "manual_path"
+        if args.import_method == "zenity":
+            import_method = "zenity_ctrl_l"
+            _, dialog_log_offset = read_log(log_path)
+            import_dialog = open_evidence_dialog(app_window, args)
+            focus(import_dialog.window)
+            ctrl_key("l")
+            time.sleep(0.3)
+            paste_text(str(fixture))
+            key("Return")
+            wait_log(
+                log_path,
+                "file dialog finished",
+                args.timeout,
+                offset=dialog_log_offset,
+                detail='"outcome":"path"',
+            )
+            wait_for(
+                lambda: import_dialog.window_id not in {item.window_id for item in windows()},
+                8.0,
+                "fechamento do seletor após escolha",
+            )
+        else:
+            focus(app_window.window)
+            click(app_window.window, args.path_x, args.path_y)
+            paste_text(str(fixture))
+            key("Tab")
+            key("space")
         imported = wait_for(
             lambda: next(
                 iter(db_rows(db_path, "SELECT id,format,size_bytes,status FROM evidence")),
@@ -463,12 +487,14 @@ def main() -> int:
         record(
             "import_fixture",
             "PASS",
-            method="manual_path",
+            method=import_method,
             evidence_id=imported[0],
             format=imported[1],
             size_bytes=imported[2],
             evidence_status=imported[3],
         )
+        if args.import_method == "zenity":
+            focus(app_window.window)
         time.sleep(0.8)
 
         click(app_window.window, args.analyze_x, args.analyze_y)
