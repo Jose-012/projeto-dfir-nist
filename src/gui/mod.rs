@@ -40,6 +40,42 @@ use theme::{BaseTheme, ThemePreset};
 /// O tom anterior `(200, 60, 60)` tinha somente 3,42:1 no painel padrão.
 pub(crate) const DANGER_TEXT_COLOR: egui::Color32 = egui::Color32::from_rgb(240, 110, 110);
 
+/// Formata somente a apresentação de timestamps UTC, sem alterar dados forenses.
+fn format_timestamp(value: &str) -> String {
+    let Some((date, time_and_zone)) = value.split_once('T') else {
+        return value.to_owned();
+    };
+    let Some(time) = time_and_zone
+        .strip_suffix('Z')
+        .or_else(|| time_and_zone.strip_suffix("+00:00"))
+    else {
+        return value.to_owned();
+    };
+    let time = time.split_once('.').map_or(time, |(seconds, _)| seconds);
+    let date_parts = date.as_bytes();
+    let time_parts = time.as_bytes();
+    let valid_shape = date_parts.len() == 10
+        && time_parts.len() == 8
+        && date_parts[4] == b'-'
+        && date_parts[7] == b'-'
+        && time_parts[2] == b':'
+        && time_parts[5] == b':'
+        && date_parts
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| ![4, 7].contains(index))
+            .all(|(_, byte)| byte.is_ascii_digit())
+        && time_parts
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| ![2, 5].contains(index))
+            .all(|(_, byte)| byte.is_ascii_digit());
+    if !valid_shape {
+        return value.to_owned();
+    }
+    format!("{date} {time} UTC")
+}
+
 pub fn launch(config: AppConfig, paths: StoragePaths) -> Result<(), AppError> {
     let preference_store = PreferenceStore::new(&config.data_root);
     let (preferences, preference_notice) = match preference_store.load() {
@@ -514,7 +550,6 @@ impl DfirApp {
                     ui.label(egui::RichText::new("DFIR").strong());
                 } else {
                     ui.heading("DFIR");
-                    ui.label(egui::RichText::new("Local · offline · operador único").weak());
                 }
                 ui.separator();
                 self.nav_item(ui, Screen::Evidence, AppIcon::Evidence, compact);
@@ -1065,7 +1100,7 @@ pub(crate) mod test_harness {
 
 #[cfg(test)]
 mod presentation_tests {
-    use super::DANGER_TEXT_COLOR;
+    use super::{DANGER_TEXT_COLOR, format_timestamp};
 
     fn luminance(color: egui::Color32) -> f32 {
         fn channel(value: u8) -> f32 {
@@ -1088,6 +1123,36 @@ mod presentation_tests {
             contrast >= 4.5,
             "contraste insuficiente para texto normal: {contrast:.2}:1"
         );
+    }
+
+    #[test]
+    fn utc_timestamps_drop_fraction_and_rfc3339_separators() {
+        assert_eq!(
+            format_timestamp("2026-11-23T12:34:56.123456789Z"),
+            "2026-11-23 12:34:56 UTC"
+        );
+        assert_eq!(
+            format_timestamp("2026-11-23T12:34:56Z"),
+            "2026-11-23 12:34:56 UTC"
+        );
+        assert_eq!(
+            format_timestamp("2026-11-23T12:34:56+00:00"),
+            "2026-11-23 12:34:56 UTC"
+        );
+    }
+
+    #[test]
+    fn timestamp_formatting_preserves_unrecognized_values() {
+        for value in [
+            "",
+            "não informado",
+            "2026-11-23 12:34:56",
+            "2026-11-23T12:34:56-03:00",
+            "2026-11-23T12:34Z",
+            "2026/11/23T12:34:56Z",
+        ] {
+            assert_eq!(format_timestamp(value), value);
+        }
     }
 }
 
@@ -1143,6 +1208,22 @@ mod navigation_tests {
         harness.run();
         harness.get_by_label("Evidências");
         harness.get_by_label("Incidentes");
+    }
+
+    #[test]
+    fn navigation_omits_rejected_subtitle() {
+        let (backend, _commands) = Backend::for_test();
+        let app = DfirApp::new(backend);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1280.0, 820.0))
+            .build_ui_state(|ui, app: &mut DfirApp| app.navigation(ui), app);
+        harness.step();
+        harness.get_by_label("Evidências");
+        assert!(
+            harness
+                .query_by_label("Local · offline · operador único")
+                .is_none()
+        );
     }
 
     #[test]
