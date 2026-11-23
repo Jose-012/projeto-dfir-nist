@@ -3,7 +3,8 @@
 
 As ações são injetadas por XTEST, mas o aceite usa pós-condições independentes:
 mudança real de tela no log sanitizado, janela Zenity por título/PID, evidência e
-jobs no SQLite isolado e página de timeline carregada pelo backend da UI.
+jobs no SQLite isolado, página de timeline carregada pelo backend da UI e, quando
+solicitado, geometria exata e ausência de erros X11 após resize.
 
 O data-root precisa estar vazio. Nenhum arquivo, evento ou nome de evidência é
 impresso. Somente IDs, contagens, status e o hash da fixture entram no relatório.
@@ -132,6 +133,28 @@ def absolute_origin(window) -> tuple[int, int]:
         y += geometry.y
         current = current.query_tree().parent
     raise RuntimeError("window ancestry is too deep")
+
+
+def client_geometry(window) -> tuple[int, int]:
+    geometry = window.get_geometry()
+    return geometry.width, geometry.height
+
+
+def resize_window(window, width: int, height: int, x_errors: list) -> tuple[int, int]:
+    before = len(x_errors)
+    window.configure(width=width, height=height)
+    D.sync()
+
+    def requested_geometry():
+        current = client_geometry(window)
+        return current if current == (width, height) else None
+
+    actual = wait_for(requested_geometry, 8.0, f"geometria {width}x{height}")
+    time.sleep(0.5)
+    D.sync()
+    if len(x_errors) != before:
+        raise RuntimeError(f"erro X11 durante resize {width}x{height}: {x_errors[before:]}")
+    return actual
 
 
 def click(window, x: int, y: int) -> None:
@@ -371,6 +394,7 @@ def main() -> int:
     parser.add_argument("--results", required=True)
     parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument("--import-method", choices=["manual", "zenity"], default="manual")
+    parser.add_argument("--exercise-resize", action="store_true")
     parser.add_argument("--evidence-y", type=int, default=80)
     parser.add_argument("--incidents-y", type=int, default=120)
     parser.add_argument("--import-x", type=int, default=443)
@@ -395,6 +419,19 @@ def main() -> int:
     results: dict[str, dict] = {}
     proc = None
     dialog_pid = None
+    x_errors = []
+    if args.exercise_resize:
+        def capture_x_error(error, _request) -> None:
+            x_errors.append(
+                {
+                    "type": type(error).__name__,
+                    "code": int(getattr(error, "code", -1)),
+                    "request_code": int(getattr(error, "request_code", -1)),
+                    "minor_code": int(getattr(error, "minor_code", -1)),
+                }
+            )
+
+        D.set_error_handler(capture_x_error)
 
     def record(name: str, status: str, **details) -> None:
         results[name] = {"status": status, **details}
@@ -445,6 +482,22 @@ def main() -> int:
         click(app_window.window, 80, args.evidence_y)
         wait_log(log_path, "native UI screen changed", 8.0, detail="Evidence")
         record("navigate_to_evidence", "PASS")
+
+        if args.exercise_resize:
+            actual = resize_window(app_window.window, 960, 600, x_errors)
+            record("resize_compact", "PASS", requested=[960, 600], actual=list(actual))
+            _, offset = read_log(log_path)
+            click(app_window.window, 80, args.incidents_y)
+            wait_log(log_path, "native UI screen changed", 8.0, offset=offset, detail="Incidents")
+            record("compact_navigate_incidents", "PASS")
+            _, offset = read_log(log_path)
+            click(app_window.window, 80, args.evidence_y)
+            wait_log(log_path, "native UI screen changed", 8.0, offset=offset, detail="Evidence")
+            record("compact_navigate_evidence", "PASS")
+            actual = resize_window(app_window.window, 1024, 640, x_errors)
+            record("resize_medium", "PASS", requested=[1024, 640], actual=list(actual))
+            actual = resize_window(app_window.window, 1280, 820, x_errors)
+            record("resize_wide", "PASS", requested=[1280, 820], actual=list(actual))
 
         import_method = "manual_path"
         if args.import_method == "zenity":
@@ -566,6 +619,27 @@ def main() -> int:
             raise RuntimeError("cancelar o seletor alterou o catálogo de evidências")
         record("selector_open_cancel", "PASS", dialog_pid=dialog_pid, evidence_count=1)
         dialog_pid = None
+        if args.exercise_resize:
+            D.sync()
+            if x_errors:
+                raise RuntimeError(f"erros X11 acumulados no fluxo com resize: {x_errors}")
+            if proc.poll() is not None:
+                raise RuntimeError("app encerrou durante o fluxo com resize")
+            app_output = results_path.with_suffix(".app-output.log").read_text(
+                encoding="utf-8", errors="replace"
+            ).lower()
+            badmatch_logged = "badmatch" in app_output
+            panic_logged = "panic" in app_output
+            if badmatch_logged or panic_logged:
+                raise RuntimeError("diagnóstico BadMatch/panic no fluxo com resize")
+            record(
+                "resize_diagnostics",
+                "PASS",
+                x_error_count=len(x_errors),
+                badmatch_logged=badmatch_logged,
+                panic_logged=panic_logged,
+                process_alive=True,
+            )
         record("flow", "PASS")
 
     except Exception as error:
