@@ -8,7 +8,7 @@ use super::detection::DetectionState;
 use super::file_dialog::{FilePicker, Picked, Request};
 use super::lineage::LineageState;
 use super::timeline::{PAGE_SIZE, TimelineView};
-use super::{Loadable, str_field};
+use super::{Loadable, format_timestamp, str_field};
 use crate::persistence::audit::CustodyEntry;
 use crate::service::lineage::{LineageScope, LineageView};
 use crate::service::provenance::EvidenceProvenance;
@@ -535,7 +535,11 @@ impl EvidenceState {
         );
         ui.horizontal(|ui| {
             ui.heading("Evidência");
-            if ui.button("Atualizar").clicked() {
+            if ui
+                .button("Atualizar")
+                .on_hover_text("Recarrega a lista de evidências do banco de dados")
+                .clicked()
+            {
                 self.list = Loadable::Loading;
                 backend.send(Command::ListEvidence);
             }
@@ -543,6 +547,9 @@ impl EvidenceState {
                 .add_enabled(
                     !self.importing && !self.picker.is_busy(),
                     egui::Button::new("Importar evidência…"),
+                )
+                .on_hover_text(
+                    "Abre o seletor nativo de arquivo e importa o arquivo de evidência escolhido",
                 )
                 .clicked()
             {
@@ -577,6 +584,7 @@ impl EvidenceState {
             let can_import_typed = !self.importing && !self.manual_path.trim().is_empty();
             let clicked = ui
                 .add_enabled(can_import_typed, egui::Button::new("Importar caminho"))
+                .on_hover_text("Importa o arquivo no caminho digitado acima")
                 .clicked();
             if can_import_typed && (clicked || submitted) {
                 let path = PathBuf::from(self.manual_path.trim());
@@ -715,8 +723,9 @@ impl EvidenceState {
                             ui.label(&item.status);
                         });
                         row.col(|ui| {
-                            ui.add(egui::Label::new(&item.imported_at).truncate())
-                                .on_hover_text(&item.imported_at);
+                            let imported = format_timestamp(&item.imported_at);
+                            ui.add(egui::Label::new(&imported).truncate())
+                                .on_hover_text(&imported);
                         });
                         row.col(|ui| {
                             let treatment = treatment_label(item);
@@ -730,6 +739,9 @@ impl EvidenceState {
                                 if item.format == "evtx"
                                     && ui
                                         .add_enabled(!analyzing, egui::Button::new("Analisar EVTX"))
+                                        .on_hover_text(
+                                            "Inicia a análise de timeline de eventos EVTX desta evidência",
+                                        )
                                         .clicked()
                                 {
                                     self.analyzing.insert(item.id.clone());
@@ -761,6 +773,7 @@ impl EvidenceState {
                                 }
                                 if ui
                                     .add_enabled(!analyzing, egui::Button::new("Analisar YARA"))
+                                    .on_hover_text("Inicia uma varredura YARA nesta evidência")
                                     .clicked()
                                 {
                                     self.analyzing.insert(item.id.clone());
@@ -772,9 +785,9 @@ impl EvidenceState {
                                 if analyzing {
                                     let cancelling = self.cancelling.contains(&item.id);
                                     if ui
-                                        .add_enabled(
-                                            !cancelling,
-                                            egui::Button::new("Cancelar análise"),
+                                        .add_enabled(!cancelling, egui::Button::new("Cancelar análise"))
+                                        .on_hover_text(
+                                            "Cancela a análise em andamento nesta evidência",
                                         )
                                         .clicked()
                                     {
@@ -788,16 +801,26 @@ impl EvidenceState {
                                 }
                                 if self.pending_destroy.as_deref() == Some(item.id.as_str()) {
                                     ui.label("Confirmar?");
-                                    if ui.button("Sim").clicked() {
+                                    if ui.button("Sim").on_hover_text(
+                                        "Confirma o descarte do arquivo de evidência e registra a destruição na cadeia de custódia; o registro de custódia é mantido",
+                                    )
+                                    .clicked()
+                                    {
                                         self.pending_destroy = None;
                                         self.destroying.insert(item.id.clone());
                                         backend.send(Command::DestroyEvidence(item.id.clone()));
                                     }
-                                    if ui.button("Cancelar").clicked() {
+                                    if ui.button("Cancelar").on_hover_text(
+                                        "Cancela a destruição prevista para esta evidência",
+                                    )
+                                    .clicked() {
                                         self.pending_destroy = None;
                                     }
                                 } else if ui
                                     .add_enabled(!destroying, egui::Button::new("Destruir"))
+                                    .on_hover_text(
+                                        "Marca a evidência para descarte; exige confirmação antes de descartar o arquivo",
+                                    )
                                     .clicked()
                                 {
                                     self.pending_destroy = Some(item.id.clone());
@@ -942,7 +965,11 @@ impl EvidenceState {
                     .response
                     .on_hover_text("Incidente ao qual vincular a evidência");
                 ui.horizontal(|ui| {
-                    if ui.button("Vincular ao incidente").clicked() {
+                    if ui
+                        .button("Vincular ao incidente")
+                        .on_hover_text("Vincula esta evidência ao incidente selecionado acima")
+                        .clicked()
+                    {
                         self.pending_link = Some((evidence_id.to_string(), chosen.clone()));
                         backend.send(Command::LinkEvidenceToIncident {
                             evidence_id: evidence_id.to_string(),
@@ -1006,7 +1033,8 @@ impl EvidenceState {
                                         ui.label(&entry.actor);
                                     });
                                     row.col(|ui| {
-                                        ui.label(&entry.timestamp);
+                                        let quando = format_timestamp(&entry.timestamp);
+                                        ui.label(quando);
                                     });
                                     row.col(|ui| {
                                         ui.label(&entry.reason);
@@ -1763,6 +1791,141 @@ mod provenance_ui_tests {
         harness.get_by_label("Tratamento");
         harness.get_by_label("analisada automaticamente");
         harness.get_by_label("somente preservada (sem análise)");
+    }
+
+    #[test]
+    fn imported_at_is_shown_formatted_without_raw_rfc3339_in_table_cell_and_hover() {
+        let (backend, _commands) = Backend::for_test();
+        let state = EvidenceState {
+            list: Loadable::Ready(vec![evidence("ev-1", "Security.evtx", "evtx")]),
+            ..EvidenceState::default()
+        };
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.run();
+        // Apresentação legível (AAAA-MM-DD HH:MM:SS UTC).
+        harness.get_by_label("2026-10-01 10:00:00 UTC");
+        // Nenhuma célula nem tooltip exibe o RFC3339 bruto.
+        assert!(
+            harness
+                .query_by_label("2026-10-01T10:00:00+00:00")
+                .is_none(),
+            "o RFC3339 bruto não deve aparecer na tabela: {harness:?}"
+        );
+    }
+
+    #[test]
+    fn custody_timestamp_is_shown_formatted_without_raw_rfc3339() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = EvidenceState {
+            list: Loadable::Ready(vec![evidence("ev-1", "Security.evtx", "evtx")]),
+            selected: Some("ev-1".into()),
+            ..EvidenceState::default()
+        };
+        state.on_custody_loaded(
+            "ev-1",
+            Ok(vec![crate::persistence::audit::CustodyEntry {
+                sequence: 1,
+                entry_id: "ce-1".into(),
+                evidence_id: "ev-1".into(),
+                action: "IMPORTED".into(),
+                actor: "operador".into(),
+                timestamp: "2026-11-15T00:00:00Z".into(),
+                reason: "importação inicial".into(),
+                metadata: serde_json::json!({}),
+                previous_entry_hash: None,
+                entry_hash: "ab".repeat(32),
+            }]),
+        );
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.run();
+        harness
+            .get_by_label("Vínculo com incidente e custódia (F1-19/F1-24)")
+            .click();
+        harness.run();
+        harness
+            .get_by_label("Cadeia de custódia (somente leitura)")
+            .click();
+        harness.run();
+        harness.get_by_label("2026-11-15 00:00:00 UTC");
+        assert!(
+            harness.query_by_label("2026-11-15T00:00:00Z").is_none(),
+            "o RFC3339 bruto não deve aparecer na custódia: {harness:?}"
+        );
+    }
+
+    #[test]
+    fn evidence_actions_have_action_specific_tooltips() {
+        let (backend, _commands) = Backend::for_test();
+        let state = EvidenceState {
+            list: Loadable::Ready(vec![evidence("ev-1", "Security.evtx", "evtx")]),
+            ..EvidenceState::default()
+        };
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.run();
+        // Tooltips específicos, não genéricos que repetem o rótulo.
+        harness.get_by_label("Analisar EVTX");
+        harness.get_by_label("Analisar YARA");
+        harness.get_by_label("Destruir");
+        harness.get_by_label("Detectar");
+    }
+
+    #[test]
+    fn evidence_action_tooltips_are_descriptive_not_label_repeats() {
+        let (backend, _commands) = Backend::for_test();
+        let state = EvidenceState {
+            list: Loadable::Ready(vec![evidence("ev-1", "Security.evtx", "evtx")]),
+            ..EvidenceState::default()
+        };
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.run();
+
+        for (label, expected) in [
+            (
+                "Analisar EVTX",
+                "Inicia a análise de timeline de eventos EVTX desta evidência",
+            ),
+            ("Analisar YARA", "Inicia uma varredura YARA nesta evidência"),
+            (
+                "Destruir",
+                "Marca a evidência para descarte; exige confirmação antes de descartar o arquivo",
+            ),
+            (
+                "Detectar",
+                "Roda as regras de detecção e cria candidatos para revisão",
+            ),
+        ] {
+            harness.get_by_label(label).hover();
+            harness.run();
+            assert!(
+                harness.query_all_by_label(expected).count() > 0,
+                "tooltip descritivo ausente para {label:?}: esperado '{expected}'"
+            );
+            // O tooltip não deve se limitar a repetir o rótulo do botão.
+            assert!(
+                expected != label,
+                "tooltip de {label:?} repete o rótulo em vez de descrever a ação"
+            );
+        }
     }
 
     #[test]

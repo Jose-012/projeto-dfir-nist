@@ -6,6 +6,7 @@
 //! linhas visíveis são desenhadas e só as páginas que faltam são pedidas.
 
 use super::backend::{Backend, Command};
+use super::format_timestamp;
 use crate::service::{JobStatusResponse, TimelineEvent, TimelinePage};
 use egui_extras::{Column, TableBuilder};
 use std::collections::{HashMap, HashSet};
@@ -294,7 +295,9 @@ impl TimelineView {
                             // uniforme mantêm a rolagem virtualizada correta; o
                             // texto completo aparece ao passar o mouse.
                             row.col(|ui| {
-                                ui.add(egui::Label::new(&event.timestamp).truncate());
+                                let timestamp = format_timestamp(&event.timestamp);
+                                ui.add(egui::Label::new(&timestamp).truncate())
+                                    .on_hover_text(&timestamp);
                             });
                             row.col(|ui| {
                                 ui.add(
@@ -421,6 +424,32 @@ mod ui_tests {
             |ui, (view, backend): &mut State| view.show(ui, "ev_1", backend),
             (view, backend),
         )
+    }
+
+    #[test]
+    fn timeline_formats_event_timestamp_without_raw_rfc3339() {
+        let (backend, _commands) = Backend::for_test();
+        let mut view = TimelineView::for_job("job-1");
+        view.on_page(
+            "",
+            0,
+            Ok(Some(TimelinePage::for_test(
+                "job-1",
+                Some(1),
+                0,
+                events(1),
+                vec![],
+            ))),
+        );
+        let mut harness = harness(view, backend);
+        harness.run();
+
+        harness.get_by_label("2026-01-01 00:00:00 UTC");
+        assert!(
+            harness
+                .query_by_label("2026-01-01T00:00:00+00:00")
+                .is_none()
+        );
     }
 
     #[test]

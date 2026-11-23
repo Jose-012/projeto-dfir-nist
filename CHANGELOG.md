@@ -7,6 +7,7 @@
 - `scripts/native_x11_smoke.py` exige pós-condições reais para navegação, importação manual, jobs, timeline e abrir/cancelar Zenity. `EVD-050` tem PASS delimitado em Linux x86_64; o BLOCKED/`BadMatch` histórico foi preservado.
 - `EVD-060` acrescenta seleção real no Zenity com outcome `path` e SQLite, seguida do fluxo completo no commit `370411f`; o modo manual padrão também passou sem regressão.
 - `EVD-061` acrescenta resize 960×600/1024×640/1280×820 com navegação compacta e zero erros X11 no commit `5d3ecae`; fluxo Zenity e regressão manual PASS, divergência de 1 px rejeitada em controle negativo.
+- Evidências, Incidentes, Linhagem e Timeline apresentam timestamps UTC legíveis sem `T`, `Z` ou frações, sem alterar valores persistidos; controles importantes e as 13 abas de incidente explicam sua finalidade, e o descarte deixa explícita a preservação da cadeia de custódia. O subtítulo redundante "Local · offline · operador único" foi removido.
 - `EVD-059`: verify 701 passed/1 skipped, doc-tests/Clippy verdes, E2E 123/123 e doc-gates inicial/final 73/73 no commit `63ac821`. A falha de sccache foi preservada antes da repetição com rustc direto.
 - Outros backends de diálogo, AT-SPI, latência, Windows, Linux aarch64, incidente real, revisão humana e aceite de produção não são promovidos.
 

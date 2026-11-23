@@ -8,7 +8,7 @@
 //! [`crate::service::lineage::LineageView`] por `Command::LineageForResult`.
 
 use super::backend::{Backend, Command};
-use super::{Loadable, error_banner};
+use super::{Loadable, error_banner, format_timestamp};
 use crate::service::lineage::{LineageScope, LineageView, OutgoingRelation};
 
 /// Estado da tela de linhagem.
@@ -127,7 +127,7 @@ fn render_selected(ui: &mut egui::Ui, item: &crate::service::AnalyticalResultRes
         if let Some(job) = &item.analysis_job_id {
             ui.label(format!("Job de análise: {job}"));
         }
-        ui.label(format!("Criado em: {}", item.created_at));
+        ui.label(format!("Criado em: {}", format_timestamp(&item.created_at)));
 
         ui.separator();
         ui.heading("Payload");
@@ -195,7 +195,7 @@ fn render_history(
                     if let Some(supersedes) = &item.supersedes {
                         ui.label(format!("Substitui: {supersedes}"));
                     }
-                    ui.label(format!("Criado em: {}", item.created_at));
+                    ui.label(format!("Criado em: {}", format_timestamp(&item.created_at)));
                     if is_current {
                         ui.colored_label(
                             egui::Color32::from_rgb(80, 160, 80),
@@ -316,6 +316,12 @@ mod ui_tests {
         harness.get_by_label("Tipo: YARA_MATCH");
         harness.get_by_label("Confiança: HIGH");
         harness.get_by_label("Versão da regra/modelo: 1.0");
+        harness.get_by_label("Criado em: 2026-10-01 00:00:00 UTC");
+        assert!(
+            harness
+                .query_by_label("Criado em: 2026-10-01T00:00:00Z")
+                .is_none()
+        );
         // Campos do payload estruturados, não JSON cru.
         harness.get_by_label("rule");
         harness.get_by_label("\"critical\"");

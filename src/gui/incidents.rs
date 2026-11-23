@@ -49,6 +49,28 @@ impl Tab {
             Self::Audit => "Auditoria",
         }
     }
+
+    /// Descrição curta e contextual da aba, usada como tooltip. Não repete o
+    /// rótulo: explica o que o operador encontra ou faz naquele painel.
+    const fn description(self) -> &'static str {
+        match self {
+            Self::Nist => "Perfil NIST CSF do incidente: funções, maturidade e lacunas de fonte.",
+            Self::Attack => "Mapeamento ATT&CK do incidente: táticas e técnicas observadas.",
+            Self::CriticalPath => "Caminho crítico: sequência de estágios do incidente.",
+            Self::Impact => {
+                "Avaliação de impacto: confidencialidade, integridade e disponibilidade."
+            }
+            Self::Findings => "Achados do incidente: vulnerabilidades, causas e gravidade.",
+            Self::Plan => "Plano de resposta: itens de ação, prioridade e esforço.",
+            Self::Gaps => "Lacunas de fonte: evidências ausentes e motivos da ausência.",
+            Self::Iocs => "IOCs do incidente: indicadores de compromisso extraídos.",
+            Self::Recommendations => "Recomendações: ações imediatas e estratégicas.",
+            Self::Deliverables => "Entregáveis: preview e geração de documentos do incidente.",
+            Self::Export => "Exportação: baixar achados e evidências do incidente.",
+            Self::Evidence => "Evidências vinculadas: arquivos preservados e analisados.",
+            Self::Audit => "Trilha de auditoria: eventos, ações e hashes do incidente.",
+        }
+    }
 }
 
 impl IncidentsState {
@@ -204,6 +226,7 @@ impl IncidentsState {
                             !self.creating && !self.new_name.trim().is_empty(),
                             egui::Button::new("Novo"),
                         )
+                        .on_hover_text("Cria o incidente com o nome digitado acima")
                         .clicked()
                     {
                         self.creating = true;
@@ -225,7 +248,11 @@ impl IncidentsState {
                 match &self.list {
                     Loadable::Idle => {
                         ui.label("A lista de incidentes ainda não foi carregada.");
-                        if ui.button("Carregar lista").clicked() {
+                        if ui
+                            .button("Carregar lista")
+                            .on_hover_text("Busca a lista de incidentes salvos no banco")
+                            .clicked()
+                        {
                             self.list = Loadable::Loading;
                             backend.send(Command::ListIncidents);
                         }
@@ -239,7 +266,11 @@ impl IncidentsState {
                     Loadable::Failed(message) => {
                         super::error_banner(ui, message);
                         ui.horizontal(|ui| {
-                            if ui.button("Tentar novamente").clicked() {
+                            if ui
+                                .button("Tentar novamente")
+                                .on_hover_text("Repete a listagem de incidentes após falha")
+                                .clicked()
+                            {
                                 self.list = Loadable::Loading;
                                 backend.send(Command::ListIncidents);
                             }
@@ -296,7 +327,11 @@ impl IncidentsState {
                     Tab::Evidence,
                     Tab::Audit,
                 ] {
-                    if ui.selectable_label(self.tab == tab, tab.label()).clicked() {
+                    if ui
+                        .selectable_label(self.tab == tab, tab.label())
+                        .on_hover_text(tab.description())
+                        .clicked()
+                    {
                         self.tab = tab;
                     }
                 }
@@ -429,7 +464,9 @@ impl IncidentsState {
                                                     ui.label(event.sequence.to_string());
                                                 });
                                                 row.col(|ui| {
-                                                    ui.label(&event.timestamp);
+                                                    ui.label(super::format_timestamp(
+                                                        &event.timestamp,
+                                                    ));
                                                 });
                                                 row.col(|ui| {
                                                     ui.label(&event.action);
@@ -455,21 +492,25 @@ impl IncidentsState {
                                     });
                             });
                         let mut chosen_hash = self.audit_hash_detail.clone().unwrap_or_default();
-                        egui::ComboBox::from_label("Selecionar hash completo da auditoria")
-                            .selected_text(if chosen_hash.is_empty() {
-                                "— selecione um prefixo —".to_string()
-                            } else {
-                                chosen_hash[..12.min(chosen_hash.len())].to_string()
-                            })
-                            .show_ui(ui, |ui| {
-                                for event in events {
-                                    ui.selectable_value(
-                                        &mut chosen_hash,
-                                        event.event_hash.clone(),
-                                        &event.event_hash[..12.min(event.event_hash.len())],
-                                    );
-                                }
-                            });
+                        let hash_picker =
+                            egui::ComboBox::from_label("Selecionar hash completo da auditoria")
+                                .selected_text(if chosen_hash.is_empty() {
+                                    "— selecione um prefixo —".to_string()
+                                } else {
+                                    chosen_hash[..12.min(chosen_hash.len())].to_string()
+                                })
+                                .show_ui(ui, |ui| {
+                                    for event in events {
+                                        ui.selectable_value(
+                                            &mut chosen_hash,
+                                            event.event_hash.clone(),
+                                            &event.event_hash[..12.min(event.event_hash.len())],
+                                        );
+                                    }
+                                });
+                        hash_picker.response.on_hover_text(
+                            "Escolhe um evento e revela o hash integral para verificação",
+                        );
                         if !chosen_hash.is_empty() {
                             self.audit_hash_detail = Some(chosen_hash);
                         }
@@ -971,6 +1012,142 @@ mod tests {
         assert_eq!(
             retries, 1,
             "clicar em Tentar novamente dispara ListIncidents uma vez"
+        );
+    }
+
+    #[test]
+    fn audit_timestamp_uses_formatted_value_not_raw_rfc3339() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        state.tab = Tab::Audit;
+        state.audit = Loadable::Ready(vec![audit_event(1, "EVIDENCE_LINKED_TO_INCIDENT")]);
+        let width = 780.0;
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(width, 600.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        harness.get_by_label("2026-11-15 00:00:00 UTC");
+        assert!(
+            harness.query_by_label("2026-11-15T00:00:00Z").is_none(),
+            "timestamp RFC3339 bruto não deve aparecer na tabela de auditoria"
+        );
+    }
+
+    #[test]
+    fn tabs_show_contextual_descriptions_instead_of_only_labels() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        for tab in [
+            Tab::Nist,
+            Tab::Attack,
+            Tab::CriticalPath,
+            Tab::Impact,
+            Tab::Findings,
+            Tab::Plan,
+            Tab::Gaps,
+            Tab::Iocs,
+            Tab::Recommendations,
+            Tab::Deliverables,
+            Tab::Export,
+            Tab::Evidence,
+            Tab::Audit,
+        ] {
+            let label = tab.label();
+            let description = tab.description();
+            assert_ne!(
+                label, description,
+                "descrição não deve repetir o rótulo: {label:?}"
+            );
+            harness.get_by_label(label).hover();
+            // Painéis em loading mantêm o spinner ativo; avance o tempo da
+            // tooltip sem exigir que a tela fique ociosa.
+            harness.run_steps(4);
+            assert!(
+                harness.query_all_by_label(description).count() > 0,
+                "aba {label:?} deve expor tooltip com descrição {description:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn action_buttons_show_contextual_descriptions() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = IncidentsState::default();
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        harness.get_by_label("Carregar lista").hover();
+        harness.run();
+        assert!(
+            harness
+                .query_all_by_label("Busca a lista de incidentes salvos no banco")
+                .count()
+                > 0,
+            "Carregar lista deve expor tooltip contextual"
+        );
+
+        // "Tentar novamente" só aparece no estado Failed.
+        drop(harness);
+        state.list = Loadable::Failed("indisponível".into());
+        let mut harness2 = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness2.step();
+        harness2.get_by_label("Tentar novamente").hover();
+        harness2.run();
+        assert!(
+            harness2
+                .query_all_by_label("Repete a listagem de incidentes após falha")
+                .count()
+                > 0,
+            "Tentar novamente deve expor tooltip contextual"
+        );
+    }
+
+    #[test]
+    fn audit_hash_selector_shows_contextual_description() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        state.tab = Tab::Audit;
+        state.audit = Loadable::Ready(vec![audit_event(1, "INCIDENT_CREATED")]);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        harness
+            .get_by_label("Selecionar hash completo da auditoria")
+            .hover();
+        harness.run();
+        assert!(
+            harness
+                .query_all_by_label("Escolhe um evento e revela o hash integral para verificação")
+                .count()
+                > 0,
+            "seletor de hash deve expor tooltip contextual"
         );
     }
 }
