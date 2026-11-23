@@ -238,7 +238,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** em 2026-11-21, chamadas `todo add` falharam com `added todo needs phase, or an after todo with membership` (fase não informada); `duplicate todo name` (nome reutilizado sem `rename_to` ou `update`); `unknown todo name` (tentativa de atualizar item não registrado no plano). Os três erros ocorreram na mesma sessão de benchmark.
 - **Risco:** churn de coordenação, perda de rastreamento de tarefas e falsa impressão de progresso sem itens efetivamente registrados no plano.
 - **Prevenção:** antes de `todo add`, sempre informar `phase` ou `after`; antes de `todo update`/`remove`, confirmar que o nome existe no plano atual (ler estado do `todo` primeiro); evitar reutilizar nomes — usar `rename_to` para preservar identidade e dependências. Essa regra é derivada do schema do `todo` (fase ou `after` obrigatórios em `add`; nomes únicos dentro do plano).
-- **Confirmação:** pendente.
+- **Confirmação:** recorrente em 2026-11-23: uma atualização usou nome derivado do resumo e retornou `unknown todo name`. O controle operacional foi executar `todo` sem `update`/`add` para ler o plano atual, copiar o nome real `Atualizar evidência e commits` e só então atualizá-lo; nenhum item duplicado foi criado.
 
 ### 29. Primeiro `Id` animado e passo temporal padrão do harness
 
@@ -285,6 +285,14 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** uma lane classificou como reproduzida uma alegação de falha mascarada em `just supply-chain`, mas o controle root com etapas 23/0, 0/17 e 23/17 retornou 23/17/17, preservando a última falha. Na mesma entrega, versões antigas do histórico foram descritas como estado vigente, embora a tabela atual já tivesse os valores resolvidos, e um manifesto de scratch foi tratado como arquivo da raiz do checkout. Um candidato root sobre `fs::rename` também foi rejeitado após conferir a documentação da toolchain 1.100, que substitui o destino.
 - **Prevenção:** CP-14 e `dfir-verify` exigem comando, exit e diagnóstico para `reproduced`, reservam `static_candidate` à leitura e testam shell com códigos distintos. Também exigem separar vigente/histórico, confirmar inventário rastreado e registrar hipóteses rejeitadas. `dfir-change` limita catálogos Rust a hipóteses e exige comportamento da API na toolchain efetiva.
 - **Confirmação:** pendente para a próxima sessão que revisar findings ou aplicar regras externas de Rust. Nesta rodada, os controles citados impediram alterações indevidas em `justfile`, `docs/SUPPLY_CHAIN.md` e `src/gui/preferences.rs`.
+
+### 35. Interação nova de diálogo nativo calibrada fora do repositório
+
+- **Classe:** melhoria de método de verificação nativa.
+- **Fato:** a seleção dentro do Zenity não podia ser inferida do smoke anterior, que cobria abrir/cancelar e importação por caminho manual. Uma driver externa e descartável confirmou `Ctrl+L`, outcome `path` e uma linha independente no SQLite antes do patch do harness.
+- **Risco:** confundir injeção de teclas ou digitação no campo manual com seleção real pelo diálogo, ou alterar o harness sem antes conhecer a interação do backend.
+- **Prevenção:** calibrar a ação e sua pós-condição fora do repositório antes do patch. `scripts/native_x11_smoke.py --import-method zenity` exige outcome `path`, fechamento do diálogo, importação no SQLite e foco devolvido antes das análises; o modo `manual` continua padrão e deve ser repetido como regressão.
+- **Confirmação:** confirmada em 2026-11-23 por `EVD-060`: calibração, fluxo Zenity completo e regressão manual completos, com EVTX 12, detecção 5 e página 1/índice 12. O PASS permanece limitado ao backend Zenity deste host.
 
 ## Próxima revisão
 
