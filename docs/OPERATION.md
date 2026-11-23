@@ -228,6 +228,8 @@ O script recusa uma raiz não vazia e janelas DFIR/seletores preexistentes. Ele 
 
 O fluxo padrão importa `tests/fixtures/senai-demo.evtx` pelo **campo manual**. Com `--import-method zenity`, a importação usa o **seletor real**: Ctrl+L no Zenity, caminho colado, Enter, outcome `path` e diálogo fechado antes da leitura do SQLite. Nos dois modos, o smoke executa EVTX e detecção, exige eventos e candidatos não vazios, abre uma página de timeline não vazia e depois abre/cancela outro seletor, conferindo que o catálogo permanece com uma evidência. Coordenadas podem ser ajustadas pelas opções `--help`; qualquer timeout, candidato vazio ou pós-condição ausente produz `flow: FAIL`. IDs, contagens e hash da fixture entram no relatório, não nomes/caminhos de evidências ou conteúdo de eventos. `EVD-060` registra os dois modos neste host, sem promover outros backends, AT-SPI ou meta de latência.
 
+Com `--exercise-resize`, o harness exige geometria exata 960×600, 1024×640 e 1280×820, captura erros do protocolo X11 e confirma navegação nova no modo compacto por offsets de log. Ao final, exige processo vivo e ausência de `BadMatch`/panic. `EVD-061` registra esse fluxo com seleção Zenity, a regressão manual sem a flag e um controle negativo em cópia descartável que rejeitou divergência de 1 px. Isso não substitui inspeção estética nem mede desempenho de repaint.
+
 ## 4. O que este documento não cobre
 
 Bundle assinado, preflight e health/smoke automáticos, e `.dfirpkg` são Fase 4 (ADR-0018). Importar CSV/JSONL (rede, SIEM, dispositivos de segurança) foi adiado por decisão do operador (ADR-0025).

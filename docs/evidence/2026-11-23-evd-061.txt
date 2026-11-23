@@ -1,0 +1,98 @@
+EVD-061 - resize nativo X11 com pós-condições e controle negativo
+================================================================
+
+Status: PASS no escopo local executado.
+Commit do harness exercitado: 5d3ecaea86f9248db79f272707f7299e4ba28f00.
+Binário debug SHA-256: 6657d981b426cd4045dce3ed1af7bc9505de9fd9b9974bbf84cabe48418d1866.
+Harness SHA-256: f634406a3dd4c130b26c97fb071c56093a36ca63b4c2c7387d41d60e0e5c01e7.
+Período UTC: 2026-11-23T11:24:04Z..12:00:03Z.
+Ambiente: Linux x86_64, Debian 13, X11 `DISPLAY=:0`, eframe/egui 0.37.0,
+Zenity 4.1.90, CPython 3.13.5, python-xlib 0.33, XTEST e xclip já existentes.
+Raízes vazias isoladas e fixture sanitizada versionada de 69 632 bytes,
+SHA-256 256a655a7e259908e1dfd23b914abf27b7ecb8fd98c0b3f73033336f6ed448be.
+Sem screenshots, AT-SPI, OCR, xdotool, instalação de pacotes ou dados de caso.
+
+Before e calibração externa
+---------------------------
+EVD-050 de 2026-11-19 observou geometria 960x600 e 1024x640, mas o helper antigo
+também emitiu `Xlib.error.BadMatch`. O resize ficou parcial e fora dos PASS
+posteriores. Esse histórico não foi reescrito nem tratado como defeito atual do app.
+
+Antes de alterar o repositório, `validation/calibrate_native_resize.py` usou o
+binário e o harness atuais em raiz vazia. Em 2026-11-23T11:24:04Z..11:24:09Z,
+confirmou geometria exata 960x600, 1024x640 e 1280x820, zero erros no handler
+Xlib, processo vivo e navegação nova Evidence ↔ Incidents no modo compacto.
+Não reproduziu `BadMatch` nem defeito funcional. Resultado:
+`validation/task-005-calibration.json`, SHA-256
+b3aaee572b65a307aaba238ab65bba1a937a3718f524ca4c82dea93396338368.
+
+Mudança validada
+----------------
+`scripts/native_x11_smoke.py` recebeu `--exercise-resize`, desligado por padrão.
+Quando ativo, o harness instala um handler de erros X11, exige a geometria exata
+após cada pedido, confirma navegação nova por offsets de log no modo compacto e
+retorna a 1280x820 antes das demais ações. No final exige zero erros X11,
+processo vivo e ausência de `BadMatch`/panic no console. Nenhum código Rust ou
+dependência mudou.
+
+Fluxo completo com resize e seleção Zenity
+------------------------------------------
+Comando: `python3 scripts/native_x11_smoke.py --import-method zenity --exercise-resize --data-root <raiz-vazia> --results <json>`.
+Período: 2026-11-23T11:32:03Z..11:33:28Z. Exit 0 e `flow=PASS`.
+
+1. Navegação inicial Evidence ↔ Incidents confirmada por logs reais.
+2. Resize 960x600 confirmado; nova ida a Incidents e retorno a Evidence confirmados.
+3. Resize 1024x640 e retorno a 1280x820 confirmados.
+4. Seleção Zenity por Ctrl+L, outcome `path` e importação EVTX/FORENSIC no SQLite.
+5. EVTX COMPLETED com 12 itens e índice de 12 eventos.
+6. Detecção COMPLETED com 5 candidatos.
+7. Timeline `has_page=true`, página com 1 evento e índice com 12.
+8. Novo seletor aberto/cancelado, processo encerrado e catálogo inalterado com 1 evidência.
+9. `resize_diagnostics=PASS`, zero erros X11, sem `BadMatch`/panic e processo vivo.
+
+Resultado: `validation/task-005-x11-resize.json`, SHA-256
+41e582afd72f6678b357994b47f26142e0c707ca8655b55380a433fd843ec8d0.
+
+Regressão do modo manual padrão
+-------------------------------
+Comando sem `--import-method` nem `--exercise-resize`, em outra raiz vazia.
+Período: 2026-11-23T11:34:29Z..11:35:22Z. Exit 0 e `flow=PASS`.
+O fluxo repetiu `manual_path`, EVTX 12, detecção 5, página 1/índice 12 e
+cancelamento sem alterar o catálogo, sem registros de resize quando a flag está
+ausente. Resultado: `validation/task-005-manual-regression.json`, SHA-256
+1384f86a1f3bfa0134faa86dd12675dde0012b10870863ffdcb42c805b9d73de.
+
+Controle negativo
+-----------------
+Uma cópia descartável do harness, SHA-256
+8d9e54e5622b9682564bf912ed7195a78af83931c21047bf2bff8ea41b7e0b54,
+foi alterada somente em scratch para exigir largura `width + 1` sem mudar o
+pedido real. Em 2026-11-23T11:41:48Z..11:41:58Z, o processo retornou exit 1,
+`flow=FAIL` com `RuntimeError: timeout em geometria 960x600` e não gravou
+`resize_compact=PASS`. O checkout real não foi modificado por esse controle.
+Resultado: `validation/task-005-negative-resize.json`, SHA-256
+63e19fcfc2cd48f2408b5921a4edf3ded9c6760dea0a1993c69c9e887023dc2c.
+
+Diagnósticos e artefatos
+------------------------
+Sintaxe do harness e presença de `--exercise-resize` no `--help` passaram antes
+do fluxo integrado. Drivers, app outputs e JSONs de calibração, fluxo, regressão
+e controle negativo estão em `validation/task-005-*`. O console conserva os
+diagnósticos EGL conhecidos antes da seleção do adaptador Gl; não registrou
+`BadMatch` ou panic. Nenhuma falha inesperada ocorreu nesta lane; o FAIL do
+controle negativo foi deliberado e permanece separado dos fluxos válidos.
+
+Gate documental
+---------------
+`just doc-gate` passou em 2026-11-23T12:00:01Z..12:00:03Z com Fase 0 sem
+erros/avisos, documentation/playbook/repo audit PASS e 73 testes OK.
+Log: `validation/task-005-doc-gate.txt`.
+
+Limites
+-------
+Este PASS cobre resize e responsividade no backend X11 deste host, com as três
+geometrias e pós-condições descritas. Não declara inspeção estética, ausência de
+problemas de repaint, latência, AT-SPI, outros backends de diálogo, Windows,
+Linux aarch64, incidente real ou aceite de produção. Rust e E2E não foram
+repetidos porque somente o harness Python mudou; seus resultados anteriores
+ficam em EVD-059 e não são apresentados como nova execução deste commit.

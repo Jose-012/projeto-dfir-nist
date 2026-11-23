@@ -29,7 +29,7 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Fato:** cliques X11 tiveram exit 0 enquanto a tela permaneceu `Screen::Evidence`. O smoke final de resize também teve exit 0 e emitiu `Xlib.error.BadMatch`.
 - **Risco:** transformar envio de evento em falsa prova de navegação ou resize limpo.
 - **Prevenção:** toda ação exige pós-condição independente e inspeção de diagnósticos; `EVD-050` registra janela/resize apenas como resultado parcial e bloqueado.
-- **Confirmação:** confirmada em 2026-11-19: `gh run watch` foi seguido de confirmação MCP do run e das 27 etapas; o diagnóstico do doc-gate foi lido e uma divergência de ticket foi corrigida antes do PASS.
+- **Confirmação:** confirmada em 2026-11-19: `gh run watch` foi seguido de confirmação MCP do run e das 27 etapas; o diagnóstico do doc-gate foi lido e uma divergência de ticket foi corrigida antes do PASS. Confirmada novamente em 2026-11-23 por `EVD-061`: geometria exata e navegação nova foram exigidas após resize, o handler X11 e o console foram inspecionados, e uma cópia com divergência de 1 px retornou exit 1 sem `resize_compact=PASS`.
 
 ### 4. Evidência vigente sensível a advisories e premissas antigas
 
