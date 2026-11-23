@@ -81,10 +81,10 @@ As fatias 2 e 3 são independentes e podem ser paralelizadas com donos de escrit
 
 ## 4. Fatia 3: histórico NIST completo e somente leitura
 
-### Base e recorte
+### Base e recorte inicial
 
-- **REPO-FACT:** `ProfileHistoryView` já chega à GUI por `src/gui/backend.rs::Event::NistProfileHistoryLoaded` e `src/gui/nist.rs::on_history`.
-- **REPO-FACT:** `src/gui/nist.rs::profile_column` usa somente `history.versions.last()` para as entradas e informa apenas a quantidade de versões anteriores.
+- **REPO-FACT (base inicial):** `ProfileHistoryView` já chega à GUI por `src/gui/backend.rs::Event::NistProfileHistoryLoaded` e `src/gui/nist.rs::on_history`.
+- **REPO-FACT (base inicial):** `src/gui/nist.rs::profile_column` usava somente `history.versions.last()` para as entradas e informava apenas a quantidade de versões anteriores.
 - **INFERENCE:** um seletor de versão na GUI é suficiente para a primeira fatia. Não são necessários migration, novo comando de serviço ou mudança do modelo append-only.
 
 ### Implementação
@@ -101,17 +101,21 @@ As fatias 2 e 3 são independentes e podem ser paralelizadas com donos de escrit
 - Current e Target não compartilham seleção acidentalmente; lista vazia e versão única continuam estáveis.
 - Abrir uma versão antiga não emite comando de criação, atualização, remoção ou recálculo.
 - A versão vigente continua sendo o padrão após recarga e a indicação de gap `STALE` não é escondida.
-- Testes `egui_kittest` de seleção e conteúdo, seguidos dos gates comuns. Eles não substituem o fluxo nativo X11 pendente.
+- Testes `egui_kittest` de seleção e conteúdo, seguidos dos gates comuns. Eles não substituem o fluxo nativo X11 nem declaram AT-SPI.
 
 **Rastreabilidade:** F1-03, RF-009, RF-010 e ADR-0011.
 
+### Estado em 2026-11-23
+
+Implementado o seletor independente de versão Current/Target com indicação de versão não vigente, sem comandos de escrita. `EVD-059` registra verify 701/701, E2E 123/123 e gates documentais na árvore integrada. O smoke X11 de `EVD-050` não navegou por essa seleção, portanto o aceite nativo específico e AT-SPI não são declarados.
+
 ## 5. Fatia 4: linhagem analítica inspecionável
 
-### Base e decisão de desenho
+### Base e decisão de desenho inicial
 
-- **REPO-FACT:** `src/persistence/analytical_results.rs::history_for_correlation_key` implementa o histórico ordenado, mas está sob `#[cfg(test)]`. `related_to` já lê relações de saída.
+- **REPO-FACT (base inicial):** `src/persistence/analytical_results.rs::history_for_correlation_key` implementava o histórico ordenado, mas estava sob `#[cfg(test)]`. `related_to` já lia relações de saída.
 - **REPO-FACT:** `src/service/mod.rs::AnalyticalResultResponse` usa `TryFrom<AnalyticalResultRecord>` e retorna erro para `payload` ou `provenance` JSON inválido. Essa conversão não pode ser substituída por `null` ou default.
-- **REPO-FACT:** `src/gui/evidence.rs` carrega resultados vigentes e apresenta o painel como “Resultados analíticos (YARA)”.
+- **REPO-FACT (base inicial):** `src/gui/evidence.rs` carregava resultados vigentes e apresentava o painel como “Resultados analíticos (YARA)”.
 - **PROPOSAL:** o primeiro recorte contém o resultado selecionado, o histórico completo da mesma `correlation_key` e suas relações de saída. Grafo bidirecional, visualização global ou edição de relações não entram nesta fatia.
 
 ### Implementação
@@ -133,6 +137,10 @@ As fatias 2 e 3 são independentes e podem ser paralelizadas com donos de escrit
 - Gates focados, `just verify`, E2E com fixture sanitizada e `just doc-gate`.
 
 **Rastreabilidade:** F1-01 e ADR-0008 para o modelo comum; F1-04 e ADR-0012 para relações; regressão de conversão já registrada em `EVD-023`, sem reutilizar essa evidência para a nova funcionalidade.
+
+### Estado em 2026-11-23
+
+Implementado em `src/service/lineage.rs` e `src/gui/lineage.rs`, com histórico de produção, relações estritas e consulta em Evidências e no plano do incidente. Além do resultado selecionado, histórico, vigente e alvos das relações passam por `validate_scope`. O focado de linhagem passou 19/19 e `EVD-059` registra os gates integrados. O smoke X11 não abriu deliberatemente essa view, portanto seu aceite nativo específico não é declarado.
 
 ## 6. Fatia 5: hardening sem modificação automatizada de clientes
 
@@ -159,6 +167,10 @@ As fatias 2 e 3 são independentes e podem ser paralelizadas com donos de escrit
 - Revisão humana do Entregável 4 e dos demais documentos afetados, sem declarar eficácia de hardening não executado.
 
 **Rastreabilidade:** F1-06 absorvido por F1-29, RF-052, ADR-0018 D-2/D-3 e ADR-0023.
+
+### Estado em 2026-11-23
+
+Novos itens exigem pré/pós-condição, verificação, `source` e `confidence`; o formulário começa em `NOT_VERIFIED`/`LOW`, e registros legados sem os dois últimos campos continuam legíveis. `EVD-059` cobre os testes e o E2E integrados. Nenhum executor foi introduzido. A revisão humana do Entregável 4, a eficácia em clientes e o aceite de produção permanecem fora desse PASS.
 
 ## 7. Fatia 6: expansão controlada das regras EVTX
 
@@ -207,8 +219,8 @@ As fatias 2 e 3 são independentes e podem ser paralelizadas com donos de escrit
 | Windows x86_64, F1-22 | `PENDING-HUMAN`; `WVR-001` até 2026-12-31 não é verificação | `just doctor`, `just verify`, E2E e `engine-smoke` nativos; registrar `SANDBOX_NOT_FULLY_APPLIED` sem alegar confinamento inexistente |
 | Linux aarch64 | `PENDING-HUMAN`; `WVR-002` até 2026-12-31 não é verificação | Executar nativamente os mesmos gates e testes de sandbox, registrando arquitetura, kernel, Landlock e seccomp |
 | Incidente real autorizado e sanitizado | Não substituído por DEMO, testes sintéticos ou datasets públicos | Preservar original, registrar proveniência e executar fluxo protegido; somente métricas sanitizadas entram na evidência |
-| Fluxo nativo X11 | `BLOCKED/PENDING-HUMAN` em `EVD-050`; janela/resize não provam navegação | Confirmar Evidence para Incidentes, abrir/cancelar seletor e importar fixture sem travamento, com pós-condição independente |
-| Fechamento do RC, F1-12 | Bloqueado pelas pendências externas e nativas | Resolver ou aceitar formalmente cada pendência antes de qualquer `ACCEPTED` final |
+| Fluxo nativo X11 | `PASS` delimitado em Linux x86_64 por `EVD-050`; seleção no Zenity, AT-SPI, resize e latência não promovidos | Manter o smoke pós-condicionado ao mudar a UI e executar separadamente qualquer limite residual que se torne requisito de aceite |
+| Fechamento do RC, F1-12 | Bloqueado pelas pendências externas; o fluxo X11 delimitado não é aceite de produção | Resolver ou aceitar formalmente cada pendência antes de qualquer `ACCEPTED` final |
 
 Essas pendências seguem `docs/FASE1_BACKLOG.md`, `docs/RELEASE_GATE.md` e `docs/EVIDENCE_REGISTER.md`. As melhorias propostas não as fecham, e a ausência de ambiente não transforma uma proposta em defeito verificado.
 

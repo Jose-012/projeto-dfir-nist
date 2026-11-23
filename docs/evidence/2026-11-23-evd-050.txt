@@ -1,0 +1,77 @@
+EVD-050 - atualização do fluxo da GUI nativa X11 em 2026-11-23
+================================================================
+
+Status atual: PASS no escopo executado abaixo.
+Execução histórica de 2026-11-19: BLOCKED, preservada sem reescrita em
+`docs/evidence/2026-11-19-evd-050.txt`.
+
+Identidade e ambiente
+---------------------
+Commit do conteúdo exercitado: 63ac821ed785d5e7311ad6dd9aae599568b59fe1.
+Binário debug SHA-256: 6657d981b426cd4045dce3ed1af7bc9505de9fd9b9974bbf84cabe48418d1866.
+Harness SHA-256: be9a91d92398e94420c8ee6dddbf9c04d334ee3c36f65bbe0bff9340aaae9920.
+Período UTC: 2026-11-23T08:09:04Z..08:09:59Z.
+Toolchain: rustc/cargo 1.100.0, CPython 3.13.5, eframe/egui 0.37.0,
+Zenity 4.1.90, XTEST/Xlib e xclip já existentes no host.
+Ambiente: Linux x86_64, Debian 13, X11 `DISPLAY=:0`, janela 1280x820,
+Mesa Intel HD Graphics 2000, backend Gl, dois adaptadores candidatos.
+Raiz de dados vazia e isolada em scratch. Fixture sanitizada versionada,
+69 632 bytes, SHA-256 256a655a7e259908e1dfd23b914abf27b7ecb8fd98c0b3f73033336f6ed448be.
+Sem screenshots, AT-SPI, OCR, xdotool, instalação de pacotes ou dados de caso.
+
+Comando
+-------
+`cargo build --locked --bin dfir-app` já havia reconstruído o binário na árvore
+exercitada. O aceite final executou:
+
+`python3 scripts/native_x11_smoke.py --data-root <raiz-vazia-em-scratch> --results <json-em-scratch>`
+
+O harness recusaria raiz não vazia ou sessões DFIR/Zenity preexistentes. Cliques
+XTEST são somente ações. Cada PASS abaixo depende de log sanitizado, janela real,
+processo ou SQLite isolado, não do exit de injeção.
+
+Pós-condições do fluxo fresco final
+-----------------------------------
+1. Janela e GPU: PASS. Janela visível, adapter Gl/Intel registrado.
+2. Navegação: PASS. Logs reais `screen=Incidents` e depois `screen=Evidence`.
+3. Importação pelo campo manual: PASS. Logs `non_empty=true`, import requested e
+   `success=true`; SQLite contém uma evidência EVTX, 69 632 bytes, FORENSIC.
+   Nenhum caminho ou nome de evidência entra nesses três logs da GUI.
+4. EVTX: PASS. Job COMPLETED com 12 itens e `timeline_index.event_count=12`.
+5. Detecção: PASS. Job COMPLETED com 5 candidatos; zero candidatos falharia o smoke.
+6. Timeline: PASS. Clique pós-condicionado após rolagem abriu página real com
+   `has_page=true` e `event_count=1`. O relatório separa explicitamente
+   `timeline_index_events=12` de `timeline_page_events=1`; não afirma que os 12
+   eventos foram desenhados simultaneamente.
+7. Seletor: PASS somente para abrir/cancelar. Zenity com o título esperado ficou
+   visível, Escape removeu a janela e encerrou o processo. O backend registrou
+   `outcome=cancelled`, `elapsed_ms=26063`, e o catálogo permaneceu com uma
+   evidência. Esse tempo é uma observação, não uma meta de latência validada.
+8. Fluxo e cleanup: PASS. `flow.status=PASS`, exit 0, processos próprios encerrados.
+   Nenhum processo de terceiros foi alvo de cleanup.
+
+Artefatos
+---------
+Run overnight `overnight_1795401257237_4982334384188513183`, diretório `validation/`:
+- `task-002-x11.json`, SHA-256 27ed6710c3eb7c9ff3449444cb1e253314d7a8ff4f48bef8c555b49c384c4ff9;
+- `task-002-x11-driver.txt`, SHA-256 261374640c99b5cd5fa02bd54ae414973511217c43719ca78f8db39c2015f909;
+- `task-002-x11.app-output.log` e `task-002-final-x11-hashes.txt`;
+- cópias `task-002-x11-pass-attempt33*` do resultado final;
+- resultados das tentativas anteriores e calibrações, mantidos sem promoção a PASS.
+
+Diagnósticos e histórico
+------------------------
+O console final contém o aviso XSETTINGS e os erros EGL conhecidos do wgpu, seguidos
+pela seleção comprovada do adaptador Gl/Intel. Não apareceram `BadMatch`, panic ou
+erro de glyph no fluxo final. O `BadMatch` de 2026-11-19 permanece um fato histórico.
+As tentativas 1 a 30 não completaram todas as pós-condições. As tentativas 31 e 32
+passaram o fluxo, e a 33 repetiu o PASS com o harness final e contagem explícita da
+página. Somente a tentativa 33 vincula este registro ao commit e hashes acima.
+
+Limites
+-------
+Este PASS não cobre escolha de arquivo dentro do Zenity, resize, AT-SPI, desempenho
+de repaint, meta de latência, cancelamento de job pela GUI, Windows, Linux aarch64,
+incidente real nem aceite de produção. E2E headless e testes egui_kittest continuam
+sendo evidências distintas. O bloqueio histórico de EVD-050 está resolvido apenas
+para o fluxo delimitado descrito aqui.

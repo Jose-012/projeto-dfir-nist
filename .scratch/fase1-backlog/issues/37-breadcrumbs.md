@@ -4,7 +4,7 @@
 
 **Blocked by:** None.
 
-**Status:** IMPLEMENTED (2026-11-20, ADR-0030 D-1/D-4; `just verify` e fluxo X11 PENDING).
+**Status:** VERIFIED em Linux x86_64 (2026-11-23, `EVD-059`; ADR-0030 D-1/D-4 e commit `63ac821`). A navegação X11 delimitada de `EVD-050` não é inspeção visual dos breadcrumbs nem AT-SPI.
 
 **Origem:** RF-046 e seção 30.3; melhoria de engenharia, não requisito novo da demanda.
 

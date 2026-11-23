@@ -9,9 +9,9 @@ Este arquivo lista somente trabalho remanescente. Estado de requisitos/tickets: 
 |---|---|---|
 | A. Verificação externa | Windows x86_64 (F1-22), Linux aarch64 e incidente real com sanitização | `PENDING-HUMAN`; Windows/aarch64 têm WVR-001/WVR-002 até 2026-12-31 |
 | E. Supply chain | Repetir `just supply-chain` a cada mudança de dependência e revisar as exceções informativas bincode/chrono | local verde em `EVD-058` após `url 2.5.9`/`form_urlencoded 1.2.3` (621 dependências, 1560 advisories, sem exceção nova); anteriores `EVD-056`/`EVD-051` e CI `EVD-054`/`EVD-055`; revisões recorrentes continuam em `docs/SUPPLY_CHAIN.md` |
-| F. Fechamento do RC | Resolver ou aceitar formalmente as pendências externas e nativas antes de declarar aceite final | bloqueado pelas pistas A e G; estado normativo em `docs/RELEASE_GATE.md` |
-| G. Fluxo nativo X11 | Confirmar navegação, abrir/cancelar seletor e importar fixture sanitizada sem travamento | `BLOCKED/PENDING-HUMAN` em `EVD-050`; somente janela/resize observados, com `Xlib BadMatch` no smoke final |
-| H. Melhorias ativadas | Fatias 1–6 de `docs/MVP_IMPROVEMENT_PLAN.md`; F1-36..F1-40 por ADR-0030 | F1-38/F1-40 `VERIFIED` em Linux x86_64 por `EVD-056`; demais fatias continuam conforme RTM, sem alterar os bloqueadores A/F/G |
+| F. Fechamento do RC | Resolver ou aceitar formalmente as pendências externas antes de declarar aceite final | bloqueado pela pista A; a pista G tem PASS delimitado em `EVD-050`, sem promover produção, seleção no Zenity ou demais plataformas |
+| G. Fluxo nativo X11 | Manter o smoke pós-condicionado quando a UI afetada mudar; seleção dentro do seletor, AT-SPI, resize e latência são limites separados | `PASS` delimitado em Linux x86_64 por `EVD-050` (2026-11-23): navegação, importação manual, jobs, timeline e abrir/cancelar seletor |
+| H. Melhorias ativadas | Fatias 1–6 de `docs/MVP_IMPROVEMENT_PLAN.md`; F1-36..F1-40 por ADR-0030 | `EVD-059` integra a árvore `63ac821` com verify 701/701, E2E 123/123 e X11 delimitado; F1-38/F1-40 também têm `EVD-056`. Revisão humana, eficácia real e bloqueadores externos não são promovidos |
 
 Nenhuma pista autoriza afirmar verificação em ambiente não executado. Fixture DEMO, testes sintéticos e os dois datasets públicos externos de `EVD-052` não substituem incidente real autorizado e sanitizado.
 
@@ -27,7 +27,9 @@ Essas execuções continuam `PENDING-HUMAN` até que os ambientes e o caso exist
 
 ## Critério de saída da pista G
 
-Em sessão manual do operador, ou por método independente válido, confirmar navegação Evidence → Incidentes, abertura/cancelamento do seletor nativo e importação de `tests/fixtures/senai-demo.evtx` com retorno ao estado ocioso. Registrar comandos, versões, diagnósticos e novo `EVD-*` textual; não usar exit de injeção X11 como prova de ativação. `EVD-050` permanece `BLOCKED` até essa execução.
+Cumprido em Linux x86_64 na atualização de `EVD-050` de 2026-11-23. `scripts/native_x11_smoke.py` usou raiz vazia e fixture sanitizada, confirmando navegação Evidence ↔ Incidentes, importação pelo campo manual, EVTX e detecção concluídos, página de timeline não vazia e abertura/cancelamento do seletor sem alterar o catálogo. O aceite veio de logs, SQLite e ciclo de vida da janela/processo, não do exit de injeção X11. O histórico BLOCKED/`BadMatch` de 2026-11-19 foi preservado.
+
+Escolha de arquivo dentro do Zenity, resize, AT-SPI, latência e desempenho não fazem parte desse PASS. Ao alterar a UI ou o harness, repetir o fluxo em raiz vazia e registrar nova execução sem apagar tentativas falhas.
 
 ## Fora do escopo corrente
 

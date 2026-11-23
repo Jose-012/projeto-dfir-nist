@@ -1,0 +1,72 @@
+EVD-059 - integração ADR-0030, gates Rust, E2E e fluxo X11
+============================================================
+
+Status: PASS no escopo local executado.
+Commit do código, contratos e QA exercitados: 63ac821ed785d5e7311ad6dd9aae599568b59fe1.
+Período dos gates e do X11 final: 2026-11-23T07:34:54Z..08:58:59Z.
+Ambiente: Linux x86_64, Debian 13, fixture sanitizada, sandbox `required` no E2E,
+raízes isoladas, X11 para o smoke nativo. CPython 3.13.5 é Engineering/QA.
+Não houve mudança de dependências nesta rodada.
+
+Escopo integrado
+----------------
+Melhorias de Evidências e Incidentes, histórico NIST somente leitura, linhagem
+analítica somente leitura com escopo validado também para histórico/vigente/relações,
+plano de hardening com pré/pós-condição, verificação, fonte e confiança, e registros
+legados legíveis. Inclui o harness nativo X11 e logs sanitizados de importação.
+Nenhum hardening é executado automaticamente. Nenhuma regra EVTX nova é reivindicada.
+
+Gate Rust
+---------
+Comando final: `RUSTC_WRAPPER= just verify`.
+Período: 2026-11-23T07:34:54Z..07:39:02Z. Exit 0.
+Resultado lido no log: Fase 0 com 0 erros/0 avisos, fmt e check verdes,
+nextest 701 passed/1 skipped, doc-tests verdes e Clippy `-D warnings` limpo.
+Log: `validation/task-002-final-verify.txt` no run overnight, SHA-256
+71cbdcadec9bb54505dc2f6b01428edd58a7b4e7bb48ea368e239dc8eae55cda.
+
+A primeira tentativa, sem override de ambiente, falhou em `cargo check` com exit 101
+por `sccache: Connection refused`, antes dos testes. O log foi preservado em
+`validation/task-002-verify-sccache-failure.txt`. `RUSTC_WRAPPER=` foi aplicado apenas
+ao processo da repetição para usar rustc diretamente, sem desabilitar nenhum gate.
+
+E2E com engine real
+-------------------
+Comando: `RUSTC_WRAPPER= just e2e tests/fixtures/senai-demo.evtx`.
+Período: 2026-11-23T07:43:48Z..07:46:10Z. Exit 0.
+Resultado lido no log: 123/123 etapas, incluindo timeline, detecção, documentos,
+SVG, assinatura, adulterações, determinismo, descarte e cadeias íntegras.
+Log: `validation/task-002-final-e2e.txt`, SHA-256
+afb42e686e4e052d3d456b30a8bb57ec8659c8c66acacd882d6024314fcbe840.
+
+Gate documental inicial
+-----------------------
+Comando: `just doc-gate`.
+Período: 2026-11-23T07:48:11Z..07:48:22Z. Exit 0.
+Resultado lido no log: Fase 0 com 0 erros/0 avisos, documentation gate PASS,
+playbook estrutural e repo audit PASS, 73 testes unittest OK.
+Log: `validation/task-002-initial-doc-gate.txt`.
+
+Confirmação pós-documentação: `just doc-gate` em
+2026-11-23T08:58:58Z..08:58:59Z, exit 0, novamente com Fase 0 sem erros/avisos,
+documentation/playbook/repo audit PASS e 73 testes OK. Log:
+`validation/task-002-final-doc-gate.txt`. A primeira tentativa pós-documentação
+falhou com três divergências INC-03 entre tickets locais e RTM para F1-36/F1-37/F1-39.
+Os tickets foram sincronizados antes do PASS e a falha foi preservada em
+`validation/task-002-doc-gate-rtm-failure.txt`.
+
+Fluxo nativo X11
+----------------
+O fluxo fresco final passou em 2026-11-23T08:09:04Z..08:09:59Z, já sobre o mesmo
+conteúdo do commit acima. Navegação, importação manual, EVTX com 12 eventos,
+detecção com 5 candidatos, página de timeline não vazia e abrir/cancelar Zenity
+foram confirmados por pós-condições independentes. Detalhes, hashes e limites:
+`docs/evidence/2026-11-23-evd-050.txt` e `validation/task-002-x11*`.
+
+Limites e evidências independentes
+----------------------------------
+Supply-chain não foi repetido porque o lock e as dependências não mudaram; o estado
+local anterior permanece em EVD-058, sem transferir seu resultado a uma árvore nova
+de dependências. Windows, Linux aarch64, incidente real, CI deste commit e aceite de
+produção não foram executados ou promovidos. Seleção de arquivo dentro do Zenity,
+AT-SPI, resize, latência e desempenho visual ficam fora do PASS X11.
