@@ -1,0 +1,81 @@
+EVD-060 - seleção real no Zenity e regressão manual do fluxo X11
+================================================================
+
+Status: PASS no escopo local executado.
+Commit do harness exercitado: 370411f264f12a7350a992b4ec842f8dc732d8a9.
+Binário debug SHA-256: 6657d981b426cd4045dce3ed1af7bc9505de9fd9b9974bbf84cabe48418d1866.
+Harness SHA-256: 702d9cf27d90fa0c39842670e2769533376d5279c071c0e4090f694bdfbd8d39.
+Período UTC: 2026-11-23T09:47:01Z..10:25:36Z.
+Ambiente: Linux x86_64, Debian 13, X11 `DISPLAY=:0`, eframe/egui 0.37.0,
+Zenity 4.1.90, CPython 3.13.5, XTEST/Xlib e xclip já existentes.
+Raízes vazias isoladas e fixture sanitizada versionada de 69 632 bytes,
+SHA-256 256a655a7e259908e1dfd23b914abf27b7ecb8fd98c0b3f73033336f6ed448be.
+Sem screenshots, AT-SPI, OCR, xdotool, instalação de pacotes ou dados de caso.
+
+Before e calibração independente
+--------------------------------
+EVD-050 cobria importação por `manual_path` e somente abrir/cancelar o seletor.
+A escolha de arquivo dentro do Zenity era uma lacuna explícita. Antes de alterar
+o harness, uma calibração externa abriu o Zenity real, usou Ctrl+L, colou a fixture,
+pressionou Enter e exigiu duas pós-condições: `file dialog finished outcome=path`
+e uma linha EVTX/FORENSIC de 69 632 bytes no SQLite isolado.
+
+Resultado da calibração: PASS em 2026-11-23T09:47:01Z..09:47:30Z, diálogo fechado
+e uma evidência confirmada. Artefato: `validation/task-004-zenity-selection-calibration.json`.
+O repositório só foi alterado depois dessa prova.
+
+Mudança validada
+----------------
+`scripts/native_x11_smoke.py` recebeu `--import-method manual|zenity`, com `manual`
+como padrão. No modo `zenity`, o harness exige outcome `path`, fechamento da janela,
+importação no SQLite e retorno do foco à DFIR antes das análises. Nenhum código Rust
+ou dependência mudou.
+
+Fluxo completo com seleção Zenity
+---------------------------------
+Comando: `python3 scripts/native_x11_smoke.py --import-method zenity --data-root <raiz-vazia> --results <json>`.
+Período: 2026-11-23T10:05:37Z..10:06:59Z. Exit 0 e `flow=PASS`.
+
+1. Navegação Evidence ↔ Incidents confirmada por logs reais.
+2. Seleção dentro do Zenity por Ctrl+L, outcome `path` e diálogo fechado.
+3. Importação `zenity_ctrl_l`, EVTX/FORENSIC de 69 632 bytes no SQLite.
+4. EVTX COMPLETED com 12 itens e índice de 12 eventos.
+5. Detecção COMPLETED com 5 candidatos.
+6. Timeline `has_page=true`, página com 1 evento e índice com 12.
+7. Novo seletor aberto/cancelado, processo encerrado e catálogo inalterado com 1 evidência.
+
+Resultado: `validation/task-004-x11.json`, SHA-256
+59ba8b4731ac9b9d26e63a39220993e6a123b7f3e8be5c9df31a7970ec03cfeb.
+
+Regressão do modo manual padrão
+-------------------------------
+Comando sem `--import-method`: `python3 scripts/native_x11_smoke.py --data-root <outra-raiz-vazia> --results <json>`.
+Período: 2026-11-23T10:09:54Z..10:10:48Z. Exit 0 e `flow=PASS`.
+O fluxo repetiu todas as pós-condições com `manual_path`, EVTX 12, detecção 5,
+página 1/índice 12 e cancelamento sem alterar o catálogo.
+
+Resultado: `validation/task-004-manual-regression.json`, SHA-256
+18eb921a7a7617fdf2b73c599909666f4b254c579d6fb1a2eea1e5d029c49b9c.
+
+Diagnósticos e artefatos
+------------------------
+`python3 -m py_compile scripts/native_x11_smoke.py` passou antes dos fluxos.
+Logs e drivers: `validation/task-004-x11-driver.txt`,
+`task-004-manual-regression-driver.txt`, app outputs e
+`task-004-final-x11-hashes.txt`. A calibração e seus logs foram preservados.
+Não houve tentativa falha nesta lane. Não se reutiliza o PASS manual de EVD-050
+como prova da nova seleção: o modo Zenity foi executado separadamente.
+
+Gate documental
+---------------
+`just doc-gate` passou em 2026-11-23T10:25:35Z..10:25:36Z com Fase 0 sem
+erros/avisos, documentation/playbook/repo audit PASS e 73 testes OK.
+Log: `validation/task-004-doc-gate.txt`.
+
+Limites
+-------
+Este PASS cobre seleção real e cancelamento no backend Zenity neste host. Não cobre
+outros backends de diálogo, AT-SPI, resize, latência, desempenho de repaint,
+Windows, Linux aarch64, incidente real ou aceite de produção. Rust e E2E não foram
+repetidos porque somente o harness Python mudou; seus resultados anteriores ficam
+em EVD-059 e não são apresentados como uma nova execução deste commit.
