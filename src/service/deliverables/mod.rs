@@ -329,6 +329,15 @@ pub(super) fn write_plan_item(
             lines.push(format!("{label}: {}", esc(value)));
         }
     }
+    for (label, key) in [("Fonte", "source"), ("Confiança", "confidence")] {
+        let value = field(item, key);
+        let value = if value.trim().is_empty() {
+            "não informado (registro legado)"
+        } else {
+            value
+        };
+        lines.push(format!("{label}: {}", markdown::code(value)));
+    }
     let nist = strings(item, "nist_subcategories");
     if !nist.is_empty() {
         lines.push(format!(
@@ -1577,6 +1586,8 @@ mod tests {
         assert!(e4.contains("Recomendação geral"));
         assert!(e4.contains("Depende de: MFA no acesso remoto"));
         assert!(e4.contains("Motivado pelo achado: RDP exposto sem MFA"));
+        assert!(e4.contains("Fonte: `não informado (registro legado)`"));
+        assert!(e4.contains("Confiança: `não informado (registro legado)`"));
         let e5 = &doc(&set, FILE_E5).content;
         assert!(e5.contains("AES\\-256") || e5.contains("AES-256"));
         // A classe de dado só tem item em repouso: trânsito e chaves são lacuna.
@@ -1894,7 +1905,11 @@ mod tests {
                     effort: "M".into(),
                     cost_class: "LOW".into(),
                     phase: "SHORT_TERM".into(),
+                    precondition: "ambiente acessível".into(),
+                    postcondition: "controle aplicado".into(),
                     verification: "checagem objetiva".into(),
+                    source: Some("OBSERVED".into()),
+                    confidence: Some("MEDIUM".into()),
                     finding_ids: vec![finding],
                     nist_subcategory_ids: vec!["PR.AA-03".into()],
                     ..crate::service::plan::PlanItemInput::default()
@@ -2205,6 +2220,8 @@ mod tests {
                 effort: "S".into(),
                 cost_class: "NONE".into(),
                 phase: "IMMEDIATE".into(),
+                precondition: "escopo e rollback manual autorizados".into(),
+                postcondition: "MFA exigido no acesso remoto".into(),
                 verification: "varredura externa".into(),
                 finding_ids: vec![finding.clone()],
                 source: Some("OBSERVED".into()),

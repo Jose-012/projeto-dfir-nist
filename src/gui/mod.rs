@@ -17,6 +17,7 @@ mod icons;
 pub mod impact;
 pub mod incidents;
 pub mod iocs;
+pub mod lineage;
 mod nist;
 pub mod plan;
 pub mod preferences;
@@ -496,8 +497,9 @@ impl DfirApp {
         } else {
             self.selection_fx.clear(ui.ctx(), effect_id);
         }
-        if response.clicked() {
+        if response.clicked() && self.screen != target {
             self.screen = target;
+            tracing::info!(screen = ?target, "native UI screen changed");
         }
     }
 
@@ -717,6 +719,19 @@ impl DfirApp {
             } => {
                 self.evidence.on_analytical_results(&evidence_id, result);
             }
+            Event::LineageLoaded {
+                result_id,
+                scope,
+                result,
+            } => match &scope {
+                crate::service::lineage::LineageScope::Evidence(_) => {
+                    self.evidence.on_lineage_loaded(&result_id, &scope, *result);
+                }
+                crate::service::lineage::LineageScope::Incident(_) => {
+                    self.incidents
+                        .on_lineage_loaded(&result_id, &scope, *result);
+                }
+            },
             Event::EvidenceLinkedToIncident {
                 evidence_id,
                 result,

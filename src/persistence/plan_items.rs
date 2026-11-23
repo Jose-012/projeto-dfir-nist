@@ -375,8 +375,14 @@ pub async fn insert_plan_item(
     require_text(input.verification, "a way to verify it (verification)")?;
     require_text(input.precondition, "a precondition")?;
     require_text(input.postcondition, "a postcondition")?;
-    require_text(input.source.unwrap_or(""), "a source (OBSERVED / INFERRED / NOT_VERIFIED / RECOMMENDED)")?;
-    require_text(input.confidence.unwrap_or(""), "a confidence (LOW / MEDIUM / HIGH / CONFIRMED)")?;
+    require_text(
+        input.source.unwrap_or(""),
+        "a source (OBSERVED / INFERRED / NOT_VERIFIED / RECOMMENDED)",
+    )?;
+    require_text(
+        input.confidence.unwrap_or(""),
+        "a confidence (LOW / MEDIUM / HIGH / CONFIRMED)",
+    )?;
 
     if !matches!(
         input.source.unwrap_or(""),
@@ -641,8 +647,8 @@ mod tests {
             crypto: None,
             supersedes: None,
             actor_id: None,
-            source: None,
-            confidence: None,
+            source: Some("OBSERVED"),
+            confidence: Some("MEDIUM"),
         }
     }
 

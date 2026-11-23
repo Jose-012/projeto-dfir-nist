@@ -18,6 +18,7 @@ use crate::{
     service::{
         self, AnalyticalResultResponse, AnalyzeResponse, AppServices, EvidenceResponse,
         IncidentResponse, JobStatusResponse, TimelinePage, deliverables, detection, findings, gaps,
+        lineage::{LineageScope, LineageView},
         nist, plan, provenance,
     },
 };
@@ -52,6 +53,10 @@ pub enum Command {
         want_total: bool,
     },
     EvidenceAnalyticalResults(String),
+    LineageForResult {
+        result_id: String,
+        scope: LineageScope,
+    },
 
     /// Vincula a evidência a um incidente (F1-19).
     LinkEvidenceToIncident {
@@ -180,7 +185,7 @@ pub enum Command {
     LoadNistFunctionView(String),
     CreatePlanItem {
         incident_id: String,
-        input: plan::PlanItemInput,
+        input: Box<plan::PlanItemInput>,
     },
     LoadPlanView(String),
     CreateSourceGap {
@@ -244,6 +249,11 @@ impl Command {
                     result: Err(message()),
                 }
             }
+            Self::LineageForResult { result_id, scope } => Event::LineageLoaded {
+                result_id: result_id.clone(),
+                scope: scope.clone(),
+                result: Box::new(Err(message())),
+            },
             Self::LinkEvidenceToIncident { evidence_id, .. } => Event::EvidenceLinkedToIncident {
                 evidence_id: evidence_id.clone(),
                 result: Err(message()),
@@ -408,6 +418,11 @@ pub enum Event {
     EvidenceAnalyticalResultsLoaded {
         evidence_id: String,
         result: Result<Vec<AnalyticalResultResponse>, String>,
+    },
+    LineageLoaded {
+        result_id: String,
+        scope: LineageScope,
+        result: Box<Result<LineageView, String>>,
     },
     EvidenceLinkedToIncident {
         evidence_id: String,
@@ -864,6 +879,16 @@ async fn handle_command(services: &AppServices, command: Command) -> Event {
             Event::EvidenceAnalyticalResultsLoaded {
                 evidence_id,
                 result,
+            }
+        }
+        Command::LineageForResult { result_id, scope } => {
+            let result = service::lineage::lineage_for_result(&services.db, &result_id, &scope)
+                .await
+                .map_err(msg);
+            Event::LineageLoaded {
+                result_id,
+                scope,
+                result: Box::new(result),
             }
         }
         Command::LinkEvidenceToIncident {

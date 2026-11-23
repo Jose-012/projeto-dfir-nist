@@ -7,6 +7,7 @@
 //! `persistence/plan_items.rs` e chegam aqui como mensagem de erro.
 
 use super::backend::{Backend, Command};
+use super::lineage::LineageState;
 use super::{
     CONFIDENCE_OPTIONS, Loadable, PLAN_COST_OPTIONS, PLAN_DOMAIN_OPTIONS, PLAN_EFFORT_OPTIONS,
     PLAN_PHASE_OPTIONS, PLAN_PRIORITY_OPTIONS, enum_combo, error_banner, non_empty, split_ids,
@@ -14,6 +15,7 @@ use super::{
 };
 use crate::persistence::plan_items::{DomainCoverage, PlanDomain};
 use crate::service::AnalyticalResultResponse;
+use crate::service::lineage::{LineageScope, LineageView};
 use crate::service::plan::{CryptoInput, PlanItemInput, PlanView};
 use std::collections::BTreeSet;
 
@@ -44,18 +46,39 @@ struct PlanForm {
 }
 
 impl PlanForm {
+    fn unverified() -> Self {
+        Self {
+            source: "NOT_VERIFIED".into(),
+            confidence: "LOW".into(),
+            ..Self::default()
+        }
+    }
+
     fn needs_crypto_detail(&self) -> bool {
         PlanDomain::from_str(&self.domain).is_some_and(PlanDomain::needs_crypto_detail)
     }
 }
 
-#[derive(Default)]
 pub struct PlanState {
     loaded_for: Option<String>,
     view: Loadable<PlanView>,
     form: PlanForm,
+    lineage: LineageState,
     creating: bool,
     error: Option<String>,
+}
+
+impl Default for PlanState {
+    fn default() -> Self {
+        Self {
+            loaded_for: None,
+            view: Loadable::Idle,
+            form: PlanForm::unverified(),
+            lineage: LineageState::default(),
+            creating: false,
+            error: None,
+        }
+    }
 }
 
 impl PlanState {
@@ -64,6 +87,7 @@ impl PlanState {
             return;
         }
         self.loaded_for = Some(incident_id.to_string());
+        self.lineage.clear();
         self.view = Loadable::Loading;
         backend.send(Command::LoadPlanView(incident_id.to_string()));
     }
@@ -88,23 +112,35 @@ impl PlanState {
         match result {
             Ok(_) => {
                 self.error = None;
-                self.form = PlanForm::default();
+                self.form = PlanForm::unverified();
+                self.lineage.clear();
                 backend.send(Command::LoadPlanView(incident_id.to_string()));
             }
             Err(message) => self.error = Some(message),
         }
     }
 
+    pub fn on_lineage_loaded(
+        &mut self,
+        result_id: &str,
+        scope: &LineageScope,
+        result: Result<LineageView, String>,
+    ) {
+        self.lineage.on_loaded(result_id, scope, result);
+    }
+
     pub fn ui(&mut self, ui: &mut egui::Ui, incident_id: &str, backend: &Backend) {
         self.ensure_loaded(incident_id, backend);
 
+        let lineage = &mut self.lineage;
         self.view.show(ui, |ui, view| {
             ui.heading("Cobertura das ações do plano");
             show_coverage(ui, &view.coverage);
             ui.separator();
             ui.heading("Itens do plano");
-            show_items(ui, &view.items);
+            show_items(ui, &view.items, incident_id, lineage, backend);
         });
+        self.lineage.ui(ui);
         ui.separator();
 
         let Self {
@@ -158,7 +194,13 @@ fn labelled(ui: &mut egui::Ui, label: &str, value: &str) {
     }
 }
 
-fn show_items(ui: &mut egui::Ui, items: &[AnalyticalResultResponse]) {
+fn show_items(
+    ui: &mut egui::Ui,
+    items: &[AnalyticalResultResponse],
+    incident_id: &str,
+    lineage: &mut LineageState,
+    backend: &Backend,
+) {
     if items.is_empty() {
         ui.label("Nenhum item de plano ainda.");
         return;
@@ -203,8 +245,17 @@ fn show_items(ui: &mut egui::Ui, items: &[AnalyticalResultResponse]) {
                 "Regulatório / política interna",
                 str_field(payload, "regulatory_reference"),
             );
-            labelled(ui, "Fonte", str_field(payload, "source"));
-            labelled(ui, "Confiança", str_field(payload, "confidence"));
+            for (label, key) in [("Fonte", "source"), ("Confiança", "confidence")] {
+                let value = str_field(payload, key);
+                ui.label(format!(
+                    "{label}: {}",
+                    if value.is_empty() {
+                        "não informado (registro legado)"
+                    } else {
+                        value
+                    }
+                ));
+            }
             let nist = string_list(payload, "nist_subcategories");
             if !nist.is_empty() {
                 ui.small(format!("NIST: {}", nist.join(", ")));
@@ -221,6 +272,13 @@ fn show_items(ui: &mut egui::Ui, items: &[AnalyticalResultResponse]) {
                 labelled(ui, "Recuperação de chave", str_field(crypto, "recovery"));
             }
             ui.small(format!("id: {}", item.id));
+            if ui.button("Inspecionar linhagem").clicked() {
+                lineage.ensure_loaded(
+                    &item.id,
+                    LineageScope::Incident(incident_id.to_string()),
+                    backend,
+                );
+            }
         });
     }
 }
@@ -453,6 +511,13 @@ mod tests {
     }
 
     #[test]
+    fn new_plan_forms_default_to_explicit_unverified_state() {
+        let state = PlanState::default();
+        assert_eq!(state.form.source, "NOT_VERIFIED");
+        assert_eq!(state.form.confidence, "LOW");
+    }
+
+    #[test]
     fn protection_details_only_travel_with_the_domains_that_require_them() {
         let mut form = PlanForm {
             domain: "OS_HARDENING".into(),
@@ -592,7 +657,41 @@ mod ui_tests {
         // Detalhes de proteção do Entregável 5.
         harness.get_by_label("Mecanismo: AES-256");
         harness.get_by_label("Recuperação de chave: cofre");
+        assert_eq!(
+            harness
+                .get_all_by_label("Fonte: não informado (registro legado)")
+                .count(),
+            2
+        );
+        assert_eq!(
+            harness
+                .get_all_by_label("Confiança: não informado (registro legado)")
+                .count(),
+            2
+        );
         assert!(drain(&mut commands).is_empty());
+    }
+
+    #[test]
+    fn plan_item_lineage_uses_the_incident_scope() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut harness = harness(loaded_state(), backend);
+        harness.run();
+        harness
+            .get_all_by_label("Inspecionar linhagem")
+            .next()
+            .expect("lineage action")
+            .click();
+        harness.step();
+        let sent = drain(&mut commands);
+        assert_eq!(sent.len(), 1, "uma consulta de linhagem: {sent:?}");
+        assert!(matches!(
+            &sent[0],
+            Command::LineageForResult {
+                result_id,
+                scope: crate::service::lineage::LineageScope::Incident(incident_id),
+            } if result_id == "p-1" && incident_id == "inc-1"
+        ));
     }
 
     #[test]

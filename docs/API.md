@@ -36,6 +36,14 @@ Ao indexar ou reindexar `results.jsonl`, JSON inválido ou profundidade acima de
 
 `evidence_analytical_results` e as leituras vigentes por incidente também falham fechado quando `payload` ou `provenance` persistidos contêm JSON inválido. A conversão usa `TryFrom` e propaga um diagnóstico específico em vez de produzir `null` (`EVD-023`).
 
+### `src/service/lineage.rs` — Linhagem analítica somente leitura
+
+| Função | Parâmetros relevantes | Retorno | Descrição |
+|---|---|---|---|
+| `async lineage_for_result` | `pool: &SqlitePool, result_id: &str, scope: &LineageScope` | `Result<LineageView, AppError>` | Devolve o resultado selecionado, o histórico completo da mesma `correlation_key`, o vigente e as relações de saída, depois de validar a pertença à evidência ou ao incidente solicitado. |
+
+`LineageView` não cria versão, relação, achado ou decisão. O histórico é convertido item a item por `AnalyticalResultResponse::try_from`; JSON inválido falha com diagnóstico, nunca vira `null` ou omissão. `related_to_strict` rejeita tipo de relação desconhecido ou alvo ausente com `sqlx::Error::Protocol`, cujo motivo seguro chega ao operador por `AppError::user_message()`; uma linhagem incompleta não é devolvida como se estivesse íntegra. Respostas fora do escopo são recusadas antes da apresentação.
+
 ### `src/service/detection.rs` — Detecção por regras e candidatos (ADR-0025)
 
 | Função | Parâmetros relevantes | Retorno | Descrição |
@@ -90,6 +98,8 @@ Ao revisar um item, a checagem de ciclos exige que `depends_on` presente nos ite
 `plan_view` exige que `domain`, `priority`, `effort`, `cost_class`, `phase` e `support_kind` vigentes usem os vocabulários canônicos antes de ordenar ou calcular cobertura. Valor desconhecido, ausente ou não textual falha com o ID do item e o campo, em vez de receber defaults, desaparecer da cobertura ou chegar aos entregáveis (`EVD-040`/`EVD-041`).
 
 `plan_view` aplica a mesma exigência a `finding_ids`, `nist_subcategories` e `depends_on` antes de ordenar os itens ou permitir `deliverables::collect`. Assim dados malformados não viram listas vazias nem uma falsa recomendação geral nos documentos; campos ausentes continuam válidos (`EVD-029`).
+
+Todo item novo exige pré-condição, pós-condição e verificação manual não vazias, além de `source` (`OBSERVED`, `INFERRED`, `NOT_VERIFIED` ou `RECOMMENDED`) e `confidence` (`LOW`, `MEDIUM`, `HIGH` ou `CONFIRMED`) explícitos. A validação ocorre na persistência antes da escrita. Na leitura de registros legados, `source`/`confidence` ausentes ou nulos continuam aceitos e aparecem como "não informado (registro legado)"; valores presentes fora do vocabulário ou de outro tipo continuam falhando com ID/campo. Nenhum desses campos executa hardening ou alteração em clientes.
 
 ### `src/service/gaps.rs` — Lacunas de cobertura
 

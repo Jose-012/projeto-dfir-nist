@@ -205,6 +205,29 @@ dfir-app verify-deliverables ./saida --public-key <64_HEX_DA_CHAVE_PUBLICA>
 
 A geração assinada reverifica antes de auditar. Preview não assina; gerar novamente sem `--sign-with` remove a assinatura antiga para não deixar um envelope inválido junto de arquivos novos.
 
+## 3I. Linhagem, Incidentes e plano de hardening
+
+Em **Evidências**, abra "Resultados analíticos (YARA)" e use **Inspecionar linhagem** no resultado desejado. Em **Incidentes > Plano**, a mesma ação está disponível em cada item. A consulta é somente leitura e valida o escopo: resultado selecionado, histórico completo da `correlation_key`, versão vigente e relações de saída. Não há grafo global nem edição de relações. JSON inválido, relação desconhecida ou alvo ausente produz diagnóstico específico, não uma lista parcial silenciosa. Após uma falha, clicar novamente repete a consulta; trocar de evidência ou incidente limpa o contexto anterior.
+
+A lista de **Incidentes** começa sem consulta automática: **Carregar lista** inicia o carregamento e uma falha oferece **Tentar novamente**. A contagem aparece somente quando os dados estão prontos; `Idle` não afirma que existem zero incidentes.
+
+Todo item novo do plano exige pré-condição, pós-condição e verificação manual, além de **Fonte** e **Confiança**. O formulário começa deliberadamente em `NOT_VERIFIED`/`LOW`; o analista deve elevar esses estados somente com base no que registrou. Registros antigos sem `source`/`confidence` continuam legíveis e aparecem como "não informado (registro legado)". Esses campos organizam recomendações e o Entregável 4; **nenhum hardening é executado automaticamente** nem há eficácia declarada sem verificação manual.
+
+## 3J. Smoke do fluxo nativo X11
+
+`scripts/native_x11_smoke.py` é ferramenta de Engineering/QA para uma sessão X11 disponível. Ele exige Python com `Xlib`, `xclip`, `zenity`, o binário debug e a fixture sanitizada já presentes; não instala dependências, não usa screenshots nem AT-SPI. Use uma raiz de dados nova e um caminho de resultado fora do repositório:
+
+```bash
+cargo build --locked --bin dfir-app
+python3 scripts/native_x11_smoke.py \
+  --data-root <DIRETORIO_VAZIO_EM_SCRATCH> \
+  --results <RESULTADOS_JSON_EM_SCRATCH>
+```
+
+O script recusa uma raiz não vazia e janelas DFIR/seletores preexistentes. Ele injeta ações por XTEST, mas o aceite vem de pós-condições independentes: enums de tela no log sanitizado, evidência e jobs no SQLite isolado, eventos na `timeline_index`, página de timeline com `has_page:true` e ciclo de vida da janela/processo Zenity. A timeline é localizada por essas pós-condições, com rolagem confinada à janela; o retorno ao topo precede o seletor. O cleanup afeta somente os processos iniciados pelo smoke.
+
+O fluxo importa `tests/fixtures/senai-demo.evtx` pelo **campo manual**, executa EVTX e detecção, exige eventos e candidatos não vazios, abre a timeline e então abre/cancela o seletor, conferindo que o catálogo permanece com uma evidência. **Escolher um arquivo dentro do seletor não faz parte do aceite.** Coordenadas podem ser ajustadas pelas opções `--help`; qualquer timeout, candidato vazio ou pós-condição ausente produz `flow: FAIL`. IDs, contagens e hash da fixture entram no relatório, não nomes/caminhos de evidências ou conteúdo de eventos.
+
 ## 4. O que este documento não cobre
 
 Bundle assinado, preflight e health/smoke automáticos, e `.dfirpkg` são Fase 4 (ADR-0018). Importar CSV/JSONL (rede, SIEM, dispositivos de segurança) foi adiado por decisão do operador (ADR-0025).

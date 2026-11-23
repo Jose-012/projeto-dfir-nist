@@ -165,55 +165,28 @@ fn validate_plan_payload(item: &AnalyticalResultResponse) -> AppResult<()> {
             )));
         }
     }
-    // source e confiança são obrigatórios nos itens novos: rejeita ausência
-    // ou valores inválidos no payload armazenado.
-    let Some(source_value) = item.payload.get("source") else {
-        return Err(AppError::Config(format!(
-            "stored plan item {} is missing source",
-            item.id
-        )));
-    };
-    if source_value.is_null() || !source_value.is_string() {
-        return Err(AppError::Config(format!(
-            "stored plan item {} source is not a string",
-            item.id
-        )));
-    }
-    let Some(source) = source_value.as_str() else {
-        return Err(AppError::Config(format!(
-            "stored plan item {} source is not a string",
-            item.id
-        )));
-    };
-    if !matches!(source, "OBSERVED" | "INFERRED" | "NOT_VERIFIED" | "RECOMMENDED") {
-        return Err(AppError::Config(format!(
-            "stored plan item {} source is not valid: {source}",
-            item.id
-        )));
-    }
-    let Some(confidence_value) = item.payload.get("confidence") else {
-        return Err(AppError::Config(format!(
-            "stored plan item {} is missing confidence",
-            item.id
-        )));
-    };
-    if confidence_value.is_null() || !confidence_value.is_string() {
-        return Err(AppError::Config(format!(
-            "stored plan item {} confidence is not a string",
-            item.id
-        )));
-    }
-    let Some(confidence) = confidence_value.as_str() else {
-        return Err(AppError::Config(format!(
-            "stored plan item {} confidence is not a string",
-            item.id
-        )));
-    };
-    if !matches!(confidence, "LOW" | "MEDIUM" | "HIGH" | "CONFIRMED") {
-        return Err(AppError::Config(format!(
-            "stored plan item {} confidence is not valid: {confidence}",
-            item.id
-        )));
+    // Novos inserts exigem os dois campos na persistência. Ausência/null só
+    // pode representar um registro legado na leitura; valores presentes e
+    // inválidos continuam falhando fechado.
+    for (field, allowed) in [
+        (
+            "source",
+            &["OBSERVED", "INFERRED", "NOT_VERIFIED", "RECOMMENDED"][..],
+        ),
+        ("confidence", &["LOW", "MEDIUM", "HIGH", "CONFIRMED"][..]),
+    ] {
+        let Some(value) = item.payload.get(field) else {
+            continue;
+        };
+        if value.is_null() {
+            continue;
+        }
+        let Some(text) = value.as_str() else {
+            return Err(invalid(field));
+        };
+        if !allowed.contains(&text) {
+            return Err(invalid(field));
+        }
     }
     Ok(())
 }
@@ -382,10 +355,13 @@ mod tests {
             .await
             .expect("get plan item")
             .expect("plan item exists");
-        // source e confiança são obrigatórios: remover um deles falha.
+        // Ausência em um registro legado não quebra a leitura do plano.
         let mut payload: serde_json::Value =
             serde_json::from_str(&record.payload).expect("valid payload");
-        payload.as_object_mut().expect("payload object").remove("source");
+        payload
+            .as_object_mut()
+            .expect("payload object")
+            .remove("source");
         sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('bad-plan-source-missing','analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
             .bind(&record.correlation_key)
             .bind(&incident.id)
@@ -395,19 +371,14 @@ mod tests {
             .execute(&fx.services.db)
             .await
             .expect("malformed source-missing plan item");
-        match plan_view(&fx.services, &incident.id).await {
-            Ok(view) => panic!(
-                "missing source was accepted by plan_view: items={:?}",
-                view.items.len()
-            ),
-            Err(error) => {
-                assert!(
-                    error.to_string().contains("bad-plan-source-missing"),
-                    "{error}"
-                );
-                assert!(error.to_string().contains("source"), "{error}");
-            }
-        }
+        let view = plan_view(&fx.services, &incident.id)
+            .await
+            .expect("legacy plan item without source remains readable");
+        assert!(
+            view.items
+                .iter()
+                .any(|item| item.id == "bad-plan-source-missing")
+        );
 
         // Confiança inválida é recusada.
         let mut payload: serde_json::Value =
@@ -418,7 +389,7 @@ mod tests {
             .bind(&incident.id)
             .bind(payload.to_string())
             .bind(record.provenance.to_string())
-            .bind(&item)
+            .bind("bad-plan-source-missing")
             .execute(&fx.services.db)
             .await
             .expect("malformed confidence plan item");
@@ -428,10 +399,7 @@ mod tests {
                 view.items.len()
             ),
             Err(error) => {
-                assert!(
-                    error.to_string().contains("bad-plan-confidence"),
-                    "{error}"
-                );
+                assert!(error.to_string().contains("bad-plan-confidence"), "{error}");
                 assert!(error.to_string().contains("confidence"), "{error}");
             }
         }
@@ -444,7 +412,7 @@ mod tests {
             .bind(&incident.id)
             .bind(payload.to_string())
             .bind(record.provenance.to_string())
-            .bind(&item)
+            .bind("bad-plan-confidence")
             .execute(&fx.services.db)
             .await
             .expect("malformed source plan item");
@@ -454,10 +422,7 @@ mod tests {
                 view.items.len()
             ),
             Err(error) => {
-                assert!(
-                    error.to_string().contains("bad-plan-source"),
-                    "{error}"
-                );
+                assert!(error.to_string().contains("bad-plan-source"), "{error}");
                 assert!(error.to_string().contains("source"), "{error}");
             }
         }
@@ -470,7 +435,7 @@ mod tests {
             .bind(&incident.id)
             .bind(payload.to_string())
             .bind(record.provenance.to_string())
-            .bind(&item)
+            .bind("bad-plan-source")
             .execute(&fx.services.db)
             .await
             .expect("malformed numeric source plan item");
@@ -486,6 +451,50 @@ mod tests {
                 );
                 assert!(error.to_string().contains("source"), "{error}");
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn plan_view_accepts_legacy_missing_and_null_source_confidence() {
+        for null_fields in [false, true] {
+            let fx = fixture().await;
+            let incident = crate::service::create_incident(&fx.services, "incidente")
+                .await
+                .expect("incident");
+            let item = create_plan_item(
+                &fx.services,
+                &incident.id,
+                &plan_input("OS_HARDENING", "baseline", "P1"),
+            )
+            .await
+            .expect("valid plan item");
+            let record = crate::persistence::analytical_results::get(&fx.services.db, &item)
+                .await
+                .expect("get plan item")
+                .expect("plan item exists");
+            let mut payload: serde_json::Value =
+                serde_json::from_str(&record.payload).expect("valid payload");
+            if null_fields {
+                payload["source"] = serde_json::Value::Null;
+                payload["confidence"] = serde_json::Value::Null;
+            } else {
+                let object = payload.as_object_mut().expect("payload object");
+                object.remove("source");
+                object.remove("confidence");
+            }
+            sqlx::query("INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,supersedes,created_at) VALUES('legacy-plan-item','analytical-result-v1','PLAN_ITEM',?,?,?,?,?,'2026-10-03T00:00:00Z')")
+                .bind(&record.correlation_key)
+                .bind(&incident.id)
+                .bind(payload.to_string())
+                .bind(record.provenance.to_string())
+                .bind(&item)
+                .execute(&fx.services.db)
+                .await
+                .expect("legacy payload");
+            let view = plan_view(&fx.services, &incident.id)
+                .await
+                .expect("legacy missing/null source and confidence remain readable");
+            assert_eq!(view.items.len(), 1);
         }
     }
 

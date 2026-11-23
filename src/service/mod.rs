@@ -19,6 +19,7 @@ pub mod demo;
 pub mod detection;
 pub mod findings;
 pub mod gaps;
+pub mod lineage;
 pub mod nist;
 pub mod plan;
 pub mod provenance;

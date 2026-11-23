@@ -443,6 +443,11 @@ fn profile_column(
                 ui,
                 "Versão não vigente: visualização somente leitura. Novas análises continuam usando a versão vigente.",
             );
+            let latest = &history.versions[latest_index];
+            ui.label(format!(
+                "Versão vigente: {} · fonte: {}",
+                latest.version_label, latest.source
+            ));
         }
         if let Some(tier) = &selected.tier {
             ui.label(format!("Tier: {tier}"));
@@ -847,6 +852,7 @@ mod ui_tests {
         harness.get_by_label(
             "Versão não vigente: visualização somente leitura. Novas análises continuam usando a versão vigente.",
         );
+        harness.get_by_label("Versão vigente: atual · fonte: fonte-atual");
         harness.get_by_label(
             "Os gaps foram calculados com uma versão anterior dos profiles: recalcule para atualizar as contagens de gap.",
         );

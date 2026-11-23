@@ -6,9 +6,11 @@
 use super::backend::{Backend, Command};
 use super::detection::DetectionState;
 use super::file_dialog::{FilePicker, Picked, Request};
+use super::lineage::LineageState;
 use super::timeline::{PAGE_SIZE, TimelineView};
 use super::{Loadable, str_field};
 use crate::persistence::audit::CustodyEntry;
+use crate::service::lineage::{LineageScope, LineageView};
 use crate::service::provenance::EvidenceProvenance;
 use crate::service::{
     AnalyticalResultResponse, AnalyzeResponse, EvidenceResponse, IncidentResponse, TimelinePage,
@@ -76,6 +78,7 @@ pub struct EvidenceState {
     /// Expansão transitória pedida pela navegação de um candidato.
     timeline_expand: Option<String>,
     analytical: HashMap<String, Loadable<Vec<AnalyticalResultResponse>>>,
+    lineage: LineageState,
     /// Candidatos de detecção por regras (F1-28).
     pub detection: DetectionState,
     /// Cadeia de custódia por evidência (F1-24), carregada sob demanda.
@@ -237,6 +240,7 @@ impl EvidenceState {
 
     pub fn on_imported(&mut self, result: Result<EvidenceResponse, String>) {
         self.importing = false;
+        tracing::info!(success = result.is_ok(), "native UI import finished");
         match result {
             Ok(evidence) => {
                 self.import_error = None;
@@ -258,6 +262,7 @@ impl EvidenceState {
                 }
                 if self.selected.as_deref() == Some(evidence_id) {
                     self.selected = None;
+                    self.lineage.clear();
                 }
             }
             Err(message) => {
@@ -345,6 +350,19 @@ impl EvidenceState {
         offset: u64,
         result: Result<Option<TimelinePage>, String>,
     ) {
+        let event_count = result
+            .as_ref()
+            .ok()
+            .and_then(Option::as_ref)
+            .map(|page| page.events.len());
+        let has_page = result.as_ref().ok().is_some_and(Option::is_some);
+        tracing::info!(
+            evidence_id,
+            offset,
+            event_count,
+            has_page,
+            "native UI timeline page loaded"
+        );
         if let Some(view) = self.timeline.get_mut(evidence_id) {
             view.on_page(filter, offset, result);
         }
@@ -378,6 +396,15 @@ impl EvidenceState {
                 Err(message) => Loadable::Failed(message),
             },
         );
+    }
+
+    pub fn on_lineage_loaded(
+        &mut self,
+        result_id: &str,
+        scope: &LineageScope,
+        result: Result<LineageView, String>,
+    ) {
+        self.lineage.on_loaded(result_id, scope, result);
     }
 
     pub fn on_linked_to_incident(
@@ -417,6 +444,7 @@ impl EvidenceState {
 
     /// Envia a importação com a proveniência declarada no formulário.
     fn begin_import(&mut self, path: PathBuf, backend: &Backend) {
+        tracing::info!("native UI import requested");
         self.importing = true;
         self.import_error = None;
         self.import_hint = None;
@@ -441,10 +469,8 @@ impl EvidenceState {
             return;
         }
         if path.is_dir() {
-            self.import_hint = Some(format!(
-                "O caminho informado é uma pasta ({}); selecione um arquivo de evidência.",
-                path.display()
-            ));
+            self.import_hint =
+                Some("O caminho informado é uma pasta; selecione um arquivo de evidência.".into());
             return;
         }
         self.manual_path.clear();
@@ -475,9 +501,8 @@ impl EvidenceState {
             return;
         }
         self.import_hint = Some(format!(
-            "{} arquivos soltos; apenas o primeiro ({}) será importado.",
-            paths.len(),
-            first.display()
+            "{} arquivos soltos; apenas o primeiro será importado. Para importar os demais, arraste um arquivo por vez.",
+            paths.len()
         ));
     }
 
@@ -541,6 +566,12 @@ impl EvidenceState {
                         .desired_width(420.0),
                 )
                 .labelled_by(label_id);
+            if entry.changed() {
+                tracing::info!(
+                    non_empty = !self.manual_path.trim().is_empty(),
+                    "native UI import path edited"
+                );
+            }
             let submitted =
                 entry.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
             let can_import_typed = !self.importing && !self.manual_path.trim().is_empty();
@@ -572,6 +603,7 @@ impl EvidenceState {
             Loadable::Failed(message) => super::error_banner(ui, message),
             Loadable::Ready(_) if list_snapshot.is_empty() => {
                 ui.label("Nenhuma evidência importada ainda.");
+                ui.weak("Use “Importar evidência…”, informe o caminho ou arraste um arquivo para a janela.");
             }
             Loadable::Ready(_) => {
                 self.evidence_table(ui, &list_snapshot, backend);
@@ -666,6 +698,7 @@ impl EvidenceState {
                                         .clicked()
                             {
                                 self.selected = Some(item.id.clone());
+                                self.lineage.clear();
                                 self.analytical
                                     .entry(item.id.clone())
                                     .or_insert(Loadable::Loading);
@@ -720,6 +753,7 @@ impl EvidenceState {
                                     {
                                         self.detection.start(&item.id, backend);
                                         self.selected = Some(item.id.clone());
+                                        self.lineage.clear();
                                     }
                                     if detecting {
                                         ui.spinner();
@@ -798,6 +832,7 @@ impl EvidenceState {
         });
 
         ui.collapsing("Resultados analíticos (YARA)", |ui| {
+            let lineage = &mut self.lineage;
             let loadable = self
                 .analytical
                 .entry(evidence_id.to_string())
@@ -809,9 +844,23 @@ impl EvidenceState {
                 }
                 for item in items {
                     yara_result_ui(ui, item);
+                    if ui
+                        .button("Inspecionar linhagem")
+                        .on_hover_text(
+                            "Mostra o resultado selecionado, o histórico e as relações de saída",
+                        )
+                        .clicked()
+                    {
+                        lineage.ensure_loaded(
+                            &item.id,
+                            LineageScope::Evidence(evidence_id.to_string()),
+                            backend,
+                        );
+                    }
                 }
             });
         });
+        self.lineage.ui(ui);
 
         let expand_timeline = self.timeline_expand.as_deref() == Some(evidence_id);
         if expand_timeline {
@@ -1258,13 +1307,14 @@ mod timeline_reload_tests {
 mod analytical_ui_tests {
     use super::*;
     use crate::gui::backend::Backend;
+    use crate::gui::test_harness::drain;
     use egui_kittest::kittest::Queryable;
 
     type State = (EvidenceState, Backend);
 
     #[test]
     fn yara_results_show_metadata_matches_and_long_text_instead_of_raw_json() {
-        let (backend, _commands) = Backend::for_test();
+        let (backend, mut commands) = Backend::for_test();
         let description = "Detecta a sequência de teste EICAR preservada em um artefato, permitindo validar o funcionamento do scanner e a rastreabilidade das ocorrências sem incorporar os bytes casados ao resultado analítico exibido ao operador.";
         let reference = "https://www.example.invalid/dfir/regras/eicar/documentacao-completa-para-revisao-do-analista";
         let payload = serde_json::json!({
@@ -1351,6 +1401,15 @@ mod analytical_ui_tests {
                 .is_none(),
             "nenhuma chave JSON bruta deve virar interface"
         );
+        harness.get_by_label("Inspecionar linhagem").click();
+        harness.step();
+        let sent = drain(&mut commands);
+        assert_eq!(sent.len(), 1, "uma consulta de linhagem: {sent:?}");
+        assert!(matches!(
+            &sent[0],
+            Command::LineageForResult { result_id, scope: LineageScope::Evidence(evidence_id) }
+                if result_id == "yara-1" && evidence_id == "ev-42"
+        ));
     }
 }
 
@@ -1465,6 +1524,52 @@ mod provenance_ui_tests {
         state.request_import(directory.path().to_path_buf(), &backend);
         assert!(state.import_hint.as_deref().unwrap_or("").contains("pasta"));
         assert!(drain(&mut commands).is_empty(), "nada foi importado");
+    }
+
+    #[test]
+    fn directory_rejection_does_not_leak_path_in_the_hint() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = EvidenceState::default();
+
+        // Diretório sintético e existente: request_import rejeita antes de
+        // enviar qualquer comando, sem expor seus componentes no aviso.
+        let temp = tempfile::tempdir().expect("temp dir");
+        let deep = temp.path().join("caso-real").join("Senha do cliente");
+        std::fs::create_dir_all(&deep).expect("synthetic directory");
+        state.request_import(deep, &backend);
+        let hint = state.import_hint.as_deref().unwrap_or("");
+        assert!(hint.contains("pasta"));
+        assert!(
+            !hint.contains("caso-real") && !hint.contains("Senha do cliente"),
+            "o caminho não deve vazar no aviso: {hint}"
+        );
+    }
+
+    #[test]
+    fn multiple_dropped_files_mention_count_without_naming_files() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = EvidenceState::default();
+        let dir = tempfile::tempdir().expect("temp dir");
+        let first = dir.path().join("Security.evtx");
+        let second = dir.path().join("extra.evtx");
+        std::fs::write(&first, b"not real evtx").expect("first");
+        std::fs::write(&second, b"not real evtx").expect("second");
+
+        state.on_files_dropped(&[first.clone(), second], &backend);
+        let hint = state.import_hint.as_deref().unwrap_or("");
+        assert!(hint.contains("2 arquivos"));
+        assert!(
+            !hint.contains("Security.evtx"),
+            "nome do arquivo não deve vazar: {hint}"
+        );
+        assert!(
+            !hint.contains("extra.evtx"),
+            "nome do arquivo não deve vazar: {hint}"
+        );
+        match &drain(&mut commands)[0] {
+            Command::ImportEvidence { path, .. } => assert_eq!(path, &first),
+            other => panic!("comando inesperado: {other:?}"),
+        }
     }
 
     #[test]

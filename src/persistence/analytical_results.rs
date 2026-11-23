@@ -554,7 +554,6 @@ pub async fn current_for_correlation_key(
     Ok(row.map(AnalyticalResultRecord::from))
 }
 
-#[cfg(test)]
 /// Histórico completo de uma `correlation_key`, em ordem de inserção.
 pub async fn history_for_correlation_key(
     pool: &SqlitePool,
@@ -659,6 +658,39 @@ pub async fn related_to(
         if let Some(record) = get(pool, &related_result_id).await? {
             results.push((kind, record));
         }
+    }
+    Ok(results)
+}
+
+/// Versão estrita de [`related_to`] para o caminho de linhagem inspecionável.
+///
+/// Toda linha de saída de `result_id` deve ter um [`RelationType`] conhecido
+/// e um alvo existente; caso contrário falha com `sqlx::Error::Protocol`,
+/// cujo motivo seguro chega ao operador por `AppError::user_message()`.
+pub async fn related_to_strict(
+    pool: &SqlitePool,
+    result_id: &str,
+) -> Result<Vec<(RelationType, AnalyticalResultRecord)>, sqlx::Error> {
+    let relations: Vec<(String, String)> = sqlx::query_as(
+        "SELECT related_result_id,relation_type FROM analytical_result_relations WHERE result_id = ? ORDER BY created_at ASC",
+    )
+    .bind(result_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut results = Vec::with_capacity(relations.len());
+    for (related_result_id, relation_type) in relations {
+        let kind = RelationType::from_str(&relation_type).ok_or_else(|| {
+            validation_error(format!(
+                "relation type unknown for result {result_id}: {relation_type}"
+            ))
+        })?;
+        let Some(record) = get(pool, &related_result_id).await? else {
+            return Err(validation_error(format!(
+                "relation target missing for result {result_id}: {related_result_id}"
+            )));
+        };
+        results.push((kind, record));
     }
     Ok(results)
 }

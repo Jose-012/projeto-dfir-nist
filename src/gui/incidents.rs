@@ -119,6 +119,15 @@ impl Default for IncidentsState {
 }
 
 impl IncidentsState {
+    pub fn on_lineage_loaded(
+        &mut self,
+        result_id: &str,
+        scope: &crate::service::lineage::LineageScope,
+        result: Result<crate::service::lineage::LineageView, String>,
+    ) {
+        self.plan.on_lineage_loaded(result_id, scope, result);
+    }
+
     pub fn on_listed(&mut self, result: Result<Vec<IncidentResponse>, String>) {
         self.list = match result {
             Ok(items) => Loadable::Ready(items),
@@ -180,7 +189,12 @@ impl IncidentsState {
             .resizable(true)
             .default_size(260.0)
             .show(ui, |ui| {
-                ui.heading("Incidentes");
+                let heading = if let Loadable::Ready(items) = &self.list {
+                    format!("Incidentes ({})", items.len())
+                } else {
+                    "Incidentes".to_string()
+                };
+                ui.heading(&heading);
                 let name_label = ui.label("Nome do novo incidente");
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut self.new_name)
@@ -209,13 +223,29 @@ impl IncidentsState {
 
                 let items = self.list.ready().cloned().unwrap_or_default();
                 match &self.list {
-                    Loadable::Idle | Loadable::Loading => {
+                    Loadable::Idle => {
+                        ui.label("A lista de incidentes ainda não foi carregada.");
+                        if ui.button("Carregar lista").clicked() {
+                            self.list = Loadable::Loading;
+                            backend.send(Command::ListIncidents);
+                        }
+                    }
+                    Loadable::Loading => {
                         ui.horizontal(|ui| {
                             ui.spinner();
                             ui.label("Carregando…");
                         });
                     }
-                    Loadable::Failed(message) => super::error_banner(ui, message),
+                    Loadable::Failed(message) => {
+                        super::error_banner(ui, message);
+                        ui.horizontal(|ui| {
+                            if ui.button("Tentar novamente").clicked() {
+                                self.list = Loadable::Loading;
+                                backend.send(Command::ListIncidents);
+                            }
+                            ui.label("ou use outro painel e volte.");
+                        });
+                    }
                     Loadable::Ready(_) if items.is_empty() => {
                         ui.label("Nenhum incidente ainda.");
                     }
@@ -737,7 +767,10 @@ mod tests {
             );
         harness.step();
 
-        assert!(harness.query_by_label(&full_hash).is_none());
+        assert!(
+            harness.query_by_label(&full_hash).is_none(),
+            "hash completo não deve estar visível antes do clique"
+        );
         harness
             .get_by_label("Selecionar hash completo da auditoria")
             .click();
@@ -823,6 +856,121 @@ mod tests {
             harness.query_all_by_label("cdcdcdcdcdcd").count(),
             2,
             "cada evento mostra o prefixo do hash"
+        );
+    }
+
+    #[test]
+    fn heading_shows_the_incident_count_when_ready() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        harness.get_by_label("Incidentes (1)");
+    }
+
+    #[test]
+    fn heading_is_plain_when_not_ready() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = IncidentsState::default();
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        harness.get_by_label("Incidentes");
+        assert!(
+            harness.query_by_label("Incidentes (0)").is_none(),
+            "Idle não deve mostrar contagem enganosa (0)"
+        );
+    }
+
+    #[test]
+    fn idle_state_shows_load_instead_of_spinner() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = IncidentsState::default();
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        harness.get_by_label("A lista de incidentes ainda não foi carregada.");
+        harness.get_by_label("Carregar lista");
+        assert!(
+            harness.query_by_label("Carregando…").is_none(),
+            "Idle não deve mostrar spinner de carregamento antes do clique"
+        );
+    }
+
+    #[test]
+    fn clicking_load_in_idle_sets_loading_and_sends_list_incidents_once() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = IncidentsState::default();
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        harness.get_by_label("Carregar lista").click();
+        // step para aplicar o estado Loading e enviar o comando ao backend.
+        harness.step();
+
+        assert!(matches!(harness.state_mut().0.list, Loadable::Loading));
+        let loads = drain(&mut commands)
+            .iter()
+            .filter(|command| matches!(command, Command::ListIncidents))
+            .count();
+        assert_eq!(loads, 1, "carregar em Idle dispara ListIncidents uma vez");
+    }
+
+    #[test]
+    fn failed_state_shows_error_and_retry_button() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = IncidentsState {
+            list: Loadable::Failed("banco indisponível".into()),
+            ..Default::default()
+        };
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1400.0, 900.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.step();
+
+        harness.get_by_label("Erro: banco indisponível");
+        harness.get_by_label("Tentar novamente");
+        let initial_count = drain(&mut commands)
+            .iter()
+            .filter(|command| matches!(command, Command::ListIncidents))
+            .count();
+        assert_eq!(initial_count, 0, "nenhum ListIncidents enviado ainda");
+
+        harness.get_by_label("Tentar novamente").click();
+        harness.step();
+
+        assert!(matches!(harness.state_mut().0.list, Loadable::Loading));
+        let retries = drain(&mut commands)
+            .iter()
+            .filter(|command| matches!(command, Command::ListIncidents))
+            .count();
+        assert_eq!(
+            retries, 1,
+            "clicar em Tentar novamente dispara ListIncidents uma vez"
         );
     }
 }
