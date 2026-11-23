@@ -1,0 +1,105 @@
+EVD-062 - legibilidade e descricoes contextuais da GUI
+=======================================================
+
+Status: PASS no escopo local executado.
+Commit da apresentacao base: 909235b8266d80d235650a8ba46c95e820268901.
+Commit integrado: cb37e1dd4b27cbab1200380b2231aed7fab971d9.
+Tree integrada: fdef32be4a7486ab6098741b0802d883fff3d278.
+Binario debug SHA-256: 8e91894af5f5a6f53849ffe196a257522b7a2cea6e7de328e18c5ae4c2fd8a72.
+Harness X11 SHA-256: f634406a3dd4c130b26c97fb071c56093a36ca63b4c2c7387d41d60e0e5c01e7.
+Periodo UTC dos gates integrados: 2026-11-23T13:55:11Z..14:19:32Z.
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151,
+CPython 3.13.5, eframe/egui 0.37.0, X11 `DISPLAY=:0`, Zenity 4.1.90,
+python-xlib 0.33, XTEST e xclip ja existentes.
+O binario foi construido antes do commit integrado e nenhum arquivo Rust mudou
+depois dessa construcao. As unicas edicoes posteriores antes do commit foram
+documentais. Raizes vazias isoladas e fixture sanitizada versionada de 69 632
+bytes, SHA-256 256a655a7e259908e1dfd23b914abf27b7ecb8fd98c0b3f73033336f6ed448be.
+Sem screenshots, AT-SPI, OCR, xdotool, instalacao de pacotes ou dados de caso.
+
+Mudanca validada
+----------------
+`format_timestamp`, introduzido no commit base, converte somente para exibicao
+RFC3339 UTC com `Z` ou `+00:00`, incluindo fracoes, para
+`AAAA-MM-DD HH:MM:SS UTC`. Valores invalidos ou com offset nao UTC permanecem
+inalterados. Persistencia, serializacao e dados forenses nao mudaram.
+
+Evidencias usam o formato em importacao e custodia. Incidentes usam o formato
+na auditoria. Linhagem usa o formato na criacao e Timeline usa no evento e no
+hover. As 13 abas de incidente e controles importantes receberam descricoes
+contextuais. O descarte informa que marca `DESTROYED` e preserva a cadeia de
+custodia, sem prometer apaga-la. O subtitulo redundante
+`Local · offline · operador único` foi removido no commit base.
+
+Testes focados e falhas preservadas
+-----------------------------------
+A suite GUI final executou 245 testes com 245 aprovados. Resultado:
+`validation/task-006-focused-gui-final.txt`, SHA-256
+ec9056cc2faa364a38d9c4982223ae5de9422bc561a1d5d8c7e056f8ad9a1871.
+
+A primeira tentativa integrada terminou em exit 101 por usos invalidos de
+`on_hover_text` e um borrow em teste. Os tooltips foram movidos para `Response`,
+o ComboBox foi ajustado e o estado foi liberado antes da reutilizacao. A segunda
+tentativa terminou em exit 100 porque `run()` nao estabilizava com spinners. O
+harness passou a usar avanco temporal limitado `run_steps(4)`, sem remover
+assertivas. Os logs iniciais, falhas e repeticoes permanecem em
+`validation/task-006-*`; nenhuma falha historica foi reescrita.
+
+Gate Rust
+---------
+Comando: `RUSTC_WRAPPER= just verify`.
+Periodo: 2026-11-23T13:55:11Z..14:00:05Z. Exit 0.
+Fase 0: 0 erros e 0 avisos. fmt e check passaram. Nextest executou 713 testes,
+713 aprovados e 1 skipped. Doc-tests passaram com 0 testes. Clippy com
+`-D warnings` passou. Log: `validation/task-006-verify.txt`, SHA-256
+df0e980346c296f5345451bc98825a61a45e32b044856b7fa3aae4055284a234.
+
+E2E com engine real
+-------------------
+Comando: `RUSTC_WRAPPER= just e2e tests/fixtures/senai-demo.evtx`.
+Periodo: 2026-11-23T14:15:44Z..14:19:32Z. Exit 0 e 123/123 etapas.
+A contencao obrigatoria do engine passou com no_new_privs, Landlock ABI 6,
+seccomp, leitura permitida somente onde devido e negacoes de escrita, rede e
+execucao. Importacao, analises, filtros, deteccao, entregaveis, assinatura,
+mascara, determinismo, custodia e descarte passaram. Log:
+`validation/task-006-e2e.txt`, SHA-256
+6c691b35d33d7bb733098751c483add888f463221cb0a34a3a6e5a8f1044e6ec.
+
+Smoke nativo X11 com resize e Zenity
+------------------------------------
+Comando: `python3 scripts/native_x11_smoke.py --import-method zenity
+--exercise-resize --data-root <raiz-vazia> --results <json>` sobre o binario
+identificado acima. Periodo: 2026-11-23T14:04:33Z..14:05:57Z. Exit 0 e
+`flow=PASS`.
+
+1. Navegacao inicial Evidence <-> Incidents confirmada por logs reais.
+2. Geometrias exatas 960x600, 1024x640 e retorno a 1280x820 confirmadas.
+3. Navegacao nova no modo compacto confirmada.
+4. Selecao Zenity por Ctrl+L, outcome `path` e importacao EVTX/FORENSIC no SQLite.
+5. EVTX COMPLETED com 12 itens e indice de 12 eventos.
+6. Deteccao COMPLETED com 5 candidatos.
+7. Timeline `has_page=true`, pagina com 1 evento e indice com 12.
+8. Novo seletor aberto/cancelado sem alterar o catalogo de 1 evidencia.
+9. `resize_diagnostics=PASS`, zero erros X11, sem `BadMatch`/panic e processo vivo.
+10. Nenhuma coordenada do harness precisou mudar apos a remocao do subtitulo.
+
+JSON: `validation/task-006-x11.json`, SHA-256
+d772764c4b4617e2913cb3d3aa308c958dff6225a3f96e6906b3ef7d753fab45.
+O smoke confirma fluxo e geometria, nao o conteudo visual dos novos tooltips.
+Esses textos e timestamps foram verificados pelos testes kittest descritos acima.
+
+Gate documental inicial
+-----------------------
+`just doc-gate` passou em 2026-11-23T14:15:47Z..14:17:10Z com Fase 0 sem
+erros/avisos, documentation/playbook/repo audit PASS e 73 testes OK.
+Log: `validation/task-006-doc-gate.txt`. A repeticao apos o registro documental
+fica no log separado `validation/task-006-doc-gate-final.txt` e nas notas do run.
+
+Limites
+-------
+Este PASS cobre apresentacao, testes kittest, gates Rust/E2E e o fluxo X11 deste
+host. Nao declara inspecao estetica, aceite visual ou de acessibilidade, ausencia
+de problemas de repaint, latencia, AT-SPI, outros backends de dialogo, Windows,
+Linux aarch64, incidente real ou aceite de producao. Nenhuma dependencia mudou;
+supply-chain nao foi repetido e permanece vinculado a EVD-058. Arquivos nao
+rastreados fora da tarefa foram preservados e excluidos dos commits.
