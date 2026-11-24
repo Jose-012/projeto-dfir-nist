@@ -27,6 +27,7 @@ Convenções: o primeiro parâmetro de quase todas as funções é `services: &A
 | `async timeline_page` | `job_id: &str, offset: u64, limit: u64, filter: Option<&str>, want_total: bool` | `AppResult<TimelinePage>` | Uma página da timeline de um job, ordenada por UTC. |
 | `async evidence_analytical_results` | `evidence_id: &str` | `AppResult<Vec<AnalyticalResultResponse>>` | — |
 | `async create_incident` | `name: &str` | `AppResult<IncidentResponse>` | — |
+| `async delete_incident` | `incident_id: &str` | `AppResult<()>` | Exclui logicamente um incidente, preservando evidências, resultados e auditoria. A atualização condicional e o evento de auditoria são atômicos. |
 | `async list_incidents` | `—` | `AppResult<Vec<IncidentResponse>>` | — |
 | `async diagnostics_report` | `db: &SqlitePool, paths: &StoragePaths, settings: serde_json::Value` | `AppResult<serde_json::Value>` | Relatório de diagnóstico para suporte (ADR-0022): versões, contagens do banco, falhas recentes por **código**, espaço livre e arquivos de log. |
 

@@ -13,7 +13,7 @@ Ferramenta forense local/offline. Autenticação, RBAC, sessões e server-mode f
 |---|---|---|---|
 | Monólito modular Rust | IMPLEMENTED | `src/`, `engine/`, `protocol/` | Cargo |
 | SQLite + WAL + FK + FULL sync | IMPLEMENTED | `src/persistence/db.rs` | Cargo + testes |
-| Migrations locais | IMPLEMENTED | `migrations/0001_fase0.sql` até `0014_job_cancellation.sql` (14 arquivos em `migrations/`) | migração do zero + upgrade legado |
+| Migrations locais | IMPLEMENTED | `migrations/0001_fase0.sql` até `0015_incident_logical_delete.sql` (15 arquivos em `migrations/`) | migração do zero + upgrade legado |
 | Audit chain append-only | IMPLEMENTED | `src/persistence/audit.rs` | testes concorrentes |
 | BLAKE3-256-v2-JCS + BLAKE3-v1 | IMPLEMENTED | `src/persistence/audit.rs` | testes de hash |
 | Storage/staging | IMPLEMENTED | `src/infrastructure/storage.rs` | testes adversariais |
