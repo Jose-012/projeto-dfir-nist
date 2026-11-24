@@ -275,21 +275,26 @@ impl TimelineView {
             .selected_event
             .and_then(|index| self.pager.row(index))
             .cloned();
+        if selected.is_none() {
+            // Uma página despejada do cache não pode deixar uma seleção
+            // obsoleta escondida, sem detalhes nem orientação ao analista.
+            self.selected_event = None;
+        }
         let details_beside_table = selected.is_some() && ui.available_width() >= 1_000.0;
-        if details_beside_table {
-            if let Some(event) = &selected {
-                egui::Panel::right("timeline-event-details")
-                    .default_size(360.0)
-                    .min_size(300.0)
-                    .max_size(460.0)
-                    .show(ui, |ui| self.event_details(ui, event));
-            }
+        if details_beside_table && let Some(event) = &selected {
+            egui::Panel::right("timeline-event-details")
+                .default_size(360.0)
+                .min_size(300.0)
+                .max_size(460.0)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("timeline-event-details-scroll")
+                        .show(ui, |ui| self.event_details(ui, event));
+                });
         }
         self.show_table(ui, evidence_id, backend);
-        if !details_beside_table {
-            if let Some(event) = &selected {
-                self.event_details(ui, event);
-            }
+        if !details_beside_table && let Some(event) = &selected {
+            self.event_details(ui, event);
         }
         if self.selected_event.is_none() {
             ui.weak("Selecione um evento para ver seus campos normalizados.");
@@ -700,6 +705,34 @@ mod ui_tests {
             details.min.y > row.min.y,
             "em tela estreita, os detalhes ficam abaixo da tabela"
         );
+    }
+
+    #[test]
+    fn evicting_the_selected_page_clears_the_stale_selection() {
+        let (backend, _commands) = Backend::for_test();
+        let mut view = TimelineView::for_job("job-1");
+        view.on_page(
+            "",
+            0,
+            Ok(Some(TimelinePage::for_test(
+                "job-1",
+                Some(1),
+                0,
+                events(1),
+                vec![],
+            ))),
+        );
+        let mut harness = harness(view, backend);
+        harness.run();
+        harness.get_by_label("Inspecionar evento: evento-0").click();
+        harness.run_steps(2);
+        harness.get_by_label("Detalhes do evento");
+
+        harness.state_mut().0.pager.clear();
+        harness.run_steps(2);
+        assert!(harness.state().0.selected_event.is_none());
+        assert!(harness.query_by_label("Detalhes do evento").is_none());
+        harness.get_by_label("Selecione um evento para ver seus campos normalizados.");
     }
 
     #[test]

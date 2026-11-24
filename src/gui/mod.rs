@@ -387,7 +387,7 @@ enum Screen {
 }
 
 fn screen_reveal_id(screen: Screen) -> egui::Id {
-    egui::Id::new(("native-screen-reveal", screen))
+    egui::Id::unique(("native-screen-reveal", screen))
 }
 
 fn navigation_compact(window_width: f32, manual_override: Option<bool>) -> bool {
