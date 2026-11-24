@@ -64,3 +64,7 @@ Ambiente de verificação: container de desenvolvimento sem o toolchain fixado e
 
 1. **Classificação corrigida.** O texto acima chama o pedido do operador de "requisito explícito da demanda" e invoca a precedência de `AGENTS.md` §1. Isso estava incorreto: a demanda original (SAGA SENAI 12412, `docs/source/DEMANDA_ORIGINAL_SENAI_12412.md`) não menciona tecnologia de interface. A troca para eframe/egui é uma **decisão do operador** (arquitetura, nível 3), válida e mantida, registrada por esta ADR e pela nota (5) da especificação v6.5.0.
 2. **Versões.** A versão `0.33.3` citada acima foi a decidida em 2026-09-22. O `Cargo.toml` passou a exigir `0.36.2` para `eframe`/`egui`/`egui_extras` e o `Cargo.lock` foi regenerado em 2026-10-02 (ver `CHANGELOG.md` 6.5.0). A API `eframe::App` correspondente usa `fn ui`, não `update`.
+
+## Adendo — 2026-11-24 (ADR-0029)
+
+A [**ADR-0029**](ADR-0029-manter-eframe-egui.md) reavaliou a interface nativa e decidiu manter `eframe/egui/egui_extras` **0.37** (versão vigente em 2026-11-18). As versões anteriores `0.33.3` (decisão original, 2026-09-22) e `0.36.2` (atualização via ADR-0018, 2026-10-02) são preservadas como histórico neste documento. Nenhuma migração de framework foi iniciada.
