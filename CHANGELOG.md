@@ -1,6 +1,16 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-24 - checklist consolidado e workflow (`EVD-063`)
+
+- Recuperação de jobs entre instâncias agora usa `owner.lock` e transação condicional com auditoria (ADR-0031), preservando jobs vivos e recuperando legados órfãos. Versões antiga e nova não devem operar concorrentemente no mesmo `data_root`.
+- Os dois leitores persistidos aplicam `MAX_LINE_BYTES` antes da desserialização, com limite exato, overflow, múltiplas linhas e rollback cobertos, sem teto total. A timeline rejeita `kind` não pertencente e apresenta provider/channel pela normalização compartilhada; cinco propriedades de 128 casos e regressões reais sustentam as correções.
+- O fluxo de desenvolvimento informa caminho/build/`DFIR_ENGINE_PATH` quando o engine está ausente, `just run`/`just engine-smoke` constroem os dois binários e helpers Zenity exclusivos ficam em Linux. Não houve execução nativa Windows nem alteração do waiver de Job Object.
+- Oito seeds e quatro fixtures GUI idênticos foram compartilhados sem perda de testes: 725 nomes únicos antes/depois e grupos exatos 10→8. O índice documental reúne 31 ADRs e as adendas preservam o histórico.
+- O benchmark manual de um milhão de eventos registrou geração 35,143 s, indexação+primeira página 129,857 s, páginas até 397,944 ms, filtro+COUNT 595,481 ms e RSS 108.156 KiB. É baseline, não aceite de latência; nenhuma otimização foi feita.
+- `AGENTS.md`, `SESSION_IMPROVEMENT` e `dfir-verify` exigem clean HEAD+diff quando artefatos preservados afetam um gate, sem editar esses arquivos nem relaxar validadores. Lição 36 e `doc-gate` com um positivo e três negativos verificam a instalação da regra.
+- Gates locais: verify 725 passed/1 skipped, E2E 123/123, supply chain com 621 crates/1563 advisories sem vulnerabilidades e doc-gate 73/73. Windows nativo, Linux aarch64, incidente real, CI deste HEAD, aceite estético e produção não são promovidos.
+
 ## Unreleased - 2026-11-23 - inspeção ADR-0030 e fluxo X11 (`EVD-050`/`EVD-059`)
 
 - Evidências e Incidentes ganham melhorias de inspeção, histórico NIST somente leitura, linhagem analítica por escopo e plano com pré/pós-condição, verificação, fonte e confiança. Registros legados continuam legíveis e nenhum hardening é executado automaticamente.

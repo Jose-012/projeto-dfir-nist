@@ -1,4 +1,4 @@
-<!-- doc-type: backlog | status: proposed -->
+<!-- doc-type: backlog | status: completed -->
 # Checklist final consolidado das análises de código e documentação
 
 ## 1. Natureza, ativação e fontes
@@ -40,18 +40,34 @@ As reproduções provam os comportamentos atuais, não uma futura correção. Os
 
 **Consequência:** as metas de reduzir 30-40% dos testes ou 63% da documentação não têm baseline nem benefício semântico demonstrado. Elas não orientam este checklist.
 
+### 2.3 Fechamento da ativação de 2026-11-24
+
+A proposta foi ativada pelo operador e executada nesta rodada. Os 32 itens das prioridades 0 a 5 estão concluídos no escopo de [`EVD-063`](evidence/2026-11-24-evd-063.txt). A seção 3 preserva o plano original e os checkboxes indicam o fechamento real, não novas exigências nem aceite de produção.
+
+| Prioridade | Resultado e commit |
+|---|---|
+| P0 | `2c95df06f6653e19ac196bee4a9687ccc7fd2818`: Before exit 101 com job vivo recuperado indevidamente; After com `owner.lock`, recuperação condicional/auditoria, regressões multiinstância e verify 714/714. ADR-0031 registra a decisão; versões antiga e nova não devem compartilhar um `data_root` em concorrência. |
+| P1 | `86d8a9a7dcac80851edc757945d4e66465db6a52`: dois Before de overflow e controle no limite; After com moldura central, limites/rollback, E2E 123/123 e verify 718/718. Nenhum teto total foi criado. |
+| P2 | `ff176eb2dbbab7e32063c0e8432e6a1872eb06d2`: cinco propriedades de 128 casos, rejeição de `kind` indevido e normalização consistente de provider/channel. Before de tipo e o caso NUL foram preservados; E2E 123/123 e verify 725/725. |
+| P3 | `c4815c2dd02eb49ef3b284c24bd0279fab69583b`: somente oito `seed_incident` e quatro fixtures GUI idênticos foram compartilhados. O `Fixture` de serviço não foi forçado em pools semanticamente distintos. O fixture `incident` entrou no harness inline existente; mover o módulo inteiro não foi considerado útil e a cláusula de movimento não se aplicou. Grupos exatos 10→8, 725 nomes idênticos antes/depois e verify 725/725. |
+| P4 | `7b9272a5912812709fe59091fba25809281c5c41`: adendas pontuais e índice com 31 ADRs, incluindo ADR-0031 criada em P0. Nenhum histórico ou evidência retroativa foi inventado. |
+| P5 | Medição no commit P3, sem mudança de produção: geração 35,143 s, indexação+primeira página 129,857 s, páginas até 397,944 ms, filtro+COUNT 595,481 ms, RSS 108.156 KiB e exit 0. A cláusula de otimização posterior não foi ativada: uma única baseline não demonstra defeito nem melhoria. |
+| Workflow | `58062575fb9d3f159fcfab16ea6267b0a06c9f9e`: lição 36, salvaguarda clean-tree e doc-gate com um positivo e três controles negativos. Os cinco arquivos preservados não foram modificados nem usados para relaxar a validação. |
+
+A falha de desenvolvimento Windows relatada recebeu diagnóstico/build dos dois binários e cfg Linux em `88e2b75a152b20849d475f5b56e3740e865ce6a7`, com verify 719/719 e engine-smoke Linux. Isso não é PASS nativo de Windows 11 nem de Job Object; essas verificações continuam `PENDING-HUMAN`/`WVR-001`.
+
 ## 3. Checklist para ativação posterior
 
 ### Prioridade 0: preservar jobs vivos entre instâncias
 
 Origem: relatório de código, gap de `recover_orphaned_jobs` com múltiplos processos, confirmado pela reprodução do item 2.1.1. O código atual chama a recuperação na partida de cada GUI (`src/gui/backend.rs:687-695`) e seleciona todos os jobs `PENDING/PROCESSING` sem distinguir o dono (`src/service/mod.rs:1594-1633`). A própria função documenta que marcaria um job vivo se houvesse outro processo analisando.
 
-- [ ] Reexecutar a reprodução no HEAD de trabalho e preservar o Before com um job realmente vivo e uma segunda instância.
-- [ ] Definir a semântica de propriedade, lease ou liveness compatível com o cancelamento entre instâncias já suportado. Não impor instância única nem encerrar jobs legítimos como atalho. Registrar ADR se o contrato arquitetural mudar.
-- [ ] Adicionar regressões com duas instâncias: uma com job vivo que deve ser preservado e outra com job comprovadamente morto que deve virar `FAILED/ORPHANED` com auditoria íntegra.
-- [ ] Implementar a menor mudança que recupere apenas jobs órfãos, sem perder conclusão tardia válida, cancelamento persistido, índice ou cadeia de custódia.
-- [ ] Confirmar Before falho e After verde, processo fake recolhido, nenhum engine órfão e nenhum índice parcial.
-- [ ] Executar `just verify`, E2E com sandbox obrigatória e testes focados multiinstância. Atualizar contratos e RTM somente se o estado real mudar.
+- [x] Reexecutar a reprodução no HEAD de trabalho e preservar o Before com um job realmente vivo e uma segunda instância.
+- [x] Definir a semântica de propriedade, lease ou liveness compatível com o cancelamento entre instâncias já suportado. Não impor instância única nem encerrar jobs legítimos como atalho. Registrar ADR se o contrato arquitetural mudar.
+- [x] Adicionar regressões com duas instâncias: uma com job vivo que deve ser preservado e outra com job comprovadamente morto que deve virar `FAILED/ORPHANED` com auditoria íntegra.
+- [x] Implementar a menor mudança que recupere apenas jobs órfãos, sem perder conclusão tardia válida, cancelamento persistido, índice ou cadeia de custódia.
+- [x] Confirmar Before falho e After verde, processo fake recolhido, nenhum engine órfão e nenhum índice parcial.
+- [x] Executar `just verify`, E2E com sandbox obrigatória e testes focados multiinstância. Atualizar contratos e RTM somente se o estado real mudar.
 
 **Pós-condição independente:** iniciar uma segunda instância não altera um job vivo da primeira, enquanto um job cujo dono morreu é recuperado uma única vez, com auditoria e custódia válidas.
 
@@ -59,12 +75,12 @@ Origem: relatório de código, gap de `recover_orphaned_jobs` com múltiplos pro
 
 Origem: o relatório propõe um teto total em `results.jsonl`. A triagem reduziu e corrigiu o escopo. `MAX_LINE_BYTES` já é 8 MiB (`protocol/src/lib.rs:21`), mas os dois leitores persistidos usam `lines()` sem esse limite (`src/service/mod.rs:1773-1805` e `1914-2008`). A profundidade só é verificada depois que a linha inteira já foi alocada.
 
-- [ ] Preservar a reprodução que aceita uma linha acima de `MAX_LINE_BYTES` em `read_result_items`.
-- [ ] Adicionar Before equivalente para indexação de timeline, incluindo índice anterior preservado após a rejeição.
-- [ ] Implementar leitura limitada que rejeita linha excessiva antes da desserialização, com memória proporcional à moldura e sem `lines()` sem teto. Reutilizar a constante e a política central de `dfir-protocol`.
-- [ ] Cobrir os dois caminhos: limite exato aceito, limite+1 rejeitado, várias linhas válidas sem teto total e diagnóstico com número da linha, sem conteúdo do evento.
-- [ ] Confirmar rollback completo na indexação e ausência de perda silenciosa de resultados válidos.
-- [ ] Executar testes focados, `just verify` e E2E. Não adicionar teto total de saída nem alterar ADR-0020 sem uma nova decisão explícita.
+- [x] Preservar a reprodução que aceita uma linha acima de `MAX_LINE_BYTES` em `read_result_items`.
+- [x] Adicionar Before equivalente para indexação de timeline, incluindo índice anterior preservado após a rejeição.
+- [x] Implementar leitura limitada que rejeita linha excessiva antes da desserialização, com memória proporcional à moldura e sem `lines()` sem teto. Reutilizar a constante e a política central de `dfir-protocol`.
+- [x] Cobrir os dois caminhos: limite exato aceito, limite+1 rejeitado, várias linhas válidas sem teto total e diagnóstico com número da linha, sem conteúdo do evento.
+- [x] Confirmar rollback completo na indexação e ausência de perda silenciosa de resultados válidos.
+- [x] Executar testes focados, `just verify` e E2E. Não adicionar teto total de saída nem alterar ADR-0020 sem uma nova decisão explícita.
 
 **Pós-condição independente:** uma linha acima da moldura falha fechado antes do parse, sem alocação ilimitada e sem publicar índice parcial. Arquivos com muitas linhas válidas continuam completos, conforme ADR-0020.
 
@@ -72,11 +88,11 @@ Origem: o relatório propõe um teto total em `results.jsonl`. A triagem reduziu
 
 Origem: relatório de código, fuzzing de `NormalizedEvent::from_item` e `timeline_event_from_item`. O protocolo já tem round-trip com JSON arbitrário (`protocol/tests/properties.rs:93-101`), mas a conversão específica da aplicação tem cobertura limitada.
 
-- [ ] Inventariar os casos atuais e evitar duplicar as propriedades já existentes do protocolo.
-- [ ] Usar `proptest` já presente para gerar entradas estruturalmente válidas e inválidas para `timeline_event_from_item`, incluindo IDs qualificados, campos desconhecidos, legado, tipos errados e dados ausentes.
-- [ ] Provar ausência de panic, rejeição de itens que não são timeline e consistência entre campos normalizados e apresentados.
-- [ ] Manter a profundidade e a moldura como controles anteriores à conversão. Não criar nova dependência de fuzzing nem converter propriedades úteis em poucos exemplos determinísticos.
-- [ ] Executar propriedades focadas, `just verify` e E2E se a conversão de produção mudar.
+- [x] Inventariar os casos atuais e evitar duplicar as propriedades já existentes do protocolo.
+- [x] Usar `proptest` já presente para gerar entradas estruturalmente válidas e inválidas para `timeline_event_from_item`, incluindo IDs qualificados, campos desconhecidos, legado, tipos errados e dados ausentes.
+- [x] Provar ausência de panic, rejeição de itens que não são timeline e consistência entre campos normalizados e apresentados.
+- [x] Manter a profundidade e a moldura como controles anteriores à conversão. Não criar nova dependência de fuzzing nem converter propriedades úteis em poucos exemplos determinísticos.
+- [x] Executar propriedades focadas, `just verify` e E2E se a conversão de produção mudar.
 
 **Pós-condição independente:** entradas arbitrárias dentro dos limites preservam a mesma invariante da conversão e nunca causam panic ou aceitação de um item de outro tipo.
 
@@ -84,11 +100,11 @@ Origem: relatório de código, fuzzing de `NormalizedEvent::from_item` e `timeli
 
 Origem: relatório de código, itens 1 e 2 da priorização. Existe setup repetido, mas `service::test_support::Fixture` já existe e `gui::test_harness` já é um módulo compartilhado inline em `src/gui/mod.rs:1080`. Não criar implementações paralelas nem presumir a economia de 500 linhas.
 
-- [ ] Medir duplicação exata e decidir arquivo por arquivo se a extração preserva setup, migrações, permissões e isolamento.
-- [ ] Reutilizar o `Fixture` existente quando compatível. Criar suporte de persistência somente para código realmente idêntico e usado por pelo menos dois módulos.
-- [ ] Se a extração da GUI for útil, mover o módulo inline existente para um arquivo sem mudar sua política de glifos, IDs, foco, spinner ou geometria.
-- [ ] Comparar inventário de testes e nomes antes/depois. Não remover testes, reduzir casos de propriedade nem transformar testes de layout em snapshots visuais.
-- [ ] Executar os testes de cada módulo migrado e, ao final, `just verify`.
+- [x] Medir duplicação exata e decidir arquivo por arquivo se a extração preserva setup, migrações, permissões e isolamento.
+- [x] Reutilizar o `Fixture` existente quando compatível. Criar suporte de persistência somente para código realmente idêntico e usado por pelo menos dois módulos.
+- [x] Se a extração da GUI for útil, mover o módulo inline existente para um arquivo sem mudar sua política de glifos, IDs, foco, spinner ou geometria.
+- [x] Comparar inventário de testes e nomes antes/depois. Não remover testes, reduzir casos de propriedade nem transformar testes de layout em snapshots visuais.
+- [x] Executar os testes de cada módulo migrado e, ao final, `just verify`.
 
 **Pós-condição independente:** mesmos cenários e assertivas, menos duplicação real, nenhum helper concorrente e nenhum teste perdido ou enfraquecido.
 
@@ -96,12 +112,12 @@ Origem: relatório de código, itens 1 e 2 da priorização. Existe setup repeti
 
 Origem: relatório documental, itens 14 a 17, mais uma lacuna encontrada pelo coordenador na ADR-0006. Estas ações não envolvem poda, arquivamento ou reescrita de decisões.
 
-- [ ] Resolver a adenda vazia da ADR-0006 com uma nota que aponte para as decisões posteriores já existentes sobre memória e contenção, sem alterar retroativamente a decisão original.
-- [ ] Acrescentar na ADR-0017 apenas um ponteiro para a ADR-0029 e a versão vigente 0.37. Preservar 0.33.3 e 0.36.2 como histórico.
-- [ ] Criar `docs/adrs/README.md` com os 30 ADRs, status, `supersedes` e ligações, sem mover os arquivos nem reclassificá-los como "overkill".
-- [ ] Se houver padronização, aplicar `Status`, `Supersedes`, `Superseded-by` e `Evidência` aos ADRs novos ou já editados. Não reescrever os 30 em massa.
-- [ ] Vincular somente evidências existentes aos ADRs antigos. Não inventar execução retroativa nem transformar referência em novo `PASS`.
-- [ ] Executar `just doc-gate` e revisar todos os links e a hierarquia documental.
+- [x] Resolver a adenda vazia da ADR-0006 com uma nota que aponte para as decisões posteriores já existentes sobre memória e contenção, sem alterar retroativamente a decisão original.
+- [x] Acrescentar na ADR-0017 apenas um ponteiro para a ADR-0029 e a versão vigente 0.37. Preservar 0.33.3 e 0.36.2 como histórico.
+- [x] Criar `docs/adrs/README.md` com os 30 ADRs, status, `supersedes` e ligações, sem mover os arquivos nem reclassificá-los como "overkill".
+- [x] Se houver padronização, aplicar `Status`, `Supersedes`, `Superseded-by` e `Evidência` aos ADRs novos ou já editados. Não reescrever os 30 em massa.
+- [x] Vincular somente evidências existentes aos ADRs antigos. Não inventar execução retroativa nem transformar referência em novo `PASS`.
+- [x] Executar `just doc-gate` e revisar todos os links e a hierarquia documental.
 
 **Pós-condição independente:** o índice resolve navegação, as notas refletem referências vigentes e todo conteúdo histórico permanece preservado.
 
@@ -109,10 +125,10 @@ Origem: relatório documental, itens 14 a 17, mais uma lacuna encontrada pelo co
 
 Origem: relatório de código, item 7 e teste ignorado de 1 milhão de eventos. Já existe `timeline_one_million_events_index_and_paging_timing`, marcado como medição manual (`src/service/mod.rs:3662-3700`). Não é um gap de E2E nem deve entrar no gate padrão sem orçamento.
 
-- [ ] Definir métrica, hardware, build, tempo máximo e espaço em disco antes da execução.
-- [ ] Rodar somente o benchmark escolhido, nunca todos os ignorados por rotina, e preservar tempos de geração, indexação, páginas e filtro.
-- [ ] Separar resultado de desempenho de correção funcional. Não prometer melhoria nem aceite de produção com uma única medição.
-- [ ] Se houver otimização posterior, exigir baseline, comparação no mesmo ambiente e ausência de regressão funcional.
+- [x] Definir métrica, hardware, build, tempo máximo e espaço em disco antes da execução.
+- [x] Rodar somente o benchmark escolhido, nunca todos os ignorados por rotina, e preservar tempos de geração, indexação, páginas e filtro.
+- [x] Separar resultado de desempenho de correção funcional. Não prometer melhoria nem aceite de produção com uma única medição.
+- [x] Se houver otimização posterior, exigir baseline, comparação no mesmo ambiente e ausência de regressão funcional.
 
 **Pós-condição independente:** existe uma medição reproduzível e identificada, sem transformar o benchmark em gate obrigatório ou aceite de latência.
 

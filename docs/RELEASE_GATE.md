@@ -85,9 +85,11 @@ O release é fechado somente com evidência executada.
 
 > **Atualização 2026-11-23 (legibilidade e descrições da GUI).** `EVD-062`, nos commits `909235b` e `cb37e1d`, registra timestamps UTC somente de apresentação, descrições contextuais e remoção do subtítulo redundante. GUI 245/245, `just verify` com 713 passed/1 skipped, doc-tests/Clippy verdes, E2E 123/123 e fluxo X11 com Zenity/resize passaram. Falhas de compilação e de estabilização com spinners foram corrigidas sem remover assertivas e permanecem preservadas. Não há aceite estético, AT-SPI, outras plataformas ou produção.
 
+> **Atualização 2026-11-24 (checklist consolidado e workflow).** `EVD-063` registra Before/After de recuperação multiinstância (ADR-0031), moldura JSONL, diagnóstico/build do engine e conversão da timeline; deduplicação medida sem perda de testes; índice de 31 ADRs; benchmark manual de 1M sem otimização; e salvaguarda clean-tree com três controles negativos. O verify integrado mais recente tem 725 passed/1 skipped, E2E 123/123 e supply chain verde com 621 crates/1563 advisories. O diagnóstico do fluxo de desenvolvimento Windows não é execução nativa; Windows 11/Job Object, aarch64, incidente real, CI deste HEAD e produção não são promovidos.
+
 ## Gate documental
 
-Estado: `PASS` em 2026-11-23 (`EVD-062`, doc-gate inicial 73/73; anterior `EVD-059`, doc-gates inicial e pós-documentação 73/73; anterior `EVD-058`; anterior `EVD-057`; anterior `EVD-056`; anteriores `EVD-055`/`EVD-054`/`EVD-053`/`EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-036`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`/`EVD-049`/`EVD-052`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
+Estado: `PASS` em 2026-11-24 (`EVD-063`, doc-gate 73/73 e três controles negativos; anterior `EVD-062`, doc-gate inicial 73/73; anterior `EVD-059`, doc-gates inicial e pós-documentação 73/73; anterior `EVD-058`; anterior `EVD-057`; anterior `EVD-056`; anteriores `EVD-055`/`EVD-054`/`EVD-053`/`EVD-004`/`EVD-008`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-032`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-036`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`/`EVD-049`/`EVD-052`): Fase 0 com 0 erros/0 avisos e `documentation gate: PASS`.
 
 ```bash
 just validate-fase0
@@ -98,7 +100,7 @@ just doc-gate
 
 ## Gate Rust
 
-Estado: `PASS` em Linux x86_64 em 2026-11-23 (`EVD-062`, nextest 713 passed/1 skipped; anterior local `EVD-059`, nextest 701 passed/1 skipped; anterior local `EVD-058`, nextest 669 passed/1 skipped; anterior local `EVD-057`, nextest 669 passed/1 skipped; anterior local `EVD-056`, 573 passed/1 skipped; CI em `EVD-054`/`EVD-055`, 536 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
+Estado: `PASS` em Linux x86_64 em 2026-11-24 (`EVD-063`, nextest 725 passed/1 skipped; anterior `EVD-062`, nextest 713 passed/1 skipped; anterior local `EVD-059`, nextest 701 passed/1 skipped; anterior local `EVD-058`, nextest 669 passed/1 skipped; anterior local `EVD-057`, nextest 669 passed/1 skipped; anterior local `EVD-056`, 573 passed/1 skipped; CI em `EVD-054`/`EVD-055`, 536 passed/1 skipped; anteriores `EVD-001`/`EVD-005`/`EVD-010`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-015`/`EVD-016`/`EVD-017`/`EVD-018`/`EVD-020`/`EVD-021`/`EVD-022`/`EVD-023`/`EVD-024`/`EVD-025`/`EVD-026`/`EVD-027`/`EVD-028`/`EVD-029`/`EVD-030`/`EVD-031`/`EVD-033`/`EVD-034`/`EVD-035`/`EVD-037`/`EVD-038`/`EVD-039`/`EVD-040`/`EVD-041`/`EVD-042`/`EVD-043`/`EVD-044`/`EVD-045`/`EVD-046`/`EVD-047`/`EVD-048`); Windows e aarch64 viraram waivers formais (`WVR-001`, `WVR-002`, válidos até 2026-12-31; ver Runtime).
 
 ```bash
 rustc --version --verbose
@@ -118,7 +120,7 @@ cargo test --workspace --locked --doc
 
 ## Supply chain
 
-Estado: `PASS` em 2026-11-22 (`EVD-058`, 621 dependências e 1560 advisories; anteriores `EVD-056`, `EVD-051`, `EVD-054` e `EVD-055`; anteriores históricos `EVD-003`/`EVD-007`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-032`/`EVD-036`/`EVD-041`). A revisão reproduziu `RUSTSEC-2026-0592` em `url 2.5.8`; a atualização mínima para `url 2.5.9`/`form_urlencoded 1.2.3` o removeu sem exceção nova. A revisão anterior encontrou oito vulnerabilidades de `wasmtime 48.0.8`, corrigidas em 48.0.9; `sqlx 0.9.1` + `libsqlite3-sys 0.40.0` eliminaram `RUSTSEC-2026-0459`, e `WVR-004` foi encerrado. Não há exceção de vulnerabilidade vigente. Permanecem duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono), esta última com revisão até 2026-12-31. Exceção informativa analisada não é prova de inexploração nem de correção.
+Estado: `PASS` em 2026-11-24 (`EVD-063`, 621 dependências e 1563 advisories; anterior `EVD-058`, 621 dependências e 1560 advisories; anteriores `EVD-056`, `EVD-051`, `EVD-054` e `EVD-055`; anteriores históricos `EVD-003`/`EVD-007`/`EVD-012`/`EVD-013`/`EVD-014`/`EVD-019`/`EVD-020`/`EVD-032`/`EVD-036`/`EVD-041`). A revisão reproduziu `RUSTSEC-2026-0592` em `url 2.5.8`; a atualização mínima para `url 2.5.9`/`form_urlencoded 1.2.3` o removeu sem exceção nova. A revisão anterior encontrou oito vulnerabilidades de `wasmtime 48.0.8`, corrigidas em 48.0.9; `sqlx 0.9.1` + `libsqlite3-sys 0.40.0` eliminaram `RUSTSEC-2026-0459`, e `WVR-004` foi encerrado. Não há exceção de vulnerabilidade vigente. Permanecem duas exceções informativas documentadas (`RUSTSEC-2025-0141`, bincode; `RUSTSEC-2026-0543`, chrono), esta última com revisão até 2026-12-31. Exceção informativa analisada não é prova de inexploração nem de correção.
 
 ```bash
 cargo deny --workspace check
@@ -160,6 +162,9 @@ cargo audit
 - `PASS` **warnings de análise:** o e2e persiste os dois avisos do EVTX truncado; `EVD-021` também prova que JSON inválido e `warning_count` negativo/divergente falham em vez de apagar os detalhes;
 - `PASS` **candidatos de detecção:** o e2e confirma que os candidatos nascem pendentes, que só a confirmação cria achado, que rejeitar exige motivo e que nova execução não duplica; `EVD-020` também prova que JSON persistido inválido falha antes das escritas analíticas;
 - `PASS` **cópia antes de migration (RF-032):** `cargo test` cobre a cópia, a verificação, a recusa por falta de espaço e a adulteração (`EVD-005`); a execução real sobre dados reais aconteceu no e2e (`EVD-006`); política de retenção de `backups/` documentada em `docs/OPERATION.md` §3.1.1;
+- `PASS` **recuperação de órfãos com propriedade de job:** `owner.lock` exclusivo antes de `PROCESSING`, preservação de job vivo com lock ativo, recuperação legada condicional e auditoria na mesma transação; cancelamento entre instâncias e custódia permanecem íntegros (`EVD-063`). Não executar versões antiga e nova concorrentemente no mesmo `data_root`;
+- `PASS` **JSONL persistido com moldura central:** ambos os leitores rejeitam `MAX_LINE_BYTES + 1` antes da desserialização, aceitam o limite exato e múltiplas linhas válidas e preservam rollback, sem teto total (`EVD-063`);
+- `PASS` **conversão de timeline discriminada e normalizada:** somente `kind` ausente ou `NORMALIZED_EVENT` entra na timeline; provider/channel seguem os campos normalizados, com cinco propriedades de 128 casos e regressões para tipo indevido e NUL (`EVD-063`);
 - SQLite local e staging com retenção definida.
 
 ## Release da interface
@@ -168,7 +173,7 @@ A interface é nativa (eframe/egui/egui_extras), parte do próprio binário `dfi
 
 ## Gates de verificação acrescentados (ADR-0019, ADR-0021, ADR-0022)
 
-- **Ponta a ponta com engine real:** `just e2e caminho/arquivo.evtx` (`scripts/e2e_headless.py`) **123/123** em 2026-11-23 com a fixture versionada, incluindo cancelamento tardio, geração assinada, verificação offline, chave errada, adulterações/ausência e remoção de assinatura obsoleta - `PASS` (`EVD-059`; anteriores no mesmo formato em `EVD-058`/`EVD-057`/`EVD-056`). Resultado anterior: 110/110 com o `security.evtx` de referência (`EVD-002`). Qualquer EVTX é aceito; etapas que dependem de conteúdo (candidatos de detecção) são `FAIL` honesto quando o arquivo não contém os sinais.
+- **Ponta a ponta com engine real:** `just e2e caminho/arquivo.evtx` (`scripts/e2e_headless.py`) **123/123** em 2026-11-24 com a fixture versionada, incluindo cancelamento tardio, geração assinada, verificação offline, chave errada, adulterações/ausência e remoção de assinatura obsoleta - `PASS` (`EVD-063`; anteriores no mesmo formato em `EVD-059`/`EVD-058`/`EVD-057`/`EVD-056`). Resultado anterior: 110/110 com o `security.evtx` de referência (`EVD-002`). Qualquer EVTX é aceito; etapas que dependem de conteúdo (candidatos de detecção) são `FAIL` honesto quando o arquivo não contém os sinais.
 - **Testes de GUI sem janela:** `cargo test --workspace` inclui os testes com `egui_kittest` — `PASS` (`EVD-001`).
 - **Supply chain executado, não só configurado:** `cargo deny --workspace check` com advisories, bans, licenses e sources verdes (exceção individual e justificada em `deny.toml`) — `PASS` (`EVD-003`).
 - `PASS` **Logs sem dado de evidência:** `dfir-app diagnostics` não contém nome de arquivo nem conteúdo de evento (teste dedicado) — `EVD-005`;

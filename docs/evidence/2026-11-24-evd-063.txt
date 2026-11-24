@@ -1,0 +1,169 @@
+EVD-063 - recuperacao, protocolo, timeline, deduplicacao e workflow
+===================================================================
+
+Status: PASS somente no escopo local executado e descrito abaixo.
+Periodo UTC dos gates e controles consolidados: 2026-11-24T03:45Z..07:39Z.
+Base de codigo/testes: c4815c2dd02eb49ef3b284c24bd0279fab69583b,
+tree 555e0c4ba4f0a7679cc731d0614369bde0b2f4f3.
+Workflow clean-tree: 58062575fb9d3f159fcfab16ea6267b0a06c9f9e,
+tree e849705fd7b7fc1a554d4297eedc7824fc942ad6.
+Documentacao desta evidencia e do checklist: commit seguinte.
+Ambiente: Linux x86_64, Debian 13, Intel i3-2130, 3809 MiB RAM,
+rustc/cargo 1.100.0, nextest 0.9.151, CPython 3.13.5, sandbox required no E2E.
+Run: overnight_1795484966753_10927467433448320647. Os logs citados ficam em
+`validation/` nesse run, fora do checkout. Seus SHA-256 estao em
+`validation/task-010-evidence-sha256.txt`.
+
+Commits da rodada
+-----------------
+2c95df06f6653e19ac196bee4a9687ccc7fd2818 - ownership de jobs entre instancias.
+7b9272a5912812709fe59091fba25809281c5c41 - notas e indice de 31 ADRs.
+86d8a9a7dcac80851edc757945d4e66465db6a52 - moldura de JSONL persistido.
+88e2b75a152b20849d475f5b56e3740e865ce6a7 - build/diagnostico do engine.
+ff176eb2dbbab7e32063c0e8432e6a1872eb06d2 - conversao/propriedades da timeline.
+c4815c2dd02eb49ef3b284c24bd0279fab69583b - fixtures de teste compartilhados.
+58062575fb9d3f159fcfab16ea6267b0a06c9f9e - salvaguarda clean-tree.
+
+P0 - jobs vivos entre instancias
+-------------------------------
+Before qualificado: um job realmente PROCESSING foi recuperado por uma segunda
+instancia; `cargo test` exit 101 e recovered=1. O engine fake foi recolhido antes
+das assertivas finais (`validation/task-001-before-qualified.txt`).
+After: cada job adquire `owner.lock` exclusivo antes de PROCESSING e o mantem ate
+persistir. WouldBlock preserva o job; legado sem lock continua recuperavel.
+Recuperacao e auditoria ANALYSIS_JOB_ORPHANED usam uma transacao condicional
+BEGIN IMMEDIATE. Testes de job vivo, legado e cancelamento entre instancias
+passaram. Clean doc-gate/verify: 714 passed/1 skipped, doctests e Clippy verdes
+(`validation/task-001-clean-gates.txt`, SHA-256
+87d933813e4d58dcf593ec714271a51a192bda68e3203627f661774b01236fdf).
+ADR-0031 registra a decisao. Versoes antiga e nova do app nao devem operar
+concorrentemente no mesmo data_root, pois jobs legados nao tem owner.lock.
+
+P1 - moldura antes de alocar/desserializar
+------------------------------------------
+Before qualificado: controle no limite exato passou e duas linhas acima de
+MAX_LINE_BYTES foram aceitas, uma por cada leitor; cargo exit 101
+(`validation/task-004-before-qualified.txt`).
+After: ambos os leitores usam FramedRead/LinesCodec::new_with_max_length com
+`dfir_protocol::MAX_LINE_BYTES`. Limite exato, limite+1, multiplas linhas validas,
+erro com linha e rollback passaram. Nao existe teto total nem truncamento.
+Clean verify: 718 passed/1 skipped. E2E real: 123/123, sandbox obrigatoria
+(`validation/task-004-clean-verify.txt`, SHA-256
+d0f5e19e2fb333e311b7f07a9402b9423302b7c186a84e47b336d11800bce4cb;
+`validation/task-004-e2e.txt`, SHA-256
+5466e8bb96d8a6dcad5531c26fec8e7f2bfced4a52d9b2d0c32497a11356b3ec).
+
+Falha de desenvolvimento Windows relatada
+-----------------------------------------
+Before host-independente: engine ausente produzia somente um erro OS cru, sem
+caminho nem remediacao, exit 101 (`validation/task-005-before-missing-engine.txt`).
+After: o erro identifica o caminho do engine, o build dos dois binarios e
+DFIR_ENGINE_PATH. `just run` e `just engine-smoke` constroem app e engine.
+Helpers Zenity exclusivos de Linux estao sob cfg(target_os = "linux"); o codigo
+compartilhado de child guard/slot permanece. Um teste de diagnostico, oito testes
+Zenity, nove de processo e Linux engine-smoke passaram. Clean doc-gate/verify:
+719 passed/1 skipped, doctests e Clippy verdes (`validation/task-005-clean-gates.txt`,
+SHA-256 7641f8b713cc607795ed4865cffd94780b229108c0c8956a8679570ba06b1b5d).
+Isto nao e execucao nativa Windows, Job Object nem suporte de sandbox Windows.
+
+P2 - propriedades e conversao da timeline
+-----------------------------------------
+Inventario: as propriedades do protocolo ja cobriam round-trip, profundidade e
+referencias logicas. Foram acrescentadas cinco propriedades de 128 casos na
+aplicacao, sem nova biblioteca de fuzzing: proptest 1.12.0, ja resolvido no lock,
+foi declarado como dev-dependency do app.
+Before qualificado de discriminador: evento valido marcado YARA_MATCH entrou na
+timeline; cargo exit 101 (`validation/task-006-before-kind-qualified.txt`).
+A primeira After encontrou outro defeito real: Channel NUL era apresentado como
+Some(NUL), embora o campo normalizado fosse None. O caso minimo virou regressao
+deterministica complementar (`validation/task-006-after-focused.txt`).
+After: kind ausente ou NORMALIZED_EVENT e aceito; outro valor/tipo e rejeitado.
+Serializacao e SCHEMA_VERSION 4 nao mudaram. Provider/channel usam os campos
+estruturados normalizados, inclusive no legado. Cinco propriedades, regressao NUL,
+26 testes unitarios + tres propriedades do protocolo e 32 testes de timeline da
+aplicacao passaram (`validation/task-006-after-normalization.txt` e
+`validation/task-006-application-timeline.txt`).
+Clean doc-gate/verify: 725 passed/1 skipped, doctests e Clippy verdes
+(`validation/task-006-clean-gates.txt`, SHA-256
+8dd208bb260feb83cbf6a7ab7b51b1f4cfcc0b48214323a09ac873d2e72c40e3).
+E2E real: 123/123 (`validation/task-006-e2e.txt`, SHA-256
+07783ca4f6bac05491a4d7bfd49e15d561460be1a9d3eeb4912a536439e13482).
+O archive P2 nao tem `.git`; o `fatal: not a git repository` de um git status de
+setup foi preservado. A identidade da fonte foi confirmada por archive, patch e
+cmp, nao por esse comando.
+
+Supply chain
+------------
+Comandos: cargo metadata --locked; cargo tree --locked -e features;
+cargo tree --locked -d; just supply-chain. Todos exit 0.
+Audit carregou 1563 advisories e varreu 621 crates: zero vulnerabilidades e um
+aviso informativo permitido de bincode. Deny terminou advisories/bans/licenses/
+sources ok. Nenhuma excecao nova (`validation/task-006-supply-chain.txt`, SHA-256
+584af870bddeaa3aa67450cb7f19eb762e8de2e40b4e7581e19ba0502b9b9f43).
+
+P3 - deduplicacao medida de testes
+----------------------------------
+AST screening antes: 1946 function_items e dez grupos de corpos identicos apos
+normalizar whitespace. Somente dois grupos de fixtures foram migrados: oito
+seed_incident e quatro construtores GUI de IncidentResponse. Producoes semelhantes
+nao foram abstraidas por rotina (`validation/task-007-duplication-before.txt`).
+After: um persistence::test_support cfg(test) e um fixture no test_harness inline
+existente; 75 linhas liquidas removidas, dez grupos -> oito. Os modulos migrados
+passaram. O multiconjunto nextest antes/depois tem 725 nomes unicos, zero perdas,
+zero adicoes e zero duplicados (`validation/task-007-inventory-comparison.txt`,
+SHA-256 f7accff348ca32ca337ab56a493a0e5a645de8500256513e48a1777c6aed5b76).
+Clean verify: 725 passed/1 skipped, doctests e Clippy verdes
+(`validation/task-007-clean-verify.txt`, SHA-256
+4912f1673ddec6009cd9acbbfb111a47e9d6ad7393ec762e5e8e90317aaa220c).
+Nenhum teste, caso de propriedade, politica de glifos ou assertiva visual mudou.
+
+P4 - documentacao de ADRs
+-------------------------
+ADR-0006 aponta para as decisoes posteriores de memoria/contencao; ADR-0017 aponta
+para ADR-0029/egui 0.37 sem reescrever o historico. O indice contem 31 ADRs apos
+ADR-0031, com status, supersessao e ligacoes. Nao houve PASS retroativo nem
+arquivamento/reescrita em massa. O changeset foi revisado pelo coordinator e
+coberto pelos doc-gates limpos subsequentes.
+
+P5 - benchmark manual de um milhao de eventos
+---------------------------------------------
+Fonte medida: c4815c2dd02eb49ef3b284c24bd0279fab69583b, debug unoptimized.
+Ambiente e comando foram registrados antes em `validation/task-008-benchmark-plan.txt`.
+Somente `service::tests::timeline_one_million_events_index_and_paging_timing`
+foi executado com --ignored --exact, TMPDIR em scratch e timeout de 20 minutos.
+A primeira tentativa nao iniciou o teste: /usr/bin/time nao existe, exit 127.
+A repeticao usou Python stdlib subprocess/resource, sem instalar pacotes.
+Resultados: geracao 35.143157987 s; indexacao+primeira pagina 129.857396677 s
+com total 1000000; paginas @0 7.689793 ms, @500000 167.342554 ms e
+@999800 397.943733 ms; filtro+COUNT 595.481011 ms com total 1000000.
+Teste 166.76 s; wrapper 176.033 s; RSS maximo 108156 KiB; benchmark exit 0
+(`validation/task-008-million-event-benchmark.txt`, SHA-256
+37c1f63d0c31377d1a175fa53a8f1dfb938ff08d8f6156b596c003f0fc74d9e5).
+Essa unica baseline nao e aceite de latencia nem evidencia de melhoria. Nenhuma
+otimizacao foi feita e o benchmark nao entrou no gate padrao.
+
+P6 - workflow clean-tree
+------------------------
+AGENTS, SESSION_IMPROVEMENT e dfir-verify agora proibem editar/mover/apagar
+artefatos preservados ou relaxar validadores. Exigem git archive HEAD, diff
+explicitamente delimitado, arquivos novos nomeados, cmp, ausencia dos artefatos,
+diagnosticos de archive sem .git e setup BLOCKED se essas pos-condicoes falharem.
+`scripts/doc_gate.py` exige os marcadores nos tres pontos de entrada.
+Controle positivo antes e depois da licao 36: Fase 0 sem erros/avisos,
+documentation/playbook/repo audit PASS e 73 testes OK. Tres copias sanitizadas,
+cada uma sem somente o marcador `git archive HEAD` em um ponto de entrada,
+retornaram exit 1 com diagnostico especifico e nenhum documentation PASS
+(`validation/task-009-controls.txt`, SHA-256
+7e98c3a413abcd23c390d44558ab99ee8f9fb24832f997dcec929d0f5b5d11eb).
+A confirmacao futura da licao 36 permanece pendente por definicao do loop.
+
+Limites e preservacao
+---------------------
+O PASS acima e local e nao promove release de producao, aceite estetico, desempenho
+de UI, Windows, Linux aarch64, incidente real ou CI deste HEAD. Windows 11 e Job
+Objects permanecem PENDING-HUMAN/WVR-001. Nao houve push, publicacao ou escrita
+externa. A leitura/atualizacao do advisory-db nao e uma escrita no projeto remoto.
+Os cinco arquivos nao rastreados preservados pelo operador nao foram editados,
+movidos, apagados ou incluidos nos commits. As arvores limpas os excluiram sem
+relaxar a regra ADR-0027. Nenhum ID EVD-063 foi usado como evidencia antes da
+criacao deste arquivo.
