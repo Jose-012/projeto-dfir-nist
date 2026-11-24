@@ -1671,6 +1671,8 @@ A aplicação deve suportar múltiplos incidentes sem misturar evidências, find
 
 Cada objeto de investigação deve possuir `incident_id` quando aplicável.
 
+Na interface nativa, a exclusão de um incidente pelo operador é **lógica e auditada**: a migration `0015` acrescenta `incidents.deleted_at`; o incidente removido sai da lista ativa e não aceita novos vínculos ou edições, enquanto evidências, resultados analíticos, vínculos históricos e auditoria permanecem preservados. A atualização condicional do tombstone e o evento `INCIDENT_DELETED`, com `deletion_mode=logical`, compartilham uma transação. Esta regra não autoriza cascata física nem altera a governança específica de evidências em 22.3.
+
 ## 22.3. Evidence
 
 Campos mínimos:

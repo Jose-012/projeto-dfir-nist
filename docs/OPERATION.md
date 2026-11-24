@@ -105,7 +105,11 @@ Exemplo: `event:4625 user:admin from:2026-03-01`. Uma data inválida é **erro**
 
 Em um candidato de detecção com referências preservadas, **Ver eventos na timeline** abre e expande a timeline da mesma evidência com `ref:` e os identificadores exatos. A consulta resolve o último job EVTX concluído, não o job da detecção. Referências truncadas são sinalizadas como seleção parcial; candidato sem referências não oferece a ação. Navegar não confirma nem rejeita o candidato.
 
+**Selecione uma linha da timeline para inspecionar o evento.** O painel mostra descrição integral, Event ID, registro/referência, provedor, canal, host, conta, IPs, processo, ação, resultado e tipo de fonte quando esses campos normalizados existem; campos ausentes não são inventados. Em telas largas, o painel usa a lateral; em telas estreitas, fica abaixo da tabela. **Fechar detalhes** encerra a seleção, e mudar o filtro descarta a seleção anterior. O cabeçalho usa `1 evento`/`N eventos` e abrevia o job, mantendo o ID completo no tooltip.
+
 A trilha textual no topo do painel central mostra `Evidências > <nome lógico>` ou `Incidentes > <incidente> > <aba>`. Ela deriva da seleção que já controla a tela e converge no quadro seguinte às ações, sem criar uma segunda navegação nem depender de imagens. Esse comportamento foi testado sem janela; não é uma declaração de suporte AT-SPI nem de fluxo X11 verificado.
+
+O menu lateral acompanha a largura da janela e também tem **Recolher menu**/**Expandir menu** para override manual. A troca entre Evidências e Incidentes faz uma revelação curta de 140 ms, sem animação ambiente; **Reduzir movimento** resolve a mudança imediatamente.
 
 ## 3C. Detecção por regras e revisão de candidatos
 
@@ -118,7 +122,7 @@ dfir-app candidate-confirm <CANDIDATE_ID> --incident <INCIDENT_ID> [--note "..."
 dfir-app candidate-reject  <CANDIDATE_ID> --reason "motivo"
 ```
 
-**Um candidato é uma hipótese.** Ele traz a regra e a versão, a técnica ATT&CK sugerida, os eventos de origem (`record:N`), os IOCs vistos e o que a regra **não** prova. **Confirmar** cria no incidente o mapeamento ATT&CK, o achado e os IOCs; **rejeitar** exige motivo. A decisão é final. Rodar de novo não duplica nem desfaz decisões. O Entregável 1 (§4.3) diz quantos candidatos ficaram **pendentes**: pendente não é achado.
+**Um candidato é uma hipótese.** Ele traz a regra e a versão, a técnica ATT&CK sugerida, os eventos de origem (`record:N`), os IOCs vistos e o que a regra **não** prova. Conta/agregação, singular/plural e instantes são apresentados em texto legível, sem mudar os valores persistidos; chaves desconhecidas e timestamps inválidos não são convertidos silenciosamente. **Confirmar** cria no incidente o mapeamento ATT&CK, o achado e os IOCs; **rejeitar** exige motivo. A decisão é final. Rodar de novo não duplica nem desfaz decisões. O Entregável 1 (§4.3) diz quantos candidatos ficaram **pendentes**: pendente não é achado.
 
 **A ausência de candidato não prova ausência de ataque.** A regra só enxerga o que o log registrou. Para as regras de processo (linha de comando), de compartilhamento e de conexão de saída existirem, a auditoria correspondente precisa estar **ligada no Windows** (criação de processo com linha de comando — 4688 —, compartilhamento de arquivos — 5140/5145 —, plataforma de filtragem — 5156 — ou Sysmon). Sem elas o log não tem o sinal: isso é **lacuna de fonte**, registre-a na aba "Lacunas".
 
@@ -134,6 +138,8 @@ dfir-app audit [--limit N]                                      # eventos de aud
 ```
 
 Confirmar um candidato (`candidate-confirm`) também vincula a evidência ao incidente. A destruição de evidência preserva custódia e auditoria (F1-21).
+
+Na GUI, **Excluir incidente…** exige uma segunda confirmação e faz **exclusão lógica**: o incidente sai da lista e deixa de aceitar vínculos ou edições, mas evidências, resultados analíticos e histórico de auditoria não são apagados. A migration 0015 grava `incidents.deleted_at` e a mesma transação registra `INCIDENT_DELETED` com `deletion_mode=logical`. Uma falha mantém o incidente selecionado e mostra o motivo. Não há restauração pela interface nesta versão; feche a confirmação somente depois de revisar o nome.
 
 Desde a migration 0013 (F1-36/ADR-0030), `custody_state` mantém por evidência a contagem e o hash da cabeça, atualizados na mesma transação de cada append. A verificação falha fechado se a âncora estiver ausente ou divergir da cadeia, inclusive quando a cauda é removida. O upgrade preenche âncoras a partir das entradas existentes, sem reescrevê-las. Esse backfill não pode descobrir uma remoção que já tenha ocorrido antes da migration; também não impede um atacante com escrita no banco de alterar coordenadamente entradas e âncora de forma consistente. A âncora é uma guarda local adicional, não uma assinatura ou uma âncora externa de confiança.
 

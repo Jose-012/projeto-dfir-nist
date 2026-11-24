@@ -89,6 +89,7 @@ pub enum Command {
     },
 
     CreateIncident(String),
+    DeleteIncident(String),
     ListIncidents,
 
     NistProfileHistory {
@@ -284,6 +285,10 @@ impl Command {
                 result: Err(message()),
             },
             Self::CreateIncident(_) => Event::IncidentCreated(Err(message())),
+            Self::DeleteIncident(incident_id) => Event::IncidentDeleted {
+                incident_id: incident_id.clone(),
+                result: Err(message()),
+            },
             Self::ListIncidents => Event::IncidentsListed(Err(message())),
             Self::NistProfileHistory { incident_id, .. } => Event::NistProfileHistoryLoaded {
                 incident_id: incident_id.clone(),
@@ -455,6 +460,10 @@ pub enum Event {
     },
 
     IncidentCreated(Result<IncidentResponse, String>),
+    IncidentDeleted {
+        incident_id: String,
+        result: Result<(), String>,
+    },
     IncidentsListed(Result<Vec<IncidentResponse>, String>),
 
     NistProfileHistoryLoaded {
@@ -935,6 +944,15 @@ async fn handle_command(services: &AppServices, command: Command) -> Event {
         }
         Command::CreateIncident(name) => {
             Event::IncidentCreated(service::create_incident(services, &name).await.map_err(msg))
+        }
+        Command::DeleteIncident(incident_id) => {
+            let result = service::delete_incident(services, &incident_id)
+                .await
+                .map_err(msg);
+            Event::IncidentDeleted {
+                incident_id,
+                result,
+            }
         }
         Command::ListIncidents => {
             Event::IncidentsListed(service::list_incidents(services).await.map_err(msg))

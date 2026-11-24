@@ -380,15 +380,28 @@ pub(crate) fn split_ids(raw: &str) -> Vec<String> {
         .collect()
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Screen {
     Evidence,
     Incidents,
 }
 
+fn screen_reveal_id(screen: Screen) -> egui::Id {
+    egui::Id::new(("native-screen-reveal", screen))
+}
+
+fn navigation_compact(window_width: f32, manual_override: Option<bool>) -> bool {
+    manual_override.unwrap_or(window_width < 1040.0)
+}
+
 pub struct DfirApp {
     backend: Backend,
     screen: Screen,
+    rendered_screen: Screen,
+    screen_started: bool,
+    screen_reveal: effects::Crossfade,
+    /// `None` segue a largura da janela; `Some` é a escolha manual do operador.
+    nav_compact: Option<bool>,
     evidence: evidence::EvidenceState,
     incidents: incidents::IncidentsState,
     preferences: UiPreferences,
@@ -424,6 +437,10 @@ impl DfirApp {
         Self {
             backend,
             screen: Screen::Evidence,
+            rendered_screen: Screen::Evidence,
+            screen_started: false,
+            screen_reveal: effects::Crossfade::new(),
+            nav_compact: None,
             evidence: evidence::EvidenceState::default(),
             incidents: incidents::IncidentsState::default(),
             preferences,
@@ -541,7 +558,9 @@ impl DfirApp {
     }
 
     fn navigation(&mut self, ui: &mut egui::Ui) {
-        let compact = ui.available_width() < 1040.0;
+        // A decisão usa a janela, não a largura do próprio rail (que faria o
+        // modo expandido nunca ser escolhido automaticamente).
+        let compact = navigation_compact(ui.ctx().content_rect().width(), self.nav_compact);
         egui::Panel::left("dfir_nav")
             .resizable(false)
             .min_size(if compact { 64.0 } else { 188.0 })
@@ -562,6 +581,21 @@ impl DfirApp {
                     .clicked()
                 {
                     self.preference_draft = Some(self.preferences.clone());
+                }
+                ui.separator();
+                let toggle_label = if compact {
+                    "Expandir menu"
+                } else {
+                    "Recolher menu"
+                };
+                let toggle = ui
+                    .button(if compact { ">" } else { "<  Recolher menu" })
+                    .on_hover_text(toggle_label);
+                toggle.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Button, toggle.enabled(), toggle_label)
+                });
+                if toggle.clicked() {
+                    self.nav_compact = Some(!compact);
                 }
                 let rect = ui.max_rect();
                 ui.painter().add(effects::masked_edge(
@@ -697,9 +731,11 @@ impl DfirApp {
     }
 
     fn main_panels(&mut self, ui: &mut egui::Ui) {
+        let reveal = self.update_screen_reveal(ui.ctx());
         self.navigation(ui);
 
         egui::CentralPanel::default().show(ui, |ui| {
+            ui.set_opacity(reveal.progress);
             ui.label(self.breadcrumb_text());
             ui.separator();
             if let Some(notice) = &self.preference_notice {
@@ -715,6 +751,27 @@ impl DfirApp {
                 Screen::Incidents => self.incidents.ui(ui, &self.backend),
             }
         });
+    }
+
+    fn update_screen_reveal(&mut self, context: &egui::Context) -> effects::CrossfadeOut {
+        if self.rendered_screen != self.screen {
+            self.screen_reveal
+                .clear(context, screen_reveal_id(self.screen));
+            self.rendered_screen = self.screen;
+        }
+        if !self.screen_started {
+            self.screen_started = true;
+            return effects::CrossfadeOut {
+                progress: 1.0,
+                active: false,
+            };
+        }
+        self.screen_reveal.update(
+            context,
+            screen_reveal_id(self.screen),
+            std::time::Duration::from_millis(140),
+            self.preferences.reduced_motion,
+        )
     }
 
     fn apply_event(&mut self, event: Event) {
@@ -819,6 +876,10 @@ impl DfirApp {
             }
 
             Event::IncidentCreated(result) => self.incidents.on_created(result),
+            Event::IncidentDeleted {
+                incident_id,
+                result,
+            } => self.incidents.on_deleted(&incident_id, result),
             Event::IncidentsListed(result) => self.incidents.on_listed(result),
 
             Event::NistProfileHistoryLoaded {
@@ -1170,7 +1231,9 @@ mod presentation_tests {
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::{Backend, DfirApp, ThemePreset, test_harness::incident};
+    use super::{
+        Backend, DfirApp, Screen, ThemePreset, navigation_compact, test_harness::incident,
+    };
     use crate::gui::preferences::UiPreferences;
     use crate::service::EvidenceResponse;
     use egui::{Role, Theme};
@@ -1230,6 +1293,27 @@ mod navigation_tests {
     }
 
     #[test]
+    fn navigation_can_be_collapsed_and_expanded_explicitly() {
+        assert!(!navigation_compact(1280.0, None));
+        assert!(navigation_compact(960.0, None));
+        assert!(!navigation_compact(960.0, Some(false)));
+        assert!(navigation_compact(1280.0, Some(true)));
+
+        let (backend, _commands) = Backend::for_test();
+        let app = DfirApp::new(backend);
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1280.0, 900.0))
+            .build_ui_state(|ui, app: &mut DfirApp| app.main_panels(ui), app);
+        harness.step();
+        harness.get_by_label("Recolher menu").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().nav_compact, Some(true));
+        harness.get_by_label("Expandir menu").click();
+        harness.run_steps(2);
+        assert_eq!(harness.state().nav_compact, Some(false));
+    }
+
+    #[test]
     fn rapid_navigation_click_survives_pointer_exit_after_release() {
         let (backend, _commands) = Backend::for_test();
         let app = DfirApp::new(backend);
@@ -1263,6 +1347,33 @@ mod navigation_tests {
         harness.event(egui::Event::PointerMoved(egui::pos2(900.0, 500.0)));
         harness.step();
         harness.get_by_label("Preferências da interface");
+    }
+
+    #[test]
+    fn screen_reveal_is_bounded_and_reduced_motion_is_immediate() {
+        let (backend, _commands) = Backend::for_test();
+        let mut app = DfirApp::new(backend);
+        let context = egui::Context::default();
+
+        let initial = app.update_screen_reveal(&context);
+        assert_eq!(initial.progress, 1.0, "a primeira tela não começa vazia");
+        assert!(!initial.active);
+
+        app.screen = Screen::Incidents;
+        let reveal = app.update_screen_reveal(&context);
+        assert!(reveal.active);
+        assert!(reveal.progress < 1.0);
+
+        app.preferences.reduced_motion = true;
+        let reduced = app.update_screen_reveal(&context);
+        assert_eq!(reduced.progress, 1.0);
+        assert!(!reduced.active);
+
+        app.preferences.reduced_motion = false;
+        app.screen = Screen::Evidence;
+        let back = app.update_screen_reveal(&context);
+        assert!(back.active, "voltar à aba reinicia a transição");
+        assert!(back.progress < 1.0);
     }
 
     #[test]

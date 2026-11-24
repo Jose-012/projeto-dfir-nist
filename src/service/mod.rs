@@ -2706,15 +2706,69 @@ pub async fn create_incident(services: &AppServices, name: &str) -> AppResult<In
 
 pub async fn list_incidents(services: &AppServices) -> AppResult<Vec<IncidentResponse>> {
     let rows = sqlx::query_as::<_, IncidentResponse>(
-        "SELECT id,name,state,created_at FROM incidents ORDER BY created_at DESC",
+        "SELECT id,name,state,created_at FROM incidents WHERE deleted_at IS NULL ORDER BY created_at DESC",
     )
     .fetch_all(&services.db)
     .await?;
     Ok(rows)
 }
 
+/// Exclui logicamente um incidente, preservando evidências, resultados e
+/// auditoria. A atualização condicional e o evento de auditoria são atômicos.
+pub async fn delete_incident(services: &AppServices, incident_id: &str) -> AppResult<()> {
+    let deleted_at = Utc::now().to_rfc3339();
+    let metadata = serde_json::json!({
+        "incident_id": incident_id,
+        "deletion_mode": "logical",
+        "reason": "operator_requested_incident_delete",
+        "preserved": ["evidence", "analytical_results", "audit_history"],
+    })
+    .to_string();
+    let mut connection = begin_immediate(&services.db).await?;
+    let outcome: Result<bool, sqlx::Error> = async {
+        let updated =
+            sqlx::query("UPDATE incidents SET deleted_at=? WHERE id=? AND deleted_at IS NULL")
+                .bind(&deleted_at)
+                .bind(incident_id)
+                .execute(&mut *connection)
+                .await?;
+        if updated.rows_affected() == 0 {
+            return Ok(false);
+        }
+        audit::append_on_connection(
+            &mut connection,
+            None,
+            "INCIDENT_DELETED",
+            "incident",
+            incident_id,
+            Some(incident_id),
+            &metadata,
+        )
+        .await?;
+        Ok(true)
+    }
+    .await;
+    match outcome {
+        Ok(true) => {
+            if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
+                rollback(&mut connection).await;
+                return Err(AppError::Database(error));
+            }
+            Ok(())
+        }
+        Ok(false) => {
+            rollback(&mut connection).await;
+            Err(AppError::NotFound("incident not found".into()))
+        }
+        Err(error) => {
+            rollback(&mut connection).await;
+            Err(AppError::Database(error))
+        }
+    }
+}
+
 pub(crate) async fn incident_exists(pool: &SqlitePool, incident_id: &str) -> AppResult<()> {
-    sqlx::query_scalar::<_, String>("SELECT id FROM incidents WHERE id=?")
+    sqlx::query_scalar::<_, String>("SELECT id FROM incidents WHERE id=? AND deleted_at IS NULL")
         .bind(incident_id)
         .fetch_optional(pool)
         .await?
@@ -4213,6 +4267,88 @@ mod tests {
                 .expect("custody count");
         assert!(custody >= 1, "custody entries must survive destruction");
         assert_eq!(audit_count(&fx, "EVIDENCE_DESTROYED").await, 1);
+    }
+
+    #[tokio::test]
+    async fn deleting_an_incident_preserves_history_and_blocks_new_work() {
+        let fx = fixture().await;
+        let services = app_services(&fx);
+        let evidence_path = seed_evidence(&fx, "ev_incident_delete", false).await;
+        let incident = create_incident(&services, "incident delete fixture")
+            .await
+            .expect("create incident");
+        link_evidence_to_incident(&services, "ev_incident_delete", &incident.id)
+            .await
+            .expect("link evidence");
+        sqlx::query(
+            "INSERT INTO analytical_results(id,schema_version,result_type,correlation_key,incident_id,payload,provenance,created_at) VALUES(?,?,?,?,?,?,?,?)",
+        )
+        .bind("result-incident-delete")
+        .bind("analytical-result-v1")
+        .bind("FINDING")
+        .bind("incident-delete")
+        .bind(&incident.id)
+        .bind("{}")
+        .bind("{}")
+        .bind("2026-10-02T00:00:00Z")
+        .execute(&fx.pool)
+        .await
+        .expect("seed analytical result");
+
+        delete_incident(&services, &incident.id)
+            .await
+            .expect("logical delete");
+
+        assert!(list_incidents(&services).await.expect("list").is_empty());
+        let deleted_at: Option<String> =
+            sqlx::query_scalar("SELECT deleted_at FROM incidents WHERE id=?")
+                .bind(&incident.id)
+                .fetch_one(&fx.pool)
+                .await
+                .expect("tombstone");
+        assert!(deleted_at.is_some(), "o tombstone precisa ser persistido");
+        let linked_incident: Option<String> =
+            sqlx::query_scalar("SELECT incident_id FROM evidence WHERE id='ev_incident_delete'")
+                .fetch_one(&fx.pool)
+                .await
+                .expect("historical evidence link");
+        assert_eq!(linked_incident.as_deref(), Some(incident.id.as_str()));
+        let preserved_results: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM analytical_results WHERE incident_id=?")
+                .bind(&incident.id)
+                .fetch_one(&fx.pool)
+                .await
+                .expect("preserved analytical results");
+        assert_eq!(preserved_results, 1);
+        assert!(
+            tokio::fs::try_exists(&evidence_path)
+                .await
+                .expect("evidence path")
+        );
+        assert_eq!(audit_count(&fx, "INCIDENT_DELETED").await, 1);
+        let metadata: String = sqlx::query_scalar(
+            "SELECT metadata FROM audit_events WHERE action='INCIDENT_DELETED' AND incident_id=?",
+        )
+        .bind(&incident.id)
+        .fetch_one(&fx.pool)
+        .await
+        .expect("delete audit metadata");
+        let metadata: serde_json::Value = serde_json::from_str(&metadata).expect("metadata json");
+        assert_eq!(metadata["deletion_mode"], "logical");
+
+        assert!(matches!(
+            delete_incident(&services, &incident.id).await,
+            Err(AppError::NotFound(_))
+        ));
+        assert_eq!(audit_count(&fx, "INCIDENT_DELETED").await, 1);
+        assert!(matches!(
+            link_evidence_to_incident(&services, "ev_incident_delete", &incident.id).await,
+            Err(AppError::NotFound(_))
+        ));
+        assert!(matches!(
+            evidence_for_incident(&services, &incident.id).await,
+            Err(AppError::NotFound(_))
+        ));
     }
 
     #[tokio::test]

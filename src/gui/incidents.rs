@@ -92,6 +92,9 @@ pub struct IncidentsState {
     new_name: String,
     creating: bool,
     create_error: Option<String>,
+    pending_delete: Option<IncidentResponse>,
+    deleting: Option<String>,
+    delete_error: Option<String>,
     selected: Option<IncidentResponse>,
     tab: Tab,
     pub nist: nist::NistState,
@@ -121,6 +124,9 @@ impl Default for IncidentsState {
             new_name: String::new(),
             creating: false,
             create_error: None,
+            pending_delete: None,
+            deleting: None,
+            delete_error: None,
             selected: None,
             tab: Tab::default(),
             nist: Default::default(),
@@ -207,6 +213,39 @@ impl IncidentsState {
         }
     }
 
+    pub fn on_deleted(&mut self, incident_id: &str, result: Result<(), String>) {
+        if self.deleting.as_deref() == Some(incident_id) {
+            self.deleting = None;
+        }
+        match result {
+            Ok(()) => {
+                self.delete_error = None;
+                if self
+                    .pending_delete
+                    .as_ref()
+                    .is_some_and(|incident| incident.id == incident_id)
+                {
+                    self.pending_delete = None;
+                }
+                if let Loadable::Ready(items) = &mut self.list {
+                    items.retain(|incident| incident.id != incident_id);
+                }
+                if self
+                    .selected
+                    .as_ref()
+                    .is_some_and(|incident| incident.id == incident_id)
+                {
+                    self.selected = None;
+                    self.tab = Tab::default();
+                    self.evidence = Loadable::Idle;
+                    self.audit = Loadable::Idle;
+                    self.audit_hash_detail = None;
+                }
+            }
+            Err(message) => self.delete_error = Some(message),
+        }
+    }
+
     pub fn ui(&mut self, ui: &mut egui::Ui, backend: &Backend) {
         egui::Panel::left("incident_list_panel")
             .resizable(true)
@@ -288,14 +327,14 @@ impl IncidentsState {
                                     .selected
                                     .as_ref()
                                     .is_some_and(|current| current.id == incident.id);
-                                if ui
-                                    .selectable_label(
-                                        selected,
-                                        format!("{} · {}", incident.name, incident.state),
-                                    )
-                                    .clicked()
-                                {
+                                let response = ui.selectable_label(
+                                    selected,
+                                    format!("{} · {}", incident.name, incident.state),
+                                );
+                                if response.clicked() && self.deleting.is_none() {
                                     self.selected = Some(incident.clone());
+                                    self.pending_delete = None;
+                                    self.delete_error = None;
                                     self.evidence = Loadable::Idle;
                                     self.audit = Loadable::Idle;
                                     self.audit_hash_detail = None;
@@ -332,7 +371,60 @@ impl IncidentsState {
                 );
                 return;
             };
-            ui.heading(&incident.name);
+            ui.horizontal_wrapped(|ui| {
+                ui.heading(&incident.name);
+                if ui
+                    .add_enabled(
+                        self.deleting.is_none(),
+                        egui::Button::new("Excluir incidente…"),
+                    )
+                    .on_hover_text(
+                        "Remove o incidente do trabalho ativo após confirmação; preserva evidências, resultados e auditoria",
+                    )
+                    .clicked()
+                {
+                    self.pending_delete = Some(incident.clone());
+                    self.delete_error = None;
+                }
+                if self.deleting.as_deref() == Some(incident.id.as_str()) {
+                    ui.spinner();
+                    ui.label("Excluindo…");
+                }
+            });
+            if let Some(message) = &self.delete_error {
+                super::error_banner(ui, message);
+            }
+            if self
+                .pending_delete
+                .as_ref()
+                .is_some_and(|pending| pending.id == incident.id)
+            {
+                egui::Frame::group(ui.style()).show(ui, |ui| {
+                    ui.strong("Confirmar exclusão lógica");
+                    ui.label(format!(
+                        "Excluir \"{}\" da lista e impedir novos vínculos ou edições?",
+                        incident.name
+                    ));
+                    ui.label(
+                        "Evidências, resultados analíticos e histórico de auditoria serão preservados.",
+                    );
+                    ui.weak("A exclusão não pode ser desfeita pela interface.");
+                    ui.horizontal_wrapped(|ui| {
+                        if ui
+                            .button("Excluir incidente")
+                            .on_hover_text("Confirma o tombstone e registra INCIDENT_DELETED na auditoria")
+                            .clicked()
+                        {
+                            self.pending_delete = None;
+                            self.deleting = Some(incident.id.clone());
+                            backend.send(Command::DeleteIncident(incident.id.clone()));
+                        }
+                        if ui.button("Cancelar exclusão").clicked() {
+                            self.pending_delete = None;
+                        }
+                    });
+                });
+            }
             ui.horizontal_wrapped(|ui| {
                 for tab in [
                     Tab::Nist,
@@ -621,6 +713,76 @@ mod tests {
         harness.get_by_label_contains("Dê um nome à investigação");
         harness.get_by_label_contains("Feche o ciclo");
         assert!(drain(&mut commands).is_empty());
+    }
+
+    #[test]
+    fn incident_deletion_requires_confirmation_and_cancel_sends_nothing() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1_200.0, 800.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.run_steps(2);
+
+        harness.get_by_label("Excluir incidente…").click();
+        harness.run_steps(2);
+        harness.get_by_label("Confirmar exclusão lógica");
+        harness.get_by_label_contains("Evidências, resultados analíticos e histórico de auditoria");
+        harness.get_by_label("A exclusão não pode ser desfeita pela interface.");
+        harness.get_by_label("Cancelar exclusão").click();
+        harness.run_steps(2);
+        assert!(
+            !drain(&mut commands)
+                .iter()
+                .any(|command| matches!(command, Command::DeleteIncident(_))),
+            "cancelar não pode excluir; carregamentos das abas são independentes"
+        );
+        assert_eq!(harness.state().0.items().len(), 1);
+
+        harness.get_by_label("Excluir incidente…").click();
+        harness.run_steps(2);
+        harness.get_by_label("Excluir incidente").click();
+        harness.run_steps(2);
+        let deleted_ids: Vec<String> = drain(&mut commands)
+            .into_iter()
+            .filter_map(|command| match command {
+                Command::DeleteIncident(id) => Some(id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(deleted_ids, vec!["inc-1".to_string()]);
+        assert_eq!(harness.state().0.deleting.as_deref(), Some("inc-1"));
+
+        harness.state_mut().0.on_deleted("inc-1", Ok(()));
+        harness.run_steps(2);
+        assert!(harness.state().0.items().is_empty());
+        assert!(harness.state().0.selected.is_none());
+        harness.get_by_label("Organize a análise em um incidente");
+    }
+
+    #[test]
+    fn failed_incident_deletion_keeps_the_incident_and_shows_the_reason() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = state_with_incident();
+        state.deleting = Some("inc-1".into());
+        state.on_deleted("inc-1", Err("auditoria não pôde ser registrada".into()));
+        assert!(state.deleting.is_none());
+        assert_eq!(state.items().len(), 1);
+        assert!(state.selected.is_some());
+
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1_200.0, 800.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.run_steps(2);
+        harness.get_by_label("Erro: auditoria não pôde ser registrada");
+        harness.get_by_label("Incidente demo · OPEN");
+        harness.get_by_label("Excluir incidente…");
     }
 
     #[test]
