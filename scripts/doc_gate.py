@@ -77,6 +77,17 @@ for skill_name in ("dfir-improve", "dfir-change", "dfir-verify", "dfir-detect"):
             if needle not in skill_text:
                 print(f"dfir-improve safeguard missing: {needle}", file=sys.stderr)
                 raise SystemExit(1)
+    if skill_name == "dfir-verify":
+        for needle in (
+            "git archive HEAD",
+            "diff explicitamente delimitado",
+            "não os edite, mova ou apague",
+            "`cmp`",
+            "não contém `.git`",
+        ):
+            if needle not in skill_text:
+                print(f"dfir-verify clean-tree safeguard missing: {needle}", file=sys.stderr)
+                raise SystemExit(1)
 
 text = (ROOT / "toolchains.toml").read_text(encoding="utf-8")
 # Before ADR-0017 this also checked 'initial_reference = "1.3.14"' (the Bun
@@ -112,6 +123,8 @@ session_instruction_needles = {
         ".jcode/swarm-prompt.md",
         "docs/SESSION_IMPROVEMENT.md",
         "docs/SESSION_LEARNINGS.md",
+        "git archive HEAD",
+        "diff explicitamente delimitado",
         "get_call_hierarchy",
         "tools.mcp",
         "rtk recall",
@@ -147,6 +160,8 @@ session_instruction_needles = {
         "## 3. Fechamento da sessão",
         "## Formato mínimo de uma lição",
         "## Antipadrões",
+        "git archive HEAD",
+        "diff explicitamente delimitado",
         ".jcode/skills/dfir-improve/SKILL.md",
     ),
 }

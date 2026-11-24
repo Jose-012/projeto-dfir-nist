@@ -294,6 +294,14 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** calibrar a ação e sua pós-condição fora do repositório antes do patch. `scripts/native_x11_smoke.py --import-method zenity` exige outcome `path`, fechamento do diálogo, importação no SQLite e foco devolvido antes das análises; o modo `manual` continua padrão e deve ser repetido como regressão.
 - **Confirmação:** confirmada em 2026-11-23 por `EVD-060`: calibração, fluxo Zenity completo e regressão manual completos, com EVTX 12, detecção 5 e página 1/índice 12. O PASS permanece limitado ao backend Zenity deste host.
 
+### 36. Artefatos preservados contaminam o sinal do gate no checkout
+
+- **Classe:** erro de método de verificação evitado e diagnóstico de setup.
+- **Fato:** análises não rastreadas preservadas acionam corretamente a regra ADR-0027 para documentos vivos, impedindo usar o checkout inteiro como sinal limpo. As verificações desta rodada usaram `git archive HEAD` mais diff delimitado e arquivos novos explícitos. Em uma dessas árvores, `git status` emitiu `fatal: not a git repository`, embora patch, comparações e gates tenham continuado válidos.
+- **Risco:** editar ou apagar relatórios do operador, afrouxar o validador para obter verde, atribuir o PASS a uma árvore diferente da executada ou esconder uma falha de setup atrás de um exit 0 posterior.
+- **Prevenção:** `AGENTS.md` §16, `docs/SESSION_IMPROVEMENT.md` e `dfir-verify` exigem `git archive HEAD`, diff explicitamente delimitado, arquivos novos nomeados, identidade por `cmp`, ausência dos artefatos e diagnóstico de archive sem `.git`; setup falho é `BLOCKED`. `scripts/doc_gate.py` exige esses marcadores nos três pontos de entrada.
+- **Confirmação:** pendente para a próxima sessão que encontrar artefatos preservados. Nesta rodada, as árvores P2/P3 foram comparadas por `cmp`; o controle positivo P6 passou com 73 testes, e cada uma das três cópias sem `git archive HEAD` falhou com exit 1 e diagnóstico específico, sem `documentation gate: PASS` (`validation/task-009-controls.txt`).
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.
