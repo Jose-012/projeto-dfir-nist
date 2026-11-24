@@ -29,6 +29,7 @@ from Xlib.ext import xtest
 D = display.Display(os.environ.get("DISPLAY", ":0"))
 ROOT = D.screen().root
 DIALOG_TITLE = "Selecionar arquivo de evidência"
+APP_TITLE = "DFIR — Análise Forense Local"
 
 
 class WindowInfo(NamedTuple):
@@ -86,7 +87,7 @@ def windows() -> list[WindowInfo]:
 
 
 def find_dfir() -> WindowInfo | None:
-    return next((item for item in windows() if "DFIR" in item.name), None)
+    return next((item for item in windows() if item.name == APP_TITLE), None)
 
 
 def wait_for(predicate, timeout: float, description: str):

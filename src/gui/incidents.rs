@@ -5,6 +5,7 @@
 
 use super::Loadable;
 use super::backend::{Backend, Command};
+use super::icons::AppIcon;
 use super::{
     attack, critical_path, deliverables, export, findings, gaps, impact, iocs, nist, plan,
     recommendations,
@@ -307,7 +308,28 @@ impl IncidentsState {
 
         egui::CentralPanel::default().show(ui, |ui| {
             let Some(incident) = self.selected.clone() else {
-                ui.label("Selecione ou crie um incidente à esquerda.");
+                super::guidance::guidance_panel(
+                    ui,
+                    "incidents-empty-guidance",
+                    AppIcon::Incidents,
+                    "Organize a análise em um incidente",
+                    "Selecione ou crie um incidente à esquerda.",
+                    &[
+                        (
+                            "Dê um nome à investigação",
+                            "Use o campo acima da lista para criar um incidente local, sem alterar as evidências importadas.",
+                        ),
+                        (
+                            "Reúna o contexto",
+                            "Vincule evidências e revise detecções, achados e lacunas no mesmo lugar.",
+                        ),
+                        (
+                            "Feche o ciclo",
+                            "Monte o plano e gere entregáveis somente depois de revisar os resultados.",
+                        ),
+                    ],
+                    None,
+                );
                 return;
             };
             ui.heading(&incident.name);
@@ -577,6 +599,28 @@ mod tests {
             selected: Some(incident("inc-1", "Incidente demo")),
             ..IncidentsState::default()
         }
+    }
+
+    #[test]
+    fn empty_incidents_explain_the_next_steps_without_writing_data() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut state = IncidentsState {
+            list: Loadable::Ready(Vec::new()),
+            selected: None,
+            ..IncidentsState::default()
+        };
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(960.0, 700.0))
+            .build_ui_state(
+                |ui, state: &mut (&mut IncidentsState, &Backend)| state.0.ui(ui, state.1),
+                (&mut state, &backend),
+            );
+        harness.run();
+        harness.get_by_label("Selecione ou crie um incidente à esquerda.");
+        harness.get_by_label("Organize a análise em um incidente");
+        harness.get_by_label_contains("Dê um nome à investigação");
+        harness.get_by_label_contains("Feche o ciclo");
+        assert!(drain(&mut commands).is_empty());
     }
 
     #[test]

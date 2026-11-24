@@ -13,6 +13,7 @@ pub mod export;
 pub mod file_dialog;
 pub mod findings;
 pub mod gaps;
+mod guidance;
 mod icons;
 pub mod impact;
 pub mod incidents;

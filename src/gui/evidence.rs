@@ -6,6 +6,7 @@
 use super::backend::{Backend, Command};
 use super::detection::DetectionState;
 use super::file_dialog::{FilePicker, Picked, Request};
+use super::icons::AppIcon;
 use super::lineage::LineageState;
 use super::timeline::{PAGE_SIZE, TimelineView};
 use super::{Loadable, format_timestamp, str_field};
@@ -610,8 +611,33 @@ impl EvidenceState {
             }
             Loadable::Failed(message) => super::error_banner(ui, message),
             Loadable::Ready(_) if list_snapshot.is_empty() => {
-                ui.label("Nenhuma evidência importada ainda.");
-                ui.weak("Use “Importar evidência…”, informe o caminho ou arraste um arquivo para a janela.");
+                if super::guidance::guidance_panel(
+                    ui,
+                    "evidence-empty-guidance",
+                    AppIcon::Evidence,
+                    "Comece com uma evidência",
+                    "Nenhuma evidência importada ainda.",
+                    &[
+                        (
+                            "Escolha um arquivo",
+                            "Arraste para a janela, use o seletor ou informe o caminho. O processamento é local, sem enviar a evidência para um servidor.",
+                        ),
+                        (
+                            "Execute a análise",
+                            "Depois da importação, abra os detalhes para iniciar as análises disponíveis para o formato.",
+                        ),
+                        (
+                            "Revise antes de confirmar",
+                            "Confira eventos e candidatos antes de confirmar achados ou gerar entregáveis.",
+                        ),
+                    ],
+                    Some(super::guidance::GuidanceAction {
+                        label: "Escolher arquivo…",
+                        hover: "Abre o seletor nativo para escolher a primeira evidência",
+                    }),
+                ) {
+                    self.open_picker(ui.ctx().clone());
+                }
             }
             Loadable::Ready(_) => {
                 self.evidence_table(ui, &list_snapshot, backend);
@@ -1659,6 +1685,31 @@ mod provenance_ui_tests {
         assert_eq!(
             state.import_error.as_deref(),
             Some("arquivo excede o limite")
+        );
+    }
+
+    #[test]
+    fn empty_evidence_guides_the_first_import_without_duplicating_the_main_action() {
+        let (backend, _commands) = Backend::for_test();
+        let state = EvidenceState {
+            list: Loadable::Ready(Vec::new()),
+            ..EvidenceState::default()
+        };
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(960.0, 700.0))
+            .build_ui_state(
+                |ui, (state, backend): &mut State| state.ui(ui, backend, &[]),
+                (state, backend),
+            );
+        harness.run();
+        harness.get_by_label("Nenhuma evidência importada ainda.");
+        harness.get_by_label("Comece com uma evidência");
+        harness.get_by_label_contains("Revise antes de confirmar");
+        harness.get_by_label("Escolher arquivo…");
+        assert_eq!(
+            harness.query_all_by_label("Importar evidência…").count(),
+            1,
+            "a ação principal existente não pode ser duplicada"
         );
     }
 
