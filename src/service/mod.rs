@@ -35,6 +35,7 @@ use crate::{
 };
 use chrono::Utc;
 use dfir_protocol::NormalizedEvent;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{FromRow, SqlitePool};
@@ -42,6 +43,7 @@ use std::{
     fs::{File, OpenOptions, TryLockError},
     path::{Path, PathBuf},
 };
+use tokio_util::codec::{FramedRead, LinesCodec, LinesCodecError};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -1849,9 +1851,20 @@ pub struct JobWarning {
 
 pub const TIMELINE_MAX_PAGE: u64 = 5_000;
 
+/// Converte overflow da moldura em erro específico e conserva I/O como storage.
+fn stored_jsonl_error(context: &str, error: LinesCodecError, line_number: u64) -> AppError {
+    match error {
+        LinesCodecError::MaxLineLengthExceeded => AppError::Config(format!(
+            "stored {context} result exceeds maximum line length at line {line_number}"
+        )),
+        LinesCodecError::Io(error) => AppError::Storage(error),
+    }
+}
+
 /// Lê o `results.jsonl` linha a linha e entrega cada item ao `visit`, sem
 /// guardar o `Value` da linha: a memória fica proporcional ao que o chamador
-/// retém, não ao tamanho do arquivo. Não há limite de linhas (ADR-0020).
+/// retém, não ao tamanho do arquivo. Não há limite de linhas ou de saída total
+/// (ADR-0020); cada moldura continua limitada a `MAX_LINE_BYTES`.
 async fn for_each_result_item(
     path: &Path,
     mut visit: impl FnMut(&serde_json::Value),
@@ -1860,10 +1873,14 @@ async fn for_each_result_item(
         .await
         .map_err(AppError::Storage)?;
     let reader = tokio::io::BufReader::new(file);
-    let mut lines = tokio::io::AsyncBufReadExt::lines(reader);
+    let mut lines = FramedRead::new(
+        reader,
+        LinesCodec::new_with_max_length(dfir_protocol::MAX_LINE_BYTES),
+    );
     let mut line_number = 0_u64;
-    while let Some(line) = lines.next_line().await.map_err(AppError::Storage)? {
+    while let Some(line) = lines.next().await {
         line_number += 1;
+        let line = line.map_err(|error| stored_jsonl_error("analysis", error, line_number))?;
         if dfir_protocol::json_depth_exceeds_limit(line.as_bytes(), dfir_protocol::MAX_JSON_DEPTH) {
             return Err(AppError::Config(format!(
                 "stored analysis result exceeds JSON nesting depth limit at line {line_number}"
@@ -2001,7 +2018,10 @@ async fn index_timeline_on_connection(
     let file = tokio::fs::File::open(path)
         .await
         .map_err(AppError::Storage)?;
-    let mut lines = tokio::io::AsyncBufReadExt::lines(tokio::io::BufReader::new(file));
+    let mut lines = FramedRead::new(
+        tokio::io::BufReader::new(file),
+        LinesCodec::new_with_max_length(dfir_protocol::MAX_LINE_BYTES),
+    );
     let outcome: Result<(u64, u64), AppError> = async {
         sqlx::query("DELETE FROM timeline_events WHERE job_id=?")
             .bind(job_id)
@@ -2014,8 +2034,9 @@ async fn index_timeline_on_connection(
         let mut ord: i64 = 0;
         let mut line_number = 0_u64;
         let (mut indexed, mut skipped) = (0_u64, 0_u64);
-        while let Some(line) = lines.next_line().await.map_err(AppError::Storage)? {
+        while let Some(line) = lines.next().await {
             line_number += 1;
+            let line = line.map_err(|error| stored_jsonl_error("timeline", error, line_number))?;
             if dfir_protocol::json_depth_exceeds_limit(
                 line.as_bytes(),
                 dfir_protocol::MAX_JSON_DEPTH,
@@ -3027,6 +3048,12 @@ mod tests {
         assert_eq!(event.title, "Event ID 7045");
     }
 
+    fn result_jsonl_with_length(length: usize) -> String {
+        let prefix = "{\"message_type\":\"RESULT\",\"items\":[],\"padding\":\"x\"}";
+        assert!(length >= prefix.len());
+        format!("{prefix}{}", " ".repeat(length - prefix.len()))
+    }
+
     /// Escreve um `results.jsonl` no formato do engine (lotes de 128 itens por
     /// linha) com `count` eventos em ordem cronológica **inversa**.
     async fn write_results_file(path: &std::path::Path, count: u64) {
@@ -3632,6 +3659,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reindexing_rejects_oversized_jsonl_line_and_preserves_existing_index() {
+        let fx = fixture().await;
+        let oversized = result_jsonl_with_length(dfir_protocol::MAX_LINE_BYTES + 1);
+        assert_eq!(oversized.len(), dfir_protocol::MAX_LINE_BYTES + 1);
+
+        assert_reindex_rejection_preserves_index(
+            &fx,
+            "oversized_line",
+            &oversized,
+            "stored timeline result exceeds maximum line length at line 2",
+        )
+        .await;
+    }
+
+    #[tokio::test]
     async fn read_result_items_rejects_missing_items_array() {
         let dir = tempfile::tempdir().expect("temporary directory");
         let path = dir.path().join("results.jsonl");
@@ -3661,6 +3703,61 @@ mod tests {
                 .expect("valid empty items array")
                 .is_empty()
         );
+    }
+
+    #[tokio::test]
+    async fn read_result_items_rejects_oversized_jsonl_line() {
+        let dir = tempfile::tempdir().expect("temporary directory");
+        let path = dir.path().join("results.jsonl");
+        let oversized = result_jsonl_with_length(dfir_protocol::MAX_LINE_BYTES + 1);
+        assert_eq!(oversized.len(), dfir_protocol::MAX_LINE_BYTES + 1);
+        tokio::fs::write(&path, format!("{oversized}\n"))
+            .await
+            .expect("write oversized result");
+
+        let error = read_result_items(&path)
+            .await
+            .expect_err("oversized stored JSONL line was accepted");
+        assert!(
+            matches!(&error, AppError::Config(message) if message.contains("stored analysis result exceeds maximum line length at line 1")),
+            "{error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn read_result_items_accepts_exact_jsonl_line_limit() {
+        let dir = tempfile::tempdir().expect("temporary directory");
+        let path = dir.path().join("results.jsonl");
+        let exact = result_jsonl_with_length(dfir_protocol::MAX_LINE_BYTES);
+        assert_eq!(exact.len(), dfir_protocol::MAX_LINE_BYTES);
+        tokio::fs::write(&path, format!("{exact}\n"))
+            .await
+            .expect("write exact-limit result");
+
+        assert!(
+            read_result_items(&path)
+                .await
+                .expect("line exactly at MAX_LINE_BYTES must remain valid")
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn read_result_items_accepts_multiple_valid_jsonl_lines() {
+        let dir = tempfile::tempdir().expect("temporary directory");
+        let path = dir.path().join("results.jsonl");
+        let first = serde_json::json!({"message_type": "RESULT", "items": [{"value": 1}]});
+        let second = serde_json::json!({"message_type": "RESULT", "items": [{"value": 2}]});
+        tokio::fs::write(&path, format!("{first}\n{second}\n"))
+            .await
+            .expect("write multiple valid results");
+
+        let items = read_result_items(&path)
+            .await
+            .expect("all valid lines must be read without a total output cap");
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0]["value"], 1);
+        assert_eq!(items[1]["value"], 2);
     }
 
     #[tokio::test]
