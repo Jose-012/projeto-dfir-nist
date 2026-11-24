@@ -28,6 +28,7 @@ Documentos que apoiam a mudança somente quando são afetados (`AGENTS.md` §11)
 |---|---|---|
 | `docs/FASE1_STATUS.md` | log cronológico da Fase 1 | Estado: `docs/rtm.md` |
 | `docs/MVP_IMPROVEMENT_PLAN.md` | propostas priorizadas de melhoria, sem estado ou requisito próprio | Demanda, especificação, ADRs e RTM; ativação exige decisão explícita |
+| `docs/FINAL_ANALYSIS_CHECKLIST.md` | checklist consolidado das análises de código/documentação, com fatos, reproduções e destino de cada recomendação | Demanda, especificação, ADRs e RTM; ativação de cada item exige decisão explícita |
 | `CONVENTIONS.md` | convenções de desenvolvimento para agentes LLM | Regras LLM: `AGENTS.md` |
 | `.jcode/skills/dfir-improve/SKILL.md` | checklist derivado do loop e da seleção de skills | `AGENTS.md` §16/§17 + `docs/SESSION_IMPROVEMENT.md` |
 | `.jcode/swarm-prompt.md` | template derivado para missão, lanes e integração de workers | Regras LLM: `AGENTS.md` §17; não autoriza escopo ou ações externas |
