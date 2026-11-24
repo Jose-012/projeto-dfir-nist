@@ -1,0 +1,134 @@
+EVD-064 - orientacao de primeiro uso e identificacao X11
+==========================================================
+
+Status: PASS somente no escopo local executado e descrito abaixo.
+Revisao visual isolada: BLOCKED, nao executada. Aceite estetico: PENDING-HUMAN.
+Periodo UTC dos testes, capturas e gates integrados: 2026-11-24T08:40Z..10:26Z.
+Codigo/testes: ae6d0adacdb419919842584a2a200b8ddd63d5cf,
+tree 8851aba84280fae313c0f61f4279a33d5f886832.
+Documentacao desta evidencia e dos ponteiros: commit seguinte.
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151,
+CPython 3.13.5, eframe/egui 0.37.0, X11 DISPLAY=:0, Zenity 4.1.90,
+python-xlib 0.33, XTEST/xclip ja existentes. Sandbox required no E2E.
+Run: overnight_1795484966753_10927467433448320647. Logs e imagens ficam
+fora do checkout, em validation/ nesse run. Seus SHA-256 estao em
+validation/task-010-ui-evidence-sha256.txt.
+
+Mudanca validada
+----------------
+src/gui/guidance.rs apresenta um painel compartilhado para primeiro uso:
+titulo, explicacao, tres passos reais e uma acao opcional, com os tokens e
+icones vetoriais existentes. A unica revelacao e de opacidade, limitada por
+style.animation_time, sem slide ou animacao ambiente. Duracao zero/Reduced
+Motion resolve imediatamente. O componente devolve o clique; a tela conserva
+o picker e os comandos.
+
+Evidencias usa o painel quando a lista carregada esta vazia e oferece
+Escolher arquivo… pelo picker existente, sem duplicar o rotulo acessivel da
+acao Importar evidência…. Incidentes orienta selecao/criacao e revisao sem
+criar dados. Persistencia, protocolo, deteccao, comandos de analise, politica
+de dialogo e cadeia de custodia nao mudaram.
+
+O smoke X11 agora reconhece somente o titulo completo
+DFIR — Análise Forense Local. Antes, qualquer janela contendo DFIR era
+confundida com o app. A correcao e de QA, nao uma nova politica de janela.
+
+Testes focados e falhas preservadas
+-----------------------------------
+Quatro testes do componente e duas integracoes passaram: geometria e clique
+em 420 px, progresso temporal limitado, opacidade final repetida, Reduced
+Motion imediato, estado vazio real de Evidencias com uma unica acao principal,
+e orientacao de Incidentes sem comandos. As strings originais continuam
+visiveis. Log: validation/task-010-ui-focused.txt.
+
+A primeira compilacao falhou por Ui::id deprecado e Queryable ausente. Depois,
+as consultas exatas dos passos numerados falharam em Evidencias e Incidentes;
+foram corrigidas para o texto acessivel real, sem remover assertivas. Um
+wrapper de pipeline mascarou a falha de Incidentes com exit 0 externo; esse
+resultado nao foi contado. O teste foi repetido com PIPESTATUS capturado
+imediatamente e passou com incident_cargo_exit=0. Tentativas e diagnosticos
+permanecem no mesmo log.
+
+Arvore limpa, Gate Rust e E2E
+-----------------------------
+Base: d8c94540b40d87924347b8f68ffb1804ed29827c. A arvore
+/home/jose/.jcode/scratch/task-010-ui-clean.2CP2Ev veio de git archive HEAD,
+mais os patches delimitados task-010-ui-code.patch e task-010-x11-harness.patch
+e o novo src/gui/guidance.rs. git apply --check e cmp passaram para cada fonte.
+Os cinco artefatos preservados estavam ausentes. Depois do commit, todos os
+arquivos alterados foram comparados novamente: a arvore dos gates coincide com
+ae6d0adacdb419919842584a2a200b8ddd63d5cf. O archive nao tem .git; a identidade
+vem de archive, patches, cmp e do commit, nao de git status no scratch.
+
+Comando sequencial: RUSTC_WRAPPER= just doc-gate; just verify;
+just e2e tests/fixtures/senai-demo.evtx. Periodo 10:03:52Z..10:26:13Z.
+Doc-gate integrado: Fase 0 sem erros/avisos, documentation/playbook/repo audit
+PASS e 73 testes OK. Verify exit 0: fmt/check, 731 passed/1 skipped, doc-tests
+e Clippy -D warnings verdes. E2E exit 0: 123/123, engine real e sandbox
+required, incluindo filtros, deteccao, entregaveis, assinatura, mascara,
+determinismo, custodia e descarte. Log: validation/task-010-ui-clean-gates.txt.
+Binarios limpos SHA-256: dfir-app
+8f8e095f4bf0f58c0f8ffce204342c7ac850a63b69e9ded6d01eb2f29da9d2c4;
+dfir-engine
+0dc1f8f61ea25fe1aa6e2ec07824309906c3d7a66c5bd362eb6276ae1126ab10.
+
+Captura sintetica e revisao visual
+----------------------------------
+O resumo anterior citava Before PNG/JSON, mas esses arquivos nao existem no run
+e nao sustentam nenhuma comparacao ou revisao. A captura After real existe:
+validation/task-010-ui-after.png, 1280x820, somente a janela e raiz vazia;
+SHA-256 4d4f294c266a07381f8b6aa8beb80606a8d4ead1ca9447874bd33d08cae6ca79.
+JSON: validation/task-010-ui-after.json, SHA-256
+1ed8f62f9922478fac7c534868555a856e5da6eec455e2783e2b047cb8a1e7ce.
+O app usado na captura tem SHA-256
+0e6c4a167bdf82e1a1b22ea9e2d880a105ce7aeea1f36a1e3b91aac52a587c46.
+
+O driver descartavel falhou primeiro por titulo UTF-8 decodificado de forma
+incompativel e pela opcao -window inexistente no xwd instalado. A inspecao por
+PID mostrou a janela real mapeada em 1280x820; o driver passou a exigir
+_NET_WM_PID do processo iniciado, DFIR ASCII, visibilidade e xwd -id. As
+tentativas ficam em validation/task-010-ui-capture-after.txt,
+task-010-ui-process-inspection.txt e task-010-ui-after-stderr.txt. Nenhum app
+ou engine ficou ativo.
+
+Um worker isolado recebeu somente a imagem After e deveria entregar relatorio
+textual. session_dolphin_1795512864907_e962d552966f899a terminou failed porque
+multimodal processing nao esta habilitado. Nao houve revisao, relatorio, retry,
+troca de modelo ou reenvio. Resultado sanitizado:
+validation/task-010-ui-visual-review-outcome.txt. Portanto a captura prova sua
+existencia e geometria, nao qualidade estetica, contraste, AT-SPI ou aceite.
+
+Smoke X11 com Zenity e resize
+-----------------------------
+Antes da correcao do harness, duas execucoes falharam em 0,2 s porque
+find_dfir encontrou a janela do coordenador com DFIR no titulo. Nenhum app foi
+iniciado ou fechado nessas recusas. O controle com o predicado original
+identificou titulo/PID dessa janela. Apos exigir o titulo completo, com o
+coordenador ainda aberto, o controle encontrou uma janela parcial e nenhuma
+janela exata: title_control=PASS. O fluxo real entao passou.
+
+Comando: python3 scripts/native_x11_smoke.py --import-method zenity
+--exercise-resize --data-root <raiz-vazia> --results <json>.
+Periodo 09:58:35Z..09:59:59Z, exit 0 e flow=PASS. Navegacao Evidence/Incidents,
+geometrias exatas 960x600, 1024x640 e 1280x820, navegacao compacta nova,
+selecao Zenity por Ctrl+L, importacao FORENSIC, EVTX 12, deteccao 5, timeline
+pagina 1/indice 12 e cancelamento sem alterar uma evidencia passaram.
+resize_diagnostics=PASS com zero erros X11, sem BadMatch/panic e processo vivo.
+Nenhum app/engine/Zenity restou apos o cleanup.
+JSON: validation/task-010-x11-zenity-resize.json, SHA-256
+63806eea11835972965e5e98a539528701a46007635be17d8b9c65e81a4f7bcf.
+Harness SHA-256: 6efde58b2ebed59a641eb1d161b2466cc1b3da3f0b05bccf99ea40c8fee7b41d.
+Log: validation/task-010-x11-zenity-resize.txt.
+
+Documentacao e limites
+----------------------
+NATIVE_UI_ARCHITECTURE descreve o componente e seus testes; OPERATION descreve
+a identificacao exata da janela. Licao 37 registra o falso positivo e sua
+prevencao executavel. A repeticao documental apos estes registros fica em
+validation/task-010-ui-doc-gate-final.txt e nas notas do run.
+
+Nenhuma dependencia mudou; supply-chain nao foi repetido e permanece EVD-063.
+Este PASS nao declara revisao estetica, AT-SPI, latencia/repaint, outros
+backends de dialogo, Windows 11/Job Object, Linux aarch64, incidente real,
+CI deste HEAD ou aceite de producao. Nao houve push, publicacao, instalacao,
+dados de caso ou escrita externa.

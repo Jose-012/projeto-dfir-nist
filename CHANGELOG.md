@@ -1,6 +1,12 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-24 - orientação de primeiro uso (`EVD-064`)
+
+- Evidências e Incidentes ganham um painel compartilhado de primeiro uso com três passos reais, ação opcional e revelação única por opacidade. Reduced Motion é imediato; o picker e os comandos continuam pertencendo às telas, e Incidentes não cria dados automaticamente.
+- Seis testes cobrem 420 px, clique, tempo/opacidade final, Reduced Motion e as duas integrações. Clean verify passou 731/1, E2E 123/123 e o fluxo X11 com Zenity/resize passou sem erros. A captura After existe, mas a revisão visual isolada ficou bloqueada por multimodal desabilitado; aceite estético continua `PENDING-HUMAN`.
+- O smoke X11 exige o título completo do app em vez de qualquer janela contendo `DFIR`, com controle positivo sobre a janela do coordenador e lição 37. Não houve novas dependências; supply-chain permanece em `EVD-063`.
+
 ## Unreleased - 2026-11-24 - checklist consolidado e workflow (`EVD-063`)
 
 - Recuperação de jobs entre instâncias agora usa `owner.lock` e transação condicional com auditoria (ADR-0031), preservando jobs vivos e recuperando legados órfãos. Versões antiga e nova não devem operar concorrentemente no mesmo `data_root`.

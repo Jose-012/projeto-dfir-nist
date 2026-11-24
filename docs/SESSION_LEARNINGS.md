@@ -302,6 +302,14 @@ Todas as confirmações começam como **pendentes** para a próxima sessão apli
 - **Prevenção:** `AGENTS.md` §16, `docs/SESSION_IMPROVEMENT.md` e `dfir-verify` exigem `git archive HEAD`, diff explicitamente delimitado, arquivos novos nomeados, identidade por `cmp`, ausência dos artefatos e diagnóstico de archive sem `.git`; setup falho é `BLOCKED`. `scripts/doc_gate.py` exige esses marcadores nos três pontos de entrada.
 - **Confirmação:** pendente para a próxima sessão que encontrar artefatos preservados. Nesta rodada, as árvores P2/P3 foram comparadas por `cmp`; o controle positivo P6 passou com 73 testes, e cada uma das três cópias sem `git archive HEAD` falhou com exit 1 e diagnóstico específico, sem `documentation gate: PASS` (`validation/task-009-controls.txt`).
 
+### 37. Smoke X11 confundiu outra janela com o aplicativo
+
+- **Classe:** falso positivo de precondição em ferramenta de QA gráfica.
+- **Fato:** `find_dfir()` aceitava qualquer título contendo `DFIR` e recusou duas execuções porque encontrou a janela do coordenador, não o aplicativo. O controle com o predicado original identificou essa janela e seu PID; nenhum app foi iniciado ou fechado nessas recusas.
+- **Risco:** interagir com uma sessão alheia, contornar a guarda para obter execução ou atribuir a falha ao produto sem usar o mesmo predicado do harness no diagnóstico.
+- **Prevenção:** `scripts/native_x11_smoke.py` compara o título completo `DFIR — Análise Forense Local`, o mesmo de `src/gui/mod.rs`; `docs/OPERATION.md` explicita que outras janelas contendo `DFIR` não são o app. O cleanup continua restrito aos processos iniciados pelo smoke.
+- **Confirmação:** confirmada nesta sessão com o coordenador ainda aberto: uma janela continha `DFIR`, o predicado exato retornou `None`, e o fluxo Zenity/resize completo passou sem erros X11 (`validation/task-010-x11-zenity-resize.txt`).
+
 ## Próxima revisão
 
 Na próxima sessão que execute uma das atividades acima, registre ao lado de `Confirmação` o comando/ação que aplicou a prevenção. Se a falha se repetir, marque `recorrente` e proponha o controle executável mínimo; não acrescente outra lição idêntica.
