@@ -471,6 +471,7 @@ mod tests {
     use crate::persistence::attack_impact::{
         AttackTactic, NewAttackMapping, insert_attack_mapping,
     };
+    use crate::persistence::test_support::seed_incident;
 
     async fn test_pool() -> SqlitePool {
         let temp = tempfile::tempdir().expect("temporary directory");
@@ -484,15 +485,6 @@ mod tests {
             .await
             .expect("migrations");
         pool
-    }
-
-    async fn seed_incident(pool: &SqlitePool, id: &str) {
-        sqlx::query("INSERT INTO incidents(id,name) VALUES(?,?)")
-            .bind(id)
-            .bind(format!("incident {id}"))
-            .execute(pool)
-            .await
-            .expect("incident insert");
     }
 
     fn finding<'a>(incident_id: &'a str, title: &'a str) -> NewFinding<'a> {

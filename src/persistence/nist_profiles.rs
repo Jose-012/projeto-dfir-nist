@@ -839,6 +839,7 @@ fn gap_correlation_key(incident_id: &str, subcategory_id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::persistence::test_support::seed_incident;
 
     fn entry(
         subcategory_id: &str,
@@ -999,15 +1000,6 @@ mod tests {
             .await
             .expect("migrations");
         pool
-    }
-
-    async fn seed_incident(pool: &SqlitePool, id: &str) {
-        sqlx::query("INSERT INTO incidents(id,name) VALUES(?,?)")
-            .bind(id)
-            .bind(format!("incident {id}"))
-            .execute(pool)
-            .await
-            .expect("incident insert");
     }
 
     #[tokio::test]

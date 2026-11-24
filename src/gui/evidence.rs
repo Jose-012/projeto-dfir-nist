@@ -1448,7 +1448,7 @@ mod analytical_ui_tests {
 mod provenance_ui_tests {
     use super::*;
     use crate::gui::backend::Backend;
-    use crate::gui::test_harness::drain;
+    use crate::gui::test_harness::{drain, incident};
     use egui_kittest::kittest::Queryable;
 
     type State = (EvidenceState, Backend);
@@ -2123,15 +2123,6 @@ mod provenance_ui_tests {
         harness.run();
         assert_eq!(harness.query_all_by_label("não informado").count(), 7);
         assert!(harness.query_by_label("LOCAL_OPERATOR").is_none());
-    }
-
-    fn incident(id: &str, name: &str) -> IncidentResponse {
-        IncidentResponse {
-            id: id.into(),
-            name: name.into(),
-            state: "OPEN".into(),
-            created_at: "2026-03-01T00:00:00Z".into(),
-        }
     }
 
     #[test]

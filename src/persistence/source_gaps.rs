@@ -185,6 +185,7 @@ pub async fn insert_source_gap(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::persistence::test_support::seed_incident;
 
     async fn test_pool() -> SqlitePool {
         let temp = tempfile::tempdir().expect("temporary directory");
@@ -198,15 +199,6 @@ mod tests {
             .await
             .expect("migrations");
         pool
-    }
-
-    async fn seed_incident(pool: &SqlitePool, id: &str) {
-        sqlx::query("INSERT INTO incidents(id,name) VALUES(?,?)")
-            .bind(id)
-            .bind(format!("incident {id}"))
-            .execute(pool)
-            .await
-            .expect("incident insert");
     }
 
     fn gap<'a>(incident_id: &'a str, source: &'a str) -> NewSourceGap<'a> {

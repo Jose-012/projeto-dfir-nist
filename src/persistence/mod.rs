@@ -11,6 +11,8 @@ pub mod nist_functions;
 pub mod nist_profiles;
 pub mod plan_items;
 pub mod source_gaps;
+#[cfg(test)]
+pub(crate) mod test_support;
 
 /// Rejeição de validação de entrada em um repository, no canal que a camada de
 /// serviço já traduz para mensagem acionável (`sqlx::Error::Protocol` é tratado

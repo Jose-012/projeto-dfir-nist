@@ -146,6 +146,7 @@ mod tests {
         AnalyticalResultType, Confidence, NewAnalyticalResult,
     };
     use crate::persistence::db;
+    use crate::persistence::test_support::seed_incident;
     use uuid::Uuid;
 
     async fn test_pool() -> SqlitePool {
@@ -156,15 +157,6 @@ mod tests {
         let pool = db::connect(&url).await.expect("database connection");
         db::migrate(&pool).await.expect("migrations");
         pool
-    }
-
-    async fn seed_incident(pool: &SqlitePool, id: &str) {
-        sqlx::query("INSERT INTO incidents(id,name) VALUES(?,?)")
-            .bind(id)
-            .bind(format!("incident {id}"))
-            .execute(pool)
-            .await
-            .expect("incident insert");
     }
 
     async fn seed_evidence(pool: &SqlitePool, id: &str, incident_id: Option<&str>) {

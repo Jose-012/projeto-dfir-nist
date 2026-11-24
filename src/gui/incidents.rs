@@ -530,17 +530,8 @@ impl IncidentsState {
 mod tests {
     use super::*;
     use crate::gui::backend::Backend;
-    use crate::gui::test_harness::drain;
+    use crate::gui::test_harness::{drain, incident};
     use egui_kittest::kittest::Queryable;
-
-    fn incident(id: &str, name: &str) -> IncidentResponse {
-        IncidentResponse {
-            id: id.into(),
-            name: name.into(),
-            state: "OPEN".into(),
-            created_at: "2026-03-01T00:00:00Z".into(),
-        }
-    }
 
     fn evidence(id: &str, filename: &str) -> EvidenceResponse {
         EvidenceResponse {

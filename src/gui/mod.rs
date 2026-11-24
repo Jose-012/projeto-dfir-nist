@@ -1078,12 +1078,23 @@ impl eframe::App for DfirApp {
 /// vira tofu em vez de panic.
 #[cfg(test)]
 pub(crate) mod test_harness {
+    use crate::service::IncidentResponse;
     use egui_kittest::HarnessBuilder;
 
     /// Builder padrão dos testes de UI: tofu em vez de panic para glifos
     /// fora do latim/cirílico (egui 0.37 mudou o default do kittest para Panic).
     pub(crate) fn builder<State>() -> HarnessBuilder<State> {
         HarnessBuilder::default().allow_missing_glyphs()
+    }
+
+    /// Incidente sintético compartilhado pelos testes de navegação e painéis.
+    pub(crate) fn incident(id: &str, name: &str) -> IncidentResponse {
+        IncidentResponse {
+            id: id.into(),
+            name: name.into(),
+            state: "OPEN".into(),
+            created_at: "2026-03-01T00:00:00Z".into(),
+        }
     }
 
     /// Drena os comandos enviados à thread de backend durante um teste de UI.
@@ -1158,9 +1169,9 @@ mod presentation_tests {
 
 #[cfg(test)]
 mod navigation_tests {
-    use super::{Backend, DfirApp, ThemePreset};
+    use super::{Backend, DfirApp, ThemePreset, test_harness::incident};
     use crate::gui::preferences::UiPreferences;
-    use crate::service::{EvidenceResponse, IncidentResponse};
+    use crate::service::EvidenceResponse;
     use egui::{Role, Theme};
     use egui_kittest::kittest::Queryable;
 
@@ -1184,15 +1195,6 @@ mod navigation_tests {
             authorization_reference: None,
             contains_personal_data: false,
             incident_id: None,
-        }
-    }
-
-    fn incident(id: &str, name: &str) -> IncidentResponse {
-        IncidentResponse {
-            id: id.into(),
-            name: name.into(),
-            state: "OPEN".into(),
-            created_at: "2026-03-01T00:00:00Z".into(),
         }
     }
 

@@ -422,7 +422,7 @@ impl DetectionState {
 #[cfg(test)]
 mod ui_tests {
     use super::*;
-    use crate::gui::test_harness::drain;
+    use crate::gui::test_harness::{drain, incident};
     use dfir_protocol::CandidateIoc;
     use egui_kittest::{
         Harness,
@@ -469,15 +469,6 @@ mod ui_tests {
             incident_id: None,
             attack_mapping_id: None,
             finding_id: None,
-        }
-    }
-
-    fn incident(id: &str, name: &str) -> IncidentResponse {
-        IncidentResponse {
-            id: id.into(),
-            name: name.into(),
-            state: "OPEN".into(),
-            created_at: "2026-03-01T00:00:00Z".into(),
         }
     }
 
