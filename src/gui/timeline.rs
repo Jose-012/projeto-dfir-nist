@@ -113,6 +113,7 @@ pub struct TimelineView {
     filter_error: Option<String>,
     filtering: bool,
     pager: TimelinePager,
+    selected_event: Option<usize>,
 }
 
 impl TimelineView {
@@ -128,6 +129,7 @@ impl TimelineView {
             filter_error: None,
             filtering: false,
             pager: TimelinePager::default(),
+            selected_event: None,
         }
     }
 
@@ -160,7 +162,10 @@ impl TimelineView {
         }
         match result {
             Err(message) => self.state = ViewState::Failed(message),
-            Ok(None) => self.state = ViewState::NoAnalysis,
+            Ok(None) => {
+                self.selected_event = None;
+                self.state = ViewState::NoAnalysis;
+            }
             Ok(Some(page)) => {
                 let job_id = &page.job.job_id;
                 if self
@@ -217,8 +222,11 @@ impl TimelineView {
 
     fn show_ready(&mut self, ui: &mut egui::Ui, evidence_id: &str, backend: &Backend) {
         if let Some(job) = &self.job {
-            ui.horizontal(|ui| {
-                ui.label(format!("Job {} · {} eventos", job.job_id, self.total));
+            ui.horizontal_wrapped(|ui| {
+                ui.strong(format!("{} na timeline", event_count_label(self.total)));
+                let short_id: String = job.job_id.chars().take(8).collect();
+                ui.weak(format!("Análise {short_id}…"))
+                    .on_hover_text(format!("Job completo: {}", job.job_id));
                 if self.filtering {
                     ui.spinner();
                 }
@@ -250,6 +258,7 @@ impl TimelineView {
                         if wanted != self.applied_filter {
                             self.applied_filter = wanted;
                             self.pager.clear();
+                            self.selected_event = None;
                             self.total = 0;
                             self.filtering = true;
                             backend.send(self.request(evidence_id, 0, true));
@@ -262,11 +271,39 @@ impl TimelineView {
             super::error_banner(ui, message);
         }
 
+        let selected = self
+            .selected_event
+            .and_then(|index| self.pager.row(index))
+            .cloned();
+        let details_beside_table = selected.is_some() && ui.available_width() >= 1_000.0;
+        if details_beside_table {
+            if let Some(event) = &selected {
+                egui::Panel::right("timeline-event-details")
+                    .default_size(360.0)
+                    .min_size(300.0)
+                    .max_size(460.0)
+                    .show(ui, |ui| self.event_details(ui, event));
+            }
+        }
+        self.show_table(ui, evidence_id, backend);
+        if !details_beside_table {
+            if let Some(event) = &selected {
+                self.event_details(ui, event);
+            }
+        }
+        if self.selected_event.is_none() {
+            ui.weak("Selecione um evento para ver seus campos normalizados.");
+        }
+    }
+
+    fn show_table(&mut self, ui: &mut egui::Ui, evidence_id: &str, backend: &Backend) {
         let total = self.total;
         let mut requests: Vec<usize> = Vec::new();
+        let mut clicked = None;
         TableBuilder::new(ui)
             .striped(true)
             .resizable(true)
+            .sense(egui::Sense::click())
             .max_scroll_height(360.0)
             .column(Column::auto().at_least(190.0))
             .column(Column::auto().at_least(70.0))
@@ -291,6 +328,7 @@ impl TimelineView {
                     let index = row.index();
                     match self.pager.row(index) {
                         Some(event) => {
+                            row.set_selected(self.selected_event == Some(index));
                             // Uma linha por evento (`truncate`): linhas de altura
                             // uniforme mantêm a rolagem virtualizada correta; o
                             // texto completo aparece ao passar o mouse.
@@ -312,6 +350,17 @@ impl TimelineView {
                                 ui.add(egui::Label::new(&event.description).truncate())
                                     .on_hover_text(&event.description);
                             });
+                            let response = row.response();
+                            response.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::Role::Button,
+                                    response.enabled(),
+                                    format!("Inspecionar evento: {}", event.title),
+                                )
+                            });
+                            if response.clicked() {
+                                clicked = Some(index);
+                            }
                         }
                         None => {
                             if let Some(offset) = self.pager.request(index) {
@@ -330,7 +379,63 @@ impl TimelineView {
         for offset in requests {
             backend.send(self.request(evidence_id, offset, false));
         }
+        if let Some(index) = clicked {
+            self.selected_event = Some(index);
+        }
     }
+
+    fn event_details(&mut self, ui: &mut egui::Ui, event: &TimelineEvent) {
+        ui.horizontal(|ui| {
+            ui.heading("Detalhes do evento");
+            if ui.button("Fechar detalhes").clicked() {
+                self.selected_event = None;
+            }
+        });
+        ui.label(egui::RichText::new(&event.title).strong());
+        ui.label(format_timestamp(&event.timestamp));
+        if event.description.trim().is_empty() {
+            ui.weak("Sem descrição normalizada.");
+        } else {
+            ui.label(&event.description);
+        }
+        ui.separator();
+        detail_row(ui, "Categoria", &event.category);
+        detail_row(ui, "Severidade", &severity_label(&event.severity));
+        for (label, value) in [
+            ("Event ID", event.event_id.as_deref()),
+            ("Registro", event.record_id.as_deref()),
+            ("Referência", event.raw_reference.as_deref()),
+            ("Provedor", event.provider.as_deref()),
+            ("Canal", event.channel.as_deref()),
+            ("Host", event.host.as_deref()),
+            ("Conta", event.user.as_deref()),
+            ("IP de origem", event.src_ip.as_deref()),
+            ("IP de destino", event.dst_ip.as_deref()),
+            ("Processo", event.process.as_deref()),
+            ("Ação", event.action.as_deref()),
+            ("Resultado", event.outcome.as_deref()),
+            ("Tipo de fonte", event.source_type.as_deref()),
+        ] {
+            if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
+                detail_row(ui, label, value);
+            }
+        }
+    }
+}
+
+fn event_count_label(total: usize) -> String {
+    if total == 1 {
+        "1 evento".into()
+    } else {
+        format!("{total} eventos")
+    }
+}
+
+fn detail_row(ui: &mut egui::Ui, label: &str, value: &str) {
+    ui.horizontal_wrapped(|ui| {
+        ui.strong(format!("{label}:"));
+        ui.label(value);
+    });
 }
 
 #[cfg(test)]
@@ -405,7 +510,7 @@ mod tests {
 /// que de fato é desenhado.
 #[cfg(test)]
 mod ui_tests {
-    use super::{PAGE_SIZE, TimelineView};
+    use super::{PAGE_SIZE, TimelineView, event_count_label};
     use crate::gui::backend::{Backend, Command};
     use crate::gui::test_harness::drain;
     use crate::service::{JobWarning, TimelineEvent, TimelinePage};
@@ -450,6 +555,188 @@ mod ui_tests {
                 .query_by_label("2026-01-01T00:00:00+00:00")
                 .is_none()
         );
+    }
+
+    #[test]
+    fn timeline_header_uses_plural_and_abbreviates_the_job_id() {
+        assert_eq!(event_count_label(1), "1 evento");
+        assert_eq!(event_count_label(2), "2 eventos");
+        let (backend, _commands) = Backend::for_test();
+        let full_job_id = "c489c12e-1111-4222-8333-444444444444";
+        let mut view = TimelineView::for_job(full_job_id);
+        view.on_page(
+            "",
+            0,
+            Ok(Some(TimelinePage::for_test(
+                full_job_id,
+                Some(1),
+                0,
+                events(1),
+                vec![],
+            ))),
+        );
+        let mut harness = harness(view, backend);
+        harness.run();
+
+        harness.get_by_label("1 evento na timeline");
+        harness.get_by_label_contains("Análise c489c12e…");
+        assert!(
+            harness.query_by_label_contains(full_job_id).is_none(),
+            "o UUID completo fica apenas no tooltip sob demanda"
+        );
+    }
+
+    #[test]
+    fn clicking_an_event_inspects_normalized_fields_and_closes_cleanly() {
+        let (backend, _commands) = Backend::for_test();
+        let mut event = TimelineEvent::for_test(
+            "Logon bem-sucedido",
+            Some("Microsoft-Windows-Security-Auditing"),
+        );
+        event.description = "Uma conta concluiu autenticação neste host.".into();
+        event.event_id = Some("4624".into());
+        event.record_id = Some("42".into());
+        event.raw_reference = Some("record:42".into());
+        event.channel = Some("Security".into());
+        event.host = Some("HOST-01".into());
+        event.user = Some("ana".into());
+        event.src_ip = Some("192.0.2.10".into());
+        event.process = Some("C:\\Windows\\System32\\svchost.exe".into());
+        event.action = Some("logon".into());
+        event.outcome = Some("success".into());
+        event.source_type = Some("EVTX".into());
+        let mut view = TimelineView::for_job("job-1");
+        view.on_page(
+            "",
+            0,
+            Ok(Some(TimelinePage::for_test(
+                "job-1",
+                Some(1),
+                0,
+                vec![event],
+                vec![],
+            ))),
+        );
+        let mut harness = crate::gui::test_harness::builder()
+            .with_size(egui::vec2(1_280.0, 760.0))
+            .build_ui_state(
+                |ui, (view, backend): &mut State| view.show(ui, "ev_1", backend),
+                (view, backend),
+            );
+        harness.run();
+        harness.get_by_label("Selecione um evento para ver seus campos normalizados.");
+        harness
+            .get_by_label("Inspecionar evento: Logon bem-sucedido")
+            .click();
+        harness.run_steps(2);
+
+        let details = harness.get_by_label("Detalhes do evento").rect();
+        assert!(
+            details.min.x > 800.0,
+            "em uma tela larga, detalhes usam o espaço à direita: {details:?}"
+        );
+        for value in [
+            "Uma conta concluiu autenticação neste host.",
+            "4624",
+            "42",
+            "Microsoft-Windows-Security-Auditing",
+            "Security",
+            "HOST-01",
+            "ana",
+            "192.0.2.10",
+            "logon",
+            "success",
+            "EVTX",
+        ] {
+            assert!(
+                harness.get_all_by_label(value).count() >= 1,
+                "campo normalizado ausente da árvore acessível: {value}"
+            );
+        }
+        assert_eq!(
+            harness
+                .get_all_by_label("Uma conta concluiu autenticação neste host.")
+                .count(),
+            2,
+            "a descrição permanece na linha e aparece integralmente nos detalhes"
+        );
+        harness.get_by_label("Categoria:");
+        harness.get_by_label("Event ID:");
+        assert!(harness.query_by_label("IP de destino:").is_none());
+
+        harness.get_by_label("Fechar detalhes").click();
+        harness.run_steps(2);
+        assert!(harness.query_by_label("Detalhes do evento").is_none());
+        harness.get_by_label("Selecione um evento para ver seus campos normalizados.");
+    }
+
+    #[test]
+    fn empty_event_details_do_not_invent_optional_fields() {
+        let (backend, _commands) = Backend::for_test();
+        let mut view = TimelineView::for_job("job-1");
+        view.on_page(
+            "",
+            0,
+            Ok(Some(TimelinePage::for_test(
+                "job-1",
+                Some(1),
+                0,
+                events(1),
+                vec![],
+            ))),
+        );
+        let mut harness = harness(view, backend);
+        harness.run();
+        harness.get_by_label("Inspecionar evento: evento-0").click();
+        harness.run_steps(2);
+
+        harness.get_by_label("Sem descrição normalizada.");
+        for absent in ["Provedor:", "Conta:", "Registro:", "Processo:"] {
+            assert!(harness.query_by_label(absent).is_none());
+        }
+        let details = harness.get_by_label("Detalhes do evento").rect();
+        let row = harness.get_by_label("Inspecionar evento: evento-0").rect();
+        assert!(
+            details.min.y > row.min.y,
+            "em tela estreita, os detalhes ficam abaixo da tabela"
+        );
+    }
+
+    #[test]
+    fn changing_the_filter_clears_the_selected_event() {
+        let (backend, mut commands) = Backend::for_test();
+        let mut view = TimelineView::for_job("job-1");
+        view.on_page(
+            "",
+            0,
+            Ok(Some(TimelinePage::for_test(
+                "job-1",
+                Some(1),
+                0,
+                events(1),
+                vec![],
+            ))),
+        );
+        let mut harness = harness(view, backend);
+        harness.run();
+        harness.get_by_label("Inspecionar evento: evento-0").click();
+        harness.run_steps(2);
+        harness.get_by_label("Detalhes do evento");
+        drain(&mut commands);
+
+        harness
+            .get_by_role(egui::accesskit::Role::TextInput)
+            .click();
+        harness.run();
+        harness
+            .get_by_role(egui::accesskit::Role::TextInput)
+            .type_text("4624");
+        harness.run();
+        harness.get_by_label("Filtrar").click();
+        harness.run_steps(2);
+
+        assert!(harness.query_by_label("Detalhes do evento").is_none());
+        assert_eq!(drain(&mut commands).len(), 1);
     }
 
     #[test]

@@ -17,6 +17,61 @@ const MAX_RENDERED: usize = 100;
 /// Referências de evento exibidas por candidato (o resto fica no detalhe do banco).
 const REFS_SHOWN: usize = 8;
 
+/// Formata a agregação do candidato para apresentação legível.
+/// Preserva chaves/valores desconhecidos; não descarta nada silenciosamente.
+/// Ex.: "conta=ana; origem=10.0.0.1" -> "Conta: ana · Origem: 10.0.0.1"
+fn format_aggregation(value: &str) -> String {
+    if value.is_empty() {
+        return String::new();
+    }
+    value
+        .split(';')
+        .map(|part| part.trim())
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            if let Some((key, val)) = part.split_once('=') {
+                let key = key.trim();
+                let val = val.trim();
+                let friendly_key = match key.to_lowercase().as_str() {
+                    "conta" => "Conta",
+                    "origem" => "Origem",
+                    "host" => "Host",
+                    "usuario" => "Usuário",
+                    "ip" => "IP",
+                    _ => key,
+                };
+                format!("{friendly_key}: {val}")
+            } else {
+                part.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+/// Formata a contagem de eventos com singular/plural correto.
+fn format_event_count(count: u64) -> String {
+    if count == 1 {
+        "1 evento".to_string()
+    } else {
+        format!("{count} eventos")
+    }
+}
+
+/// Formata o intervalo de tempo entre first_seen e last_seen.
+/// - Mesmo instante: um único timestamp formatado via format_timestamp
+/// - Instantes diferentes: "primeiro a último" com ambos formatados
+/// - Valores inválidos: preserva o valor original (delega a format_timestamp)
+fn format_timestamp_range(first: &str, last: &str) -> String {
+    let first_fmt = super::format_timestamp(first);
+    let last_fmt = super::format_timestamp(last);
+    if first_fmt == last_fmt {
+        first_fmt
+    } else {
+        format!("{first_fmt} a {last_fmt}")
+    }
+}
+
 /// Revela um controle quando a navegação por teclado o alcança.
 ///
 /// A lista usa apenas a `ScrollArea` externa da tela de evidência. Uma segunda
@@ -277,8 +332,8 @@ impl DetectionState {
                 });
                 ui.label(&item.description);
                 ui.label(format!(
-                    "{} · {} evento(s) · {} a {}",
-                    item.aggregation, item.event_count, item.first_seen, item.last_seen
+                    "{} · {} · {}",
+                    format_aggregation(&item.aggregation), format_event_count(item.event_count), format_timestamp_range(&item.first_seen, &item.last_seen)
                 ));
                 let refs: Vec<&str> = item
                     .event_refs
@@ -794,6 +849,229 @@ mod ui_tests {
         assert!(
             revealed.min.y >= 0.0 && revealed.max.y <= viewport.y,
             "o foco não revelou o último controle na viewport externa: {revealed:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod detection_formatting_tests {
+    use super::*;
+
+    #[test]
+    fn format_aggregation_known_keys() {
+        let result = format_aggregation("conta=ana; origem=10.0.0.1");
+        assert_eq!(result, "Conta: ana · Origem: 10.0.0.1");
+    }
+
+    #[test]
+    fn format_aggregation_unknown_key_preserved() {
+        let result = format_aggregation("custom_key=valor");
+        assert_eq!(result, "custom_key: valor");
+    }
+
+    #[test]
+    fn format_aggregation_empty() {
+        let result = format_aggregation("");
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn format_aggregation_malformed_part_preserved() {
+        let result = format_aggregation("conta=ana; sem_igual; host=servidor");
+        assert_eq!(result, "Conta: ana · sem_igual · Host: servidor");
+    }
+
+    #[test]
+    fn format_event_count_singular() {
+        assert_eq!(format_event_count(1), "1 evento");
+    }
+
+    #[test]
+    fn format_event_count_plural() {
+        assert_eq!(format_event_count(5), "5 eventos");
+        assert_eq!(format_event_count(0), "0 eventos");
+    }
+
+    #[test]
+    fn format_timestamp_range_same_instant() {
+        let result = format_timestamp_range("2026-03-01T10:00:00Z", "2026-03-01T10:00:00Z");
+        assert_eq!(result, "2026-03-01 10:00:00 UTC");
+        assert!(!result.contains(" a "));
+    }
+
+    #[test]
+    fn format_timestamp_range_different_instants() {
+        let result = format_timestamp_range("2026-03-01T10:00:00Z", "2026-03-01T10:10:00Z");
+        assert_eq!(result, "2026-03-01 10:00:00 UTC a 2026-03-01 10:10:00 UTC");
+    }
+
+    #[test]
+    fn format_timestamp_range_invalid_preserved() {
+        let result = format_timestamp_range("não informado", "também não");
+        assert_eq!(result, "não informado a também não");
+    }
+}
+
+#[cfg(test)]
+mod ui_integration_tests {
+    use super::*;
+    use dfir_protocol::CandidateIoc;
+    use egui_kittest::{
+        Harness,
+        kittest::{NodeT, Queryable},
+    };
+
+    type State = (DetectionState, Backend, Vec<IncidentResponse>);
+
+    fn view(id: &str, status: &str) -> CandidateView {
+        CandidateView {
+            id: id.into(),
+            evidence_id: "ev_1".into(),
+            job_id: "job-1".into(),
+            candidate_key: format!("key-{id}"),
+            created_at: "2026-03-01T11:00:00Z".into(),
+            rule_id: "R-AUTH-002".into(),
+            rule_version: "1".into(),
+            rule_set_version: "2026.10.1".into(),
+            title: format!("Logon após rajada {id}"),
+            description: "Um logon bem-sucedido depois de rajada.".into(),
+            tactic: "INITIAL_ACCESS".into(),
+            technique_id: "T1078".into(),
+            sub_technique_id: None,
+            severity: "HIGH".into(),
+            confidence: "MEDIUM".into(),
+            aggregation: "conta=admin; origem=185.220.101.5".into(),
+            event_count: 11,
+            first_seen: "2026-03-01T10:00:00Z".into(),
+            last_seen: "2026-03-01T10:10:00Z".into(),
+            event_refs: vec!["record:5".into(), "record:9".into()],
+            refs_truncated: false,
+            host: None,
+            user: Some("admin".into()),
+            src_ip: Some("185.220.101.5".into()),
+            iocs: vec![CandidateIoc {
+                ioc_type: "IP".into(),
+                value: "185.220.101.5".into(),
+                event_ref: "record:9".into(),
+            }],
+            limitations: "Não prova que o logon foi do atacante.".into(),
+            status: status.into(),
+            decided_at: None,
+            decision_note: (status == "REJECTED").then(|| "ruído de monitoramento".into()),
+            incident_id: None,
+            attack_mapping_id: None,
+            finding_id: None,
+        }
+    }
+
+    fn harness(
+        state: DetectionState,
+        backend: Backend,
+        incidents: Vec<IncidentResponse>,
+    ) -> Harness<'static, State> {
+        crate::gui::test_harness::builder().build_ui_state(
+            |ui, (state, backend, incidents): &mut State| {
+                state.ui(ui, "ev_1", true, incidents, backend)
+            },
+            (state, backend, incidents),
+        )
+    }
+
+    #[test]
+    fn candidate_shows_friendly_aggregation_and_no_raw_meta_string() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = DetectionState::default();
+        let mut v = view("singular", "PENDING");
+        v.event_count = 1;
+        v.first_seen = "2026-03-01T10:00:00Z".into();
+        v.last_seen = "2026-03-01T10:00:00Z".into();
+        state.on_loaded("ev_1", Ok(vec![v]));
+        let mut h = harness(state, backend, vec![]);
+        h.run();
+
+        // Friendly aggregation appears
+        h.get_by_label_contains("Conta: admin");
+        h.get_by_label_contains("Origem: 185.220.101.5");
+
+        // Singular event count
+        h.get_by_label_contains("1 evento");
+
+        // Single timestamp when same instant
+        h.get_by_label_contains("2026-03-01 10:00:00 UTC");
+
+        // Raw RFC3339 and 'evento(s)' do NOT appear
+        let all_text: String = h
+            .get_all_by_role(egui::accesskit::Role::Label)
+            .map(|n| n.accesskit_node().label().unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            !all_text.contains("2026-03-01T10:00:00Z"),
+            "RFC3339 raw timestamp leaked: {all_text}"
+        );
+        assert!(
+            !all_text.contains("evento(s)"),
+            "meta-string 'evento(s)' leaked: {all_text}"
+        );
+    }
+
+    #[test]
+    fn candidate_shows_plural_events_and_range() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = DetectionState::default();
+        let mut v = view("plural", "PENDING");
+        v.event_count = 3;
+        v.first_seen = "2026-03-01T10:00:00Z".into();
+        v.last_seen = "2026-03-01T10:10:00Z".into();
+        state.on_loaded("ev_1", Ok(vec![v]));
+        let mut h = harness(state, backend, vec![]);
+        h.run();
+
+        // Plural event count
+        h.get_by_label_contains("3 eventos");
+
+        // Range with ' a '
+        h.get_by_label_contains("2026-03-01 10:00:00 UTC a 2026-03-01 10:10:00 UTC");
+
+        // Raw RFC3339 and 'evento(s)' do NOT appear
+        let all_text: String = h
+            .get_all_by_role(egui::accesskit::Role::Label)
+            .map(|n| n.accesskit_node().label().unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            !all_text.contains("2026-03-01T10:00:00Z"),
+            "RFC3339 raw timestamp leaked: {all_text}"
+        );
+        assert!(
+            !all_text.contains("evento(s)"),
+            "meta-string 'evento(s)' leaked: {all_text}"
+        );
+    }
+
+    #[test]
+    fn candidate_preserves_unknown_aggregation_key() {
+        let (backend, _commands) = Backend::for_test();
+        let mut state = DetectionState::default();
+        let mut v = view("unknown", "PENDING");
+        v.aggregation = "custom_key=valor; conta=ana".into();
+        state.on_loaded("ev_1", Ok(vec![v]));
+        let mut h = harness(state, backend, vec![]);
+        h.run();
+
+        // Known key is friendly, unknown is preserved
+        h.get_by_label_contains("Conta: ana");
+        h.get_by_label_contains("custom_key: valor");
+
+        // Raw RFC3339 and 'evento(s)' do NOT appear
+        let all_text: String = h
+            .get_all_by_role(egui::accesskit::Role::Label)
+            .map(|n| n.accesskit_node().label().unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            !all_text.contains("evento(s)"),
+            "meta-string 'evento(s)' leaked: {all_text}"
         );
     }
 }
