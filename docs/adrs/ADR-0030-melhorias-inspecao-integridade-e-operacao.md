@@ -52,3 +52,7 @@ A âncora local é tamper-evident, não inviolável: um atacante capaz de altera
 A especificação, a RTM, os tickets F1-36..F1-40, a documentação de operação e os testes devem mudar junto com cada implementação. Novas migrations são históricas e não reeditam migrations anteriores. A dependência criptográfica, quando introduzida, exige `just supply-chain` e inventário atualizado.
 
 Windows, Linux aarch64, incidente real e aceite de produção continuam bloqueadores independentes. Em 2026-11-23, `EVD-050` confirmou em Linux x86_64 o fluxo X11 delimitado de navegação, importação manual, análises, timeline e abrir/cancelar seletor; `EVD-060` acrescentou seleção real no Zenity e regressão manual no commit `370411f`. Não se declaram outros backends, AT-SPI, latência ou aceite visual. `EVD-059` registra os gates integrados do commit `63ac821`. Esta decisão não fecha F1-12 nem converte waivers em verificação.
+
+## Atualização — 2026-11-24
+
+A recuperação mencionada em D-4 deixa de permanecer inalterada somente pela [**ADR-0031**](ADR-0031-ownership-de-jobs-por-lock.md): ownership por lock diferencia jobs vivos de órfãos e a transição/auditoria é condicional. O cancelamento explícito e a conclusão atômica desta ADR permanecem.

@@ -686,7 +686,9 @@ pub fn spawn(config: AppConfig, paths: StoragePaths) -> Result<Backend, AppError
                 };
                 // Jobs deixados `PROCESSING` por uma execução anterior que
                 // fechou/morreu no meio da análise (F1-10). Só na partida.
-                match crate::service::recover_orphaned_jobs(&services.db).await {
+                match crate::service::recover_orphaned_jobs(&services.db, &services.paths.staging)
+                    .await
+                {
                     Ok(0) => {}
                     Ok(count) => tracing::warn!(count, "recovered orphaned analysis jobs"),
                     Err(error) => {

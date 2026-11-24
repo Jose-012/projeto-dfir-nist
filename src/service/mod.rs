@@ -38,7 +38,10 @@ use dfir_protocol::NormalizedEvent;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{FromRow, SqlitePool};
-use std::path::Path;
+use std::{
+    fs::{File, OpenOptions, TryLockError},
+    path::{Path, PathBuf},
+};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -1053,10 +1056,12 @@ async fn analyze_inner(
     tokio::fs::create_dir_all(&output_dir)
         .await
         .map_err(AppError::Storage)?;
+    let owner_lock = acquire_job_owner_lock(&job_dir)?;
 
     let mut connection = match begin_immediate(&services.db).await {
         Ok(connection) => connection,
         Err(error) => {
+            drop(owner_lock);
             discard_temp_dir(&job_dir).await;
             return Err(AppError::Database(error));
         }
@@ -1115,11 +1120,13 @@ async fn analyze_inner(
     .await;
     if let Err(error) = transaction_result {
         rollback(&mut connection).await;
+        drop(owner_lock);
         discard_temp_dir(&job_dir).await;
         return Err(AppError::Database(error));
     }
     if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
         rollback(&mut connection).await;
+        drop(owner_lock);
         discard_temp_dir(&job_dir).await;
         return Err(AppError::Database(error));
     }
@@ -1586,37 +1593,104 @@ async fn mark_job_failed_loudly(pool: &SqlitePool, job_id: &str, code: &str, mes
     }
 }
 
-/// Recupera jobs que ficaram `PENDING`/`PROCESSING` porque o app anterior foi
-/// fechado ou morreu no meio da análise (F1-10, AUD-03). Sem isto o job ficava
-/// `PROCESSING` para sempre e `destroy_evidence` recusava a evidência
-/// eternamente.
-///
-/// **Só deve ser chamada na partida do app, antes de qualquer análise nova**:
-/// chamada com outro processo analisando, marcaria um job vivo como órfão.
-/// Cada job recuperado vira `FAILED` com `error_code = 'ORPHANED'` e gera um
-/// evento de auditoria. Devolve quantos jobs foram recuperados.
-pub async fn recover_orphaned_jobs(db: &SqlitePool) -> AppResult<u64> {
+const JOB_OWNER_LOCK_FILE: &str = "owner.lock";
+
+fn job_owner_lock_path(staging_root: &Path, job_id: &str) -> AppResult<PathBuf> {
+    if job_id.is_empty()
+        || !job_id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    {
+        return Err(AppError::Config(
+            "stored analysis job has an invalid id for ownership recovery".into(),
+        ));
+    }
+    Ok(staging_root
+        .join("analysis")
+        .join(job_id)
+        .join(JOB_OWNER_LOCK_FILE))
+}
+
+/// Adquire a propriedade do job antes de sua linha ficar visível no banco. O
+/// handle fica aberto durante execução e persistência; o SO o libera se o app
+/// terminar, inclusive em falha ou encerramento abrupto.
+fn acquire_job_owner_lock(job_dir: &Path) -> AppResult<File> {
+    let path = job_dir.join(JOB_OWNER_LOCK_FILE);
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(AppError::Storage)?;
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(TryLockError::WouldBlock) => Err(AppError::Config(
+            "analysis job is already owned by another application instance".into(),
+        )),
+        Err(TryLockError::Error(error)) => Err(AppError::Storage(error)),
+    }
+}
+
+enum RecoveryOwnership {
+    Live,
+    Recover(Option<File>),
+}
+
+/// Uma segunda instância só pode recuperar o job se adquirir o mesmo lock.
+/// `WouldBlock` significa que outro handle ainda é dono do job; ausência do
+/// arquivo é o formato legado, recuperável com a serialização transacional.
+fn recovery_ownership(staging_root: &Path, job_id: &str) -> AppResult<RecoveryOwnership> {
+    let path = job_owner_lock_path(staging_root, job_id)?;
+    let file = match OpenOptions::new().read(true).write(true).open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(RecoveryOwnership::Recover(None));
+        }
+        Err(error) => return Err(AppError::Storage(error)),
+    };
+    match file.try_lock() {
+        Ok(()) => Ok(RecoveryOwnership::Recover(Some(file))),
+        Err(TryLockError::WouldBlock) => Ok(RecoveryOwnership::Live),
+        Err(TryLockError::Error(error)) => Err(AppError::Storage(error)),
+    }
+}
+
+/// Recupera jobs que ficaram `PENDING`/`PROCESSING` porque o app dono morreu.
+/// Um lock exclusivo por job distingue dono vivo de órfão sem PID/heartbeat.
+/// A transição e a auditoria compartilham uma transação: duas instâncias não
+/// recuperam o mesmo legado e cancelamento concorrente não vira `ORPHANED`.
+pub async fn recover_orphaned_jobs(db: &SqlitePool, staging_root: &Path) -> AppResult<u64> {
     let orphans: Vec<(String, String, String)> = sqlx::query_as(
-        "SELECT id,evidence_id,status FROM analysis_jobs WHERE status IN ('PENDING','PROCESSING') ORDER BY created_at",
+        "SELECT id,evidence_id,status FROM analysis_jobs WHERE status IN ('PENDING','PROCESSING') AND cancellation_requested_at IS NULL ORDER BY created_at",
     )
     .fetch_all(db)
     .await?;
     let mut recovered = 0_u64;
     for (job_id, evidence_id, previous_status) in orphans {
-        mark_job_failed(
-            db,
-            &job_id,
-            "ORPHANED",
-            "analysis was interrupted: the application closed or stopped before the job finished",
+        let ownership = recovery_ownership(staging_root, &job_id)?;
+        let RecoveryOwnership::Recover(_owner_guard) = ownership else {
+            continue;
+        };
+        let mut connection = begin_immediate(db).await?;
+        let transitioned = sqlx::query(
+            "UPDATE analysis_jobs SET status='FAILED',error_code='ORPHANED',error_message=?,finished_at=? WHERE id=? AND status IN ('PENDING','PROCESSING') AND cancellation_requested_at IS NULL",
         )
+        .bind("analysis was interrupted: the application closed or stopped before the job finished")
+        .bind(Utc::now().to_rfc3339())
+        .bind(&job_id)
+        .execute(&mut *connection)
         .await?;
+        if transitioned.rows_affected() == 0 {
+            rollback(&mut connection).await;
+            continue;
+        }
         let metadata = serde_json::json!({
             "job_id": job_id,
             "evidence_id": evidence_id,
             "previous_status": previous_status,
         });
-        audit::append(
-            db,
+        if let Err(error) = audit::append_on_connection(
+            &mut connection,
             None,
             "ANALYSIS_JOB_ORPHANED",
             "analysis_job",
@@ -1624,7 +1698,15 @@ pub async fn recover_orphaned_jobs(db: &SqlitePool) -> AppResult<u64> {
             None,
             &metadata.to_string(),
         )
-        .await?;
+        .await
+        {
+            rollback(&mut connection).await;
+            return Err(error.into());
+        }
+        if let Err(error) = sqlx::query("COMMIT").execute(&mut *connection).await {
+            rollback(&mut connection).await;
+            return Err(AppError::Database(error));
+        }
         recovered += 1;
     }
     if recovered > 0 {
@@ -3780,7 +3862,9 @@ mod tests {
                 .is_err()
         );
 
-        let recovered = recover_orphaned_jobs(&fx.pool).await.expect("recovery");
+        let recovered = recover_orphaned_jobs(&fx.pool, &fx.paths.staging)
+            .await
+            .expect("recovery");
 
         assert_eq!(recovered, 1);
         let (status, code): (String, Option<String>) =
@@ -3801,7 +3885,12 @@ mod tests {
     async fn recovery_leaves_finished_jobs_alone_and_is_idempotent() {
         let fx = fixture().await;
         seed_evidence(&fx, "ev_p", true).await; // job COMPLETED
-        assert_eq!(recover_orphaned_jobs(&fx.pool).await.expect("recovery"), 0);
+        assert_eq!(
+            recover_orphaned_jobs(&fx.pool, &fx.paths.staging)
+                .await
+                .expect("recovery"),
+            0
+        );
         let status: String =
             sqlx::query_scalar("SELECT status FROM analysis_jobs WHERE evidence_id='ev_p'")
                 .fetch_one(&fx.pool)
@@ -4362,6 +4451,124 @@ mod tests {
                 .await
                 .expect("custody")
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn second_instance_recovery_preserves_live_job() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fx = fixture().await;
+        let input = seed_evidence(&fx, "ev_recovery_live", false).await;
+        let (blake3, sha256) = hash_file(&input).await.expect("hash fixture");
+        sqlx::query(
+            "UPDATE evidence SET format='evtx',blake3=?,sha256=? WHERE id='ev_recovery_live'",
+        )
+        .bind(blake3)
+        .bind(sha256)
+        .execute(&fx.pool)
+        .await
+        .expect("analyzable evidence");
+        let script = fx.paths.staging.join("recovery-live-engine.sh");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nread _request\necho $$ > \"$DFIR_ENGINE_OUTPUT_ROOT/engine.pid\"\nexec /bin/sleep 60\n",
+        )
+        .expect("write fake engine");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+            .expect("chmod fake engine");
+        let services = app_services_with_engine(&fx, &script);
+        let other_services = app_services(&fx);
+        let task_services = services.clone();
+        let task = tokio::spawn(async move {
+            analyze(
+                &task_services,
+                "ev_recovery_live",
+                dfir_protocol::ANALYSIS_KIND_EVTX_TIMELINE,
+                None,
+                None,
+            )
+            .await
+        });
+
+        let mut job_id = None;
+        for _ in 0..100 {
+            job_id = sqlx::query_scalar(
+                "SELECT id FROM analysis_jobs WHERE evidence_id='ev_recovery_live' AND status='PROCESSING'",
+            )
+            .fetch_optional(&fx.pool)
+            .await
+            .expect("processing job lookup");
+            if job_id.is_some() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let job_id: String = job_id.expect("job was created");
+        let pid_file = fx
+            .paths
+            .staging
+            .join("analysis")
+            .join(&job_id)
+            .join("output/engine.pid");
+        let mut pid = None;
+        for _ in 0..100 {
+            if let Ok(text) = std::fs::read_to_string(&pid_file) {
+                pid = text.trim().parse::<libc::pid_t>().ok();
+            }
+            if pid.is_some() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let pid = pid.expect("engine pid");
+
+        let recovered = recover_orphaned_jobs(&other_services.db, &other_services.paths.staging)
+            .await
+            .expect("second instance recovery");
+        let status_after_recovery: String =
+            sqlx::query_scalar("SELECT status FROM analysis_jobs WHERE id=?")
+                .bind(&job_id)
+                .fetch_one(&fx.pool)
+                .await
+                .expect("status after recovery");
+        let orphan_events = audit_count(&fx, "ANALYSIS_JOB_ORPHANED").await;
+
+        // Recolha o engine antes das assertivas finais, inclusive no Before que
+        // marca o job vivo como FAILED/ORPHANED.
+        if status_after_recovery == "PROCESSING" {
+            let cancelled = cancel_active_analysis(&other_services, "ev_recovery_live")
+                .await
+                .expect("cleanup cancellation");
+            assert_eq!(cancelled.status, "CANCELLED");
+            let response = tokio::time::timeout(std::time::Duration::from_secs(2), task)
+                .await
+                .expect("analysis cleanup did not finish")
+                .expect("analysis task join")
+                .expect("cancelled analysis response");
+            assert_eq!(response.status, "CANCELLED");
+        } else {
+            // SAFETY: o PID veio do engine de teste; o envio é apenas limpeza.
+            unsafe { libc::kill(pid, libc::SIGTERM) };
+            task.abort();
+            if let Err(error) = task.await {
+                assert!(error.is_cancelled(), "analysis task failed: {error}");
+            }
+        }
+        let mut gone = false;
+        for _ in 0..100 {
+            // SAFETY: ESRCH confirma término e recolhimento do processo.
+            if unsafe { libc::kill(pid, 0) } != 0 {
+                gone = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(gone, "engine de teste não foi recolhido");
+
+        assert_eq!(recovered, 0, "a live job must not be recovered");
+        assert_eq!(status_after_recovery, "PROCESSING");
+        assert_eq!(orphan_events, 0, "no orphan audit is valid for a live job");
     }
 
     #[tokio::test]

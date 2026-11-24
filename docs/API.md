@@ -22,7 +22,7 @@ Convenções: o primeiro parâmetro de quase todas as funções é `services: &A
 | `async analyze` | `evidence_id: &str, kind: &str, max_output_bytes: Option<u64>, max_items: Option<u64>` | `AppResult<AnalyzeResponse>` | Executa uma análise e registra o resultado no log (job, tipo, itens, avisos e duração total, ou o erro). |
 | `async cancel_job` | `job_id: &str` | `AppResult<JobStatusResponse>` | Persiste `CANCELLED` com auditoria/custódia, acorda o sinal local do job e preserva `COMPLETED`; chamadas repetidas são idempotentes. |
 | `async cancel_active_analysis` | `evidence_id: &str` | `AppResult<JobStatusResponse>` | Resolve o job `PENDING`/`PROCESSING` mais recente da evidência e aplica `cancel_job`. |
-| `async recover_orphaned_jobs` | `db: &SqlitePool` | `AppResult<u64>` | Recupera jobs que ficaram `PENDING`/`PROCESSING` porque o app anterior foi fechado ou morreu no meio da análise (F1-10, AUD-03). |
+| `async recover_orphaned_jobs` | `db: &SqlitePool, staging_root: &Path` | `AppResult<u64>` | Preserva jobs cuja propriedade exclusiva ainda está bloqueada por outra instância e recupera apenas órfãos, com transição e auditoria atômicas (ADR-0031). |
 | `async latest_timeline_job` | `evidence_id: &str` | `AppResult<Option<String>>` | O job EVTX concluído mais recente da evidência, se houver (a GUI o usa para mostrar a timeline ao selecionar a evidência, sem reanalisar). |
 | `async timeline_page` | `job_id: &str, offset: u64, limit: u64, filter: Option<&str>, want_total: bool` | `AppResult<TimelinePage>` | Uma página da timeline de um job, ordenada por UTC. |
 | `async evidence_analytical_results` | `evidence_id: &str` | `AppResult<Vec<AnalyticalResultResponse>>` | — |

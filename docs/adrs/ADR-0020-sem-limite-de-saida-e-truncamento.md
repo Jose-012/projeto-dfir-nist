@@ -42,3 +42,7 @@ O primeiro teste ponta a ponta com engine real (ADR-0019, EVTX real de 2,1 MB, 2
 ## Atualização — 2026-10-11
 
 Os riscos listados em "Consequências e riscos aceitos" foram tratados pela **ADR-0021**: memória da timeline (índice e paginação no SQLite), disco (`DFIR_MIN_FREE_DISK_BYTES`) e o achado AUD-36 (avisos `EVTX_TRUNCATED`/`EVTX_RECORDS_MISSING`). Permanecem como risco: Windows sem medição de disco e escala acima de dezenas de milhões de eventos.
+
+## Atualização — 2026-11-24
+
+O item 6 da decisão é superseded pela [**ADR-0031**](ADR-0031-ownership-de-jobs-por-lock.md) somente quanto à identificação de órfãos: um lock exclusivo por job preserva processos vivos de outra instância, e a transição/auditoria condicional recupera somente jobs sem dono. A saída sem teto total e a moldura de 8 MiB permanecem inalteradas.

@@ -25,12 +25,14 @@
 
 > **Nota de implementação — 2026-11-20 (11):** **ADR-0030** registra decisão explícita do operador que reintroduz, sem origem nova na demanda SENAI, cinco melhorias antes adiadas por ADR-0018 D-2: âncora de cabeça/contagem da custódia, breadcrumbs e cancelamento de job na Fase 1; SVG do caminho crítico na Fase 2; assinatura destacada dos entregáveis na Fase 3. A assinatura do pipeline atual cobre o SHA-256 do `manifest.json`, que referencia os documentos e o SVG, usando Ed25519 e verificação obrigatória quando habilitada. Nenhum estado de implementação ou verificação decorre desta nota. `cargo vet` e os demais adiamentos permanecem.
 
+> **Nota de implementação — 2026-11-24 (12):** **ADR-0031** supersede ADR-0020 item 6 e ADR-0030 D-4 somente quanto à recuperação multiinstância. Cada job novo mantém um lock exclusivo do sistema operacional durante toda a análise; uma segunda instância preserva o job quando esse lock está ocupado. Órfãos e jobs legados sem lock são convertidos por transição condicional e auditoria na mesma transação imediata. Não há limite de saída, lease temporal ou mudança de escopo/RF.
+
 ```xml
 <documento-projeto>
   <identificacao>
     <versao>6.5.1</versao>
     <status>ESPECIFICAÇÃO REALINHADA À DEMANDA ORIGINAL — ARQUITETURA FECHADA E BASE CONTROLADA DE IMPLEMENTAÇÃO</status>
-    <data>2026-11-20</data>
+    <data>2026-11-24</data>
     <programa>SAGA SENAI de Inovação 2026/01 — Projeto Integrador</programa>
     <escola>(SP) 1.32 Escola SENAI de Informática</escola>
     <empresa-parceira>Avivatec Soluções em Tecnologia da Informação Ltda.</empresa-parceira>
@@ -1964,7 +1966,7 @@ aguardar o job atual dentro de um prazo configurado
                     persistir estado de recuperação
 ```
 
-Jobs `PROCESSING` encontrados após reinício nunca podem permanecer silenciosamente nesse estado. O bootstrap deve convertê-los para `RECOVERY_PENDING`, registrar auditoria e, conforme o orçamento de retry/idempotência, reencaminhá-los para `PENDING` ou para `PERMANENTLY_FAILED`.
+Jobs `PROCESSING` encontrados após reinício nunca podem permanecer silenciosamente nesse estado. A conversão para órfão deve respeitar a propriedade de processo da ADR-0031: um lock exclusivo ocupado significa que outra instância ainda executa o job; somente um lock adquirível ou um job legado sem `owner.lock` é candidato à recuperação. Toda recuperação usa transição condicional e auditoria na mesma transação, sem sobrescrever cancelamento ou estado terminal.
 
 A aplicação não deve marcar um resultado parcial como `COMPLETED`.
 
@@ -1975,6 +1977,10 @@ A migration `0014_job_cancellation.sql` admite `CANCELLED` e registra `cancellat
 Cada análise possui um `CancellationToken` registrado por `job_id`. O worker observa esse token e a coluna persistida enquanto aguarda semáforo, grava requisição, lê JSONL e espera o processo. Ao cancelar, mata e recolhe o engine, para o watcher e propaga `AppError::JobCancelled`. Essa combinação cobre tanto a instância que originou a análise quanto outra invocação CLI.
 
 A indexação dos eventos, a escrita dos resultados e a conclusão/auditoria compartilham uma única transação protegida contra cancelamento. Assim não se publica índice parcial, e uma conclusão ou falha tardia não substitui um estado terminal diverso. `cancel_active_analysis` seleciona a análise vigente mais recente da evidência; `cancel_job` opera pelo `job_id`. A GUI usa o mesmo serviço sem bloquear sua thread e não recarrega timeline ou resultados após `CANCELLED`.
+
+### 26.5.2. Propriedade e recuperação entre instâncias (ADR-0031)
+
+Cada análise cria `staging/analysis/<job_id>/owner.lock` e adquire `File::try_lock` antes de publicar `PROCESSING`. O handle permanece aberto até o término da persistência. Na partida, `WouldBlock` preserva o job; lock adquirido ou arquivo legado ausente permite tentar a recuperação. A atualização condicional da linha ainda ativa e sem cancelamento, o evento `ANALYSIS_JOB_ORPHANED` e a custódia compartilham `BEGIN IMMEDIATE`. Duas instâncias novas podem coexistir; versões anteriores e novas não devem compartilhar simultaneamente o mesmo `data_root`, pois jobs antigos não possuem o mecanismo.
 
 ## 26.6. Limite operacional de armazenamento
 
@@ -3964,6 +3970,7 @@ Estas não são pendências do “documento original”, que já foi fornecido. 
   <ipc>stdin/stdout do subprocesso; sem socket ou API de rede no engine do MVP</ipc>
   <ruleset-mvp>Ruleset próprio e curado; feeds públicos apenas como fonte opcional de curadoria</ruleset-mvp>
   <database-policy>SQLite + WAL + FK + FULL sync + busy timeout</database-policy>
+  <job-ownership>Lock exclusivo por job; recuperação condicional preserva owners vivos entre instâncias (ADR-0031)</job-ownership>
   <crypto-at-rest>Proteção de volume/filesystem como mecanismo primário no MVP; field encryption apenas quando justificada</crypto-at-rest>
   <signing>Ed25519 destacada quando assinatura estiver habilitada; chave separada por finalidade</signing>
   <runtime-container>removido — binário nativo é o único modo de execução (ver Seção 28)</runtime-container>
@@ -4116,6 +4123,7 @@ O estado de release vigente é mantido em `docs/RELEASE_GATE.md` e nas evidênci
 
 | Versão | Origem/autor | Síntese |
 |---|---|---|
+| 6.5.1 | ADR-0031 — 2026-11-24 | Propriedade exclusiva de cada job por lock do sistema operacional; recuperação multiinstância preserva owners vivos e usa transição/auditoria atômicas. ADR-0020 item 6 e ADR-0030 D-4 superseded somente nesse aspecto. |
 | 6.5.1 | Revisão de integridade (2026-11-09) | SBOM fora do escopo (ADR-0028); `RF-024` e `RF-031` reescritos e de volta à tabela; seção 41 recuperada (título, marcador e índice) e sem SBOM, imagens e Podman; F.8.1 e item 2 da F.12 restaurados; `D04` parcialmente e `D12`/`D13` superseded no índice; `<data>` e `<ajuste-de-escopo>` atualizados. Versões 6.4.2, 6.4.4 e 6.4.5: ver `CHANGELOG.md`. |
 | 6.5.0 | Realinhamento à demanda original — 2026-10-02 | Fonte da demanda versionada; `.dfirpkg`, atualização offline, Ansible e benchmark para a Fase 4; retry/DLQ substituído; perfis de relatório removidos; RB-004 relida como orçamento do cliente; novos RF-048..055 (evento normalizado, importação estruturada, detecção determinística, Finding, item de plano, NIST por Function, proveniência/lacunas, redação); XSS/HTTP removidos de RF-016/030/044 (ADR-0018); CLI headless (ADR-0019), sem limite de saída nem truncamento (ADR-0020), timeline no banco, guarda de disco e avisos do parser (ADR-0021), testes de GUI e observabilidade (ADR-0022). |
 | 6.4.3 | Simplificação do engine e endurecimento do protocolo — 2026-08-18 | Parsing EVTX delegado à crate `evtx 0.12.2` com `default-features=false`; crate interno `dfir-protocol` centraliza tipos concretos; removidos restos de parser/protocolo duplicados; record-level parser errors passam por mensagens `ERROR`; cleanup de subprocesso foi centralizado para evitar vazamento de processo em erros de protocolo.
