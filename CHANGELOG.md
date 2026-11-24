@@ -1,6 +1,14 @@
 <!-- doc-type: log | status: current -->
 # Changelog
 
+## Unreleased - 2026-11-24 - leitura EVTX, inspeção e lifecycle (`EVD-065`)
+
+- Detecção apresenta agregação, plural e instantes legíveis sem mudar dados. Timeline tem cabeçalho humano e eventos selecionáveis com detalhes normalizados, painel responsivo com scroll e limpeza de seleção ao filtrar ou despejar a página.
+- A navegação decide o modo compacto pela largura real da janela, aceita recolher/expandir manualmente e usa revelação de 140 ms com Reduced Motion imediato. Não há animação ambiente nem aceite estético inferido.
+- Migration 0015 e `INCIDENT_DELETED` implementam exclusão lógica confirmada de incidentes, bloqueando novos vínculos/edições sem apagar evidências, resultados ou auditoria. Falhas preservam lista/seleção; não há restauração pela UI.
+- Clean archive em `d18af4d`: doc-gate 73/73, verify 753 passed/1 skipped, doc-tests/Clippy verdes e E2E 123/123. As duas amostras públicas íntegras passaram 25/25 checks cada; X11 com Zenity/resize passou sem erros. Falhas anteriores de documentação, harness e Clippy foram preservadas e corrigidas.
+- Supply-chain permanece em `EVD-063`. Aceite estético, Windows, Linux aarch64, incidente real, CI deste HEAD e produção não são promovidos.
+
 ## Unreleased - 2026-11-24 - orientação de primeiro uso (`EVD-064`)
 
 - Evidências e Incidentes ganham um painel compartilhado de primeiro uso com três passos reais, ação opcional e revelação única por opacidade. Reduced Motion é imediato; o picker e os comandos continuam pertencendo às telas, e Incidentes não cria dados automaticamente.

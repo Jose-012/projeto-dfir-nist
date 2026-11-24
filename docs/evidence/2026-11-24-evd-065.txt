@@ -1,0 +1,138 @@
+EVD-065 - leitura EVTX, inspecao, incidentes e navegacao nativa
+================================================================
+
+Status: PASS somente no escopo local executado e descrito abaixo.
+Aceite estetico: PENDING-HUMAN. Nenhuma revisao visual foi alegada.
+Periodo UTC de implementacao, testes e gates: 2026-11-24T12:20Z..14:54Z.
+Codigo/testes: d18af4d8b47ad3aa4254d3ac52298a126959c8d3,
+tree ee5fbcf32b946be5efbbe8931400f82cc295698a.
+Documentacao desta evidencia e dos ponteiros: commit seguinte.
+Ambiente: Linux x86_64, Debian 13, rustc/cargo 1.100.0, nextest 0.9.151,
+CPython 3.13.5, eframe/egui 0.37.0, X11 DISPLAY=:0, Zenity 4.1.90,
+python-xlib 0.33. Sandbox required nos fluxos E2E/publicos.
+Run: session_raccoon_1795483904683_2cc05bd8e291981c. Logs, datasets e
+raizes de dados ficam fora do Git, no scratch desse run. Os SHA-256 dos
+artefatos citados estao em evd065-artifacts-sha256.txt nesse scratch.
+
+Mudancas validadas
+------------------
+Detecao apresenta agregacao/conta, plural e instantes em texto legivel.
+Chaves e valores desconhecidos, inclusive valores com '=', sao preservados;
+a formatacao nao altera regras, candidatos, persistencia ou confirmacao.
+
+Timeline usa 1 evento/N eventos, abrevia o job com ID completo no tooltip e
+permite selecionar uma linha. O painel apresenta somente os campos normalizados
+presentes, a direita em telas largas ou abaixo em telas estreitas, com scroll
+proprio no painel lateral. Fechar, mudar o filtro ou despejar a pagina do cache
+limpa a selecao. Nenhum segundo parser nem mudanca de protocolo foi introduzida.
+
+A largura da janela, nao a do proprio rail, decide a navegacao compacta. O
+operador pode recolher/expandir manualmente. A troca Evidence/Incidents tem
+revelacao de 140 ms e Reduced Motion resolve imediatamente; a primeira tela
+nao comeca vazia e nao ha animacao ambiente.
+
+Migration 0015 acrescenta incidents.deleted_at. Excluir incidente exige
+confirmacao e executa tombstone logico + INCIDENT_DELETED com
+deletion_mode=logical na mesma transacao. O incidente sai da lista e
+incident_exists impede novos vinculos/edicoes. Evidencias, resultados
+analiticos, vinculos historicos e auditoria nao sao apagados. Falha preserva
+lista/selecao e apresenta o motivo. Nao ha restauracao pela interface.
+
+Arvore limpa e testes
+---------------------
+Commits funcionais/documentais anteriores: 8d12887, f991742 e 2fbb466.
+O archive final-d18af4d veio de `git archive HEAD` em d18af4d, sem patches
+pendentes e sem os cinco artefatos preservados do checkout. A equivalencia
+das duas copias da especificacao foi conferida. CARGO_TARGET_DIR externo foi
+usado somente para cache/saida; nao houve trabalho Cargo concorrente.
+
+A primeira tentativa documental no checkout falhou com tres erros: referencia
+a migration 0015 em FASE0_STATUS, contrato delete_incident em API.md e o
+artefato preservado analysis_adrs.md. Os dois primeiros foram corrigidos no
+commit 2fbb466; o artefato nao foi editado nem incluido no archive.
+
+No primeiro verify limpo (2fbb466), doc-gate passou e nextest terminou
+752 passed/1 skipped, mas Clippy falhou em Id::new deprecado e dois
+collapsible_if. O follow-up d18af4d usou Id::unique, let-chains, scroll no
+painel e limpeza de selecao despejada. Nenhum allow ou gate foi enfraquecido.
+As falhas anteriores de consultas ambiguas, quadros com spinner e comandos
+NIST legítimos tambem foram corrigidas sem remover as pos-condicoes.
+
+Gate final no archive d18af4d, exit 0 em 736,27 s:
+- doc-gate: Fase 0 com 0 erros/0 avisos; documentation/playbook/repo audit
+  PASS; 73/73 testes de coordenacao;
+- fmt e cargo check --workspace --locked --all-targets verdes;
+- nextest: 753 passed/1 skipped, incluindo service/UI/migrations;
+- doc-tests verdes;
+- Clippy --workspace --all-targets --all-features -D warnings verde;
+- build real de dfir-app e dfir-engine a partir do archive;
+- E2E com tests/fixtures/senai-demo.evtx: 123/123, engine real, deteccao,
+  entregaveis, assinatura, mascara, determinismo, custodia e descarte.
+
+Log: final-d18af4d-gates.txt, SHA-256
+daadbe36541f343b56e491ef34a3416112614bf29f4955288c8dc1d25f9562ee.
+Binarios usados tambem nos fluxos publicos/X11:
+- dfir-app 632f1ad2109f4cc6529302bf92f70fdee588c65dd5de78ed7c7393ed21b3ada4;
+- dfir-engine 9185bdd098d3e50d23f27ccda0e4fd513354823bd2b70493fc3de9eca8d62565.
+
+Amostras EVTX publicas reais
+----------------------------
+Origem: sbousseaden/EVTX-ATTACK-SAMPLES (GPL-3.0), os mesmos dois datasets
+identificados em EVD-052, mantidos fora do Git e com raizes isoladas.
+O primeiro transporte raw do gh falhou com `transform: short source buffer`
+e deixou um arquivo de 57 bytes, que nao foi aceito como EVTX. O metodo mudou
+para JSON/Base64; tamanho, SHA-256 e Git blob SHA foram exigidos antes do uso.
+
+- sample-lateral-service: 69.632 bytes; SHA-256
+  af758eb492b6d5ab6665f7e4c44b31490f57be78c37dc0a8b1da714bb0d3d458;
+  blob defba62c09d9c2a478a0048a4f08ffdea32dac22. Resultado: 3 eventos,
+  3 candidatos PENDING R-PERS-002, 25/25 checks.
+- sample-credential-lsass: 69.632 bytes; SHA-256
+  54ff62eff26af588782e066b7b3b1b952bc83e1b75a84d81f9492e654cb5c319;
+  blob 230d0d1b91e76223bb20d820624f2ea442241bae. Resultado: 4 eventos,
+  1 candidato PENDING R-CRED-001, 25/25 checks.
+
+Cada harness conferiu hash/tamanho/importacao, job COMPLETED sem parser
+warnings, ordem/total, Event IDs numericos, campos normalizados serializados,
+fonte EVTX, regra esperada, segunda deteccao sem novos candidatos nem
+duplicacao, audit-verify exit 0 e diagnostico/logs sem o nome da evidencia.
+Nao houve confirmacao automatica: candidatos permanecem hipoteses PENDING.
+
+Artefatos: public-d18af4d/lateral.json (SHA-256
+723f70969152da0d211455d8843f84e02634539d98e5bff1267a807b46271562),
+public-d18af4d/credential.json
+(2f5d345960ad3de722facd74670be33ad142c3852be67bef29c58978dcebf608),
+public-d18af4d/run.txt
+(12e1140f15978fda8333bc88fde57e0255956d294d9a7882afdb93aed389e6f6).
+Harness QA temporario: public_evtx_validate.py, SHA-256
+82bdfdac79f9528384d93d8df9506a0e22fc4753638d269779a84032bfa16156.
+
+Smoke X11 com Zenity e resize
+-----------------------------
+Comando com scripts/native_x11_smoke.py do archive, binario acima,
+--import-method zenity --exercise-resize e raiz vazia isolada.
+Exit 0 em 83,82 s; flow=PASS. Navegacao Evidence/Incidents, geometrias exatas
+960x600, 1024x640 e 1280x820, selecao Zenity por Ctrl+L, importacao FORENSIC,
+EVTX 12, deteccao 5, timeline pagina 1/indice 12 e cancelamento sem alterar
+a evidencia passaram. resize_diagnostics=PASS: zero erros X11, sem BadMatch
+ou panic e processo vivo antes do cleanup. Nenhum app/engine/Zenity restou.
+
+JSON: x11-d18af4d.json, SHA-256
+dd781a369499e78ed762123c4d2e8eec230a7507052bc76df6d921dd51f80c0e.
+Log: x11-d18af4d.txt, SHA-256
+e0bede53776a2e62537b34184244b051398a82ed1d261ee29b2e5c1bb86c8c0f.
+Harness SHA-256: 6efde58b2ebed59a641eb1d161b2466cc1b3da3f0b05bccf99ea40c8fee7b41d.
+
+Documentacao e limites
+----------------------
+PROJECT_SPEC (e copia raiz equivalente), API, FASE0_STATUS,
+NATIVE_UI_ARCHITECTURE e OPERATION descrevem as mudancas efetivas. RTM,
+RELEASE_GATE e CHANGELOG apontam para esta evidencia sem promover estados.
+
+Nenhuma dependencia mudou; supply-chain nao foi repetido e permanece EVD-063.
+Este PASS nao declara suporte EVTX universal, aceite estetico, revisao visual,
+AT-SPI, latencia/repaint, outros backends de dialogo, Windows 11/Job Object,
+Linux aarch64, incidente real, CI deste HEAD ou aceite de producao. Datasets
+publicos nao sao incidente real. A exclusao logica nao tem restauracao pela UI.
+Nao houve escrita externa ate a criacao desta evidencia; o push de main foi
+autorizado pelo operador e so ocorre apos o commit dos registros finais.
