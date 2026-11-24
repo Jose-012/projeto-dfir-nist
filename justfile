@@ -27,6 +27,7 @@ build:
     cargo build --workspace --locked --release
 
 run:
+    cargo build --locked -p dfir-app -p dfir-engine
     cargo run --locked --bin dfir-app
 
 test:
@@ -64,6 +65,7 @@ audit-verify:
     cargo run --locked --bin dfir-app -- audit-verify
 
 engine-smoke:
+    cargo build --locked -p dfir-app -p dfir-engine
     cargo run --locked --bin dfir-app -- engine-smoke
 
 # Runtime tests exercise the native local engine process on each supported host platform.

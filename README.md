@@ -17,6 +17,17 @@ dfir-engine - Rust + evtx + yara-x (um processo por job)
 
 A aplicação é nativa, local e offline, sem contas, login, sessões, RBAC, servidor HTTP ou porta de rede. A GUI chama `src/service/` diretamente. O parser recebe evidência como entrada não confiável e roda em processo separado, com caminhos validados e storage autorizado (ADR-0017 e ADR-0024).
 
+## Execução em desenvolvimento
+
+Use `just run` para abrir a GUI. A receita compila **os dois binários** antes de executar o app. O equivalente manual, inclusive no PowerShell do Windows, é:
+
+```bash
+cargo build --locked -p dfir-app -p dfir-engine
+cargo run --locked --bin dfir-app
+```
+
+`cargo run` sozinho compila apenas `dfir-app`; sem um `dfir-engine` já existente ao lado dele, a análise falha ao iniciar o processo separado. Nesse caso, o erro informa o caminho procurado, o comando de build acima e a alternativa `DFIR_ENGINE_PATH`. Para validar esse caminho sem abrir a GUI, use `just engine-smoke`.
+
 ## Linha de comando (headless)
 
 Sem subcomando, `dfir-app` abre a interface nativa. Os subcomandos são não interativos, escrevem JSON em stdout e logs em stderr.
@@ -130,7 +141,7 @@ Testes adicionais de runtime:
 just runtime-test
 just runtime-security
 cargo run -- audit-verify
-cargo run -- engine-smoke
+just engine-smoke
 ```
 
 Nenhum gate deve ser descrito como executado sem evidência real do ambiente correspondente.

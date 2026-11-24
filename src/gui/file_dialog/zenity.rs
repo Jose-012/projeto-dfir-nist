@@ -2,17 +2,27 @@
 
 use super::{Picked, Request};
 use std::{
-    io::{ErrorKind, Read},
+    io::ErrorKind,
+    process::Child,
+    sync::{Arc, Mutex, MutexGuard},
+};
+#[cfg(target_os = "linux")]
+use std::{
+    io::Read,
     path::PathBuf,
-    process::{Child, Command, ExitStatus, Stdio},
-    sync::{Arc, Mutex, MutexGuard, OnceLock},
+    process::{Command, ExitStatus, Stdio},
+    sync::OnceLock,
     thread,
     time::{Duration, Instant},
 };
 
+#[cfg(target_os = "linux")]
 const MAX_STDOUT_BYTES: usize = 64 * 1024;
+#[cfg(target_os = "linux")]
 const MAX_STDERR_BYTES: usize = 16 * 1024;
+#[cfg(target_os = "linux")]
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+#[cfg(target_os = "linux")]
 const WAIT_INTERVAL: Duration = Duration::from_millis(10);
 
 #[derive(Default)]
@@ -85,17 +95,20 @@ fn terminate(slot: &ChildSlot) {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn cached_probe(cell: &OnceLock<bool>, probe: impl FnOnce() -> bool) -> bool {
     *cell.get_or_init(probe)
 }
 
 /// Sonda executada no máximo uma vez por processo. O timeout vale apenas para
 /// `--version`, nunca para o tempo em que o operador escolhe um arquivo.
+#[cfg(target_os = "linux")]
 pub fn probe_available() -> bool {
     static AVAILABLE: OnceLock<bool> = OnceLock::new();
     cached_probe(&AVAILABLE, || probe_program("zenity"))
 }
 
+#[cfg(target_os = "linux")]
 fn probe_program(program: &str) -> bool {
     let mut child = match Command::new(program)
         .arg("--version")
@@ -125,6 +138,7 @@ fn probe_program(program: &str) -> bool {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn command(request: &Request) -> Command {
     let mut command = Command::new("zenity");
     command.arg("--no-markup");
@@ -185,6 +199,7 @@ pub fn run(_request: Request, _slot: ChildSlot) -> Picked {
     Picked::Unavailable("o backend Zenity só está disponível no Linux; use RFD".into())
 }
 
+#[cfg(target_os = "linux")]
 struct Capture {
     bytes: Vec<u8>,
     overflow: bool,
@@ -192,6 +207,7 @@ struct Capture {
 
 /// Drena até EOF para não bloquear o filho, mas conserva no máximo `limit`
 /// bytes. Todo excedente é descartado e transforma o resultado em falha.
+#[cfg(target_os = "linux")]
 fn read_limited(mut reader: impl Read, limit: usize) -> Capture {
     let mut bytes = Vec::with_capacity(limit.min(8192));
     let mut overflow = false;
@@ -216,6 +232,7 @@ fn read_limited(mut reader: impl Read, limit: usize) -> Capture {
     Capture { bytes, overflow }
 }
 
+#[cfg(target_os = "linux")]
 fn spawn_reader(
     name: &str,
     reader: impl Read + Send + 'static,
@@ -226,6 +243,7 @@ fn spawn_reader(
         .spawn(move || read_limited(reader, limit))
 }
 
+#[cfg(target_os = "linux")]
 fn wait_for_exit(slot: &ChildSlot) -> Result<ExitStatus, Picked> {
     loop {
         let status = {
@@ -254,6 +272,7 @@ fn wait_for_exit(slot: &ChildSlot) -> Result<ExitStatus, Picked> {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn run_command(mut command: Command, slot: ChildSlot) -> Picked {
     if lock(&slot).cancelled {
         return Picked::Failed("o seletor foi encerrado antes de iniciar o processo".into());
@@ -326,6 +345,7 @@ fn run_command(mut command: Command, slot: ChildSlot) -> Picked {
     interpret_output(status.code(), stdout.bytes)
 }
 
+#[cfg(target_os = "linux")]
 fn interpret_output(code: Option<i32>, bytes: Vec<u8>) -> Picked {
     match code {
         Some(0) => {
@@ -350,7 +370,7 @@ fn interpret_output(code: Option<i32>, bytes: Vec<u8>) -> Picked {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
 

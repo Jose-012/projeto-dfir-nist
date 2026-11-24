@@ -10,6 +10,8 @@ Documento do operador. **Os comandos abaixo são de referência e não foram exe
 3. A aplicação não abre porta de rede (ADR-0017) e não precisa de Internet para operar. O que usa Internet é só obter as dependências e as ferramentas, antes.
 4. Confira com `dfir-app diagnostics` (versões, contagens, disco; sem nomes de arquivo) e `dfir-app audit-verify`.
 
+Em desenvolvimento, use `just run` ou `just engine-smoke`: ambos compilam `dfir-app` e `dfir-engine` antes da execução. `cargo run` sozinho compila só o app e não prepara o processo separado. Se o engine estiver ausente, o erro informa o caminho procurado e a remediação; um `DFIR_ENGINE_PATH` explícito deve apontar para um executável existente. No Windows o nome resolvido é `dfir-engine.exe`.
+
 ## 2. Proteção do volume (RF-030)
 
 O aplicativo **não criptografa a pasta de dados por conta própria**: evidências, banco e exportações ficam em arquivos comuns. A proteção em repouso vem do volume.

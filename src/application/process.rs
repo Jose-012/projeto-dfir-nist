@@ -234,7 +234,15 @@ pub(crate) fn launch_process(
         }
     };
 
-    let executable = std::fs::canonicalize(&config.engine_path)?;
+    let executable = std::fs::canonicalize(&config.engine_path).map_err(|error| {
+        EngineRunError::Io(std::io::Error::new(
+            error.kind(),
+            format!(
+                "engine executable is unavailable at {}: {error}; build both binaries with `cargo build --locked -p dfir-app -p dfir-engine` or set DFIR_ENGINE_PATH to an existing dfir-engine executable",
+                config.engine_path.display()
+            ),
+        ))
+    })?;
     if !executable.is_file() || !executable.is_absolute() {
         return Err(EngineRunError::InvalidRequest(
             "engine executable is unavailable".into(),
@@ -421,6 +429,50 @@ mod isolation_tests {
             .expect("PATH is rebuilt");
         assert!(path.ends_with("System32"), "{path}");
         assert!(!path.contains("jose"), "{path}");
+    }
+
+    #[test]
+    fn missing_engine_reports_its_path_and_the_two_binary_build_remediation() {
+        let root = tempfile::tempdir().expect("root");
+        let root_path = root.path().canonicalize().expect("canonical root");
+        let input = root_path.join("input");
+        let output = root_path.join("output");
+        std::fs::create_dir_all(&input).expect("input");
+        std::fs::create_dir_all(&output).expect("output");
+        let engine = root_path.join(if cfg!(windows) {
+            "dfir-engine.exe"
+        } else {
+            "dfir-engine"
+        });
+        let config = EngineRunnerConfig::from_config(&AppConfig {
+            data_root: root_path.clone(),
+            engine_path: engine.clone(),
+            engine_max_line_bytes: 1024 * 1024,
+            engine_timeout: Duration::from_secs(5),
+            engine_max_concurrent_jobs: 1,
+            engine_max_memory_bytes: 1024 * 1024 * 1024,
+            max_upload_bytes: 1024 * 1024,
+            min_free_disk_bytes: 0,
+            engine_sandbox: Some("best-effort".into()),
+        });
+
+        let error = match launch_process(&config, &ProcessInput::Directory(input), &output, true) {
+            Ok(_) => panic!("a missing engine must not launch"),
+            Err(error) => error,
+        };
+        let message = error.to_string();
+        assert!(
+            message.contains(&engine.display().to_string()),
+            "missing engine path: {message}"
+        );
+        assert!(
+            message.contains("cargo build --locked -p dfir-app -p dfir-engine"),
+            "missing two-binary build instruction: {message}"
+        );
+        assert!(
+            message.contains("DFIR_ENGINE_PATH"),
+            "missing explicit override instruction: {message}"
+        );
     }
 
     #[cfg(unix)]
