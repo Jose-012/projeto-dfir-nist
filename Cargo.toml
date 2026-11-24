@@ -42,6 +42,7 @@ libc = "0.2.189"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+proptest = "1.12.0"
 # Testes de GUI sem janela (ADR-0022): consulta a árvore de acessibilidade e
 # simula clique e digitação. Só dev-dependency; não entra no binário.
 egui_kittest = "0.37.0"

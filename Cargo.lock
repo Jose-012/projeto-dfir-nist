@@ -1104,6 +1104,7 @@ dependencies = [
  "egui_kittest",
  "futures-util",
  "libc",
+ "proptest",
  "rfd",
  "serde",
  "serde_json",

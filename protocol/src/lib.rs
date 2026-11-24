@@ -49,6 +49,9 @@ const KNOWN_ANALYSIS_KINDS: [&str; 3] = [
 pub const SANDBOX_PHASE_PREFIX: &str = "sandbox:";
 /// `kind` dos itens de candidato de detecção.
 pub const ITEM_KIND_DETECTION_CANDIDATE: &str = "DETECTION_CANDIDATE";
+/// Discriminador opcional de um evento normalizado. O engine atual omite `kind`;
+/// quando ele está presente, só este valor identifica um item de timeline.
+pub const ITEM_KIND_NORMALIZED_EVENT: &str = "NORMALIZED_EVENT";
 /// Referências de evento guardadas por candidato; o restante vira contagem.
 pub const MAX_CANDIDATE_EVENT_REFS: usize = 20;
 /// IOCs guardados por candidato.
@@ -124,9 +127,10 @@ fn default_normalization_status() -> String {
 ///
 /// A forma serializada é idêntica à que o engine sempre emitiu (mesmas seis
 /// chaves), então `SCHEMA_VERSION` não muda. Campos desconhecidos são
-/// ignorados na leitura (ex.: o antigo `record_offset`); só
-/// `normalization_status` tem default, para tolerar resultados persistidos
-/// antes de o campo ser exigido nos fixtures.
+/// ignorados na leitura (ex.: o antigo `record_offset`), exceto o discriminador
+/// reservado `kind`: ausente ou `NORMALIZED_EVENT` identifica timeline; outro
+/// valor/tipo rejeita o item. Só `normalization_status` tem default, para tolerar
+/// resultados persistidos antes de o campo ser exigido nos fixtures.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NormalizedEvent {
     pub event_record_id: u64,
@@ -318,9 +322,15 @@ impl NormalizedEvent {
     }
 
     /// Lê um item de `RESULT.items`. Retorna `None` quando o item não segue
-    /// este contrato — por exemplo um `YARA_MATCH`, que compartilha o mesmo
-    /// `results.jsonl` mas não é um evento de timeline.
+    /// este contrato ou declara outro `kind` — por exemplo um `YARA_MATCH`,
+    /// que compartilha o mesmo `results.jsonl` mas não é um evento de timeline.
     pub fn from_item(item: &Value) -> Option<Self> {
+        if item
+            .get("kind")
+            .is_some_and(|kind| kind.as_str() != Some(ITEM_KIND_NORMALIZED_EVENT))
+        {
+            return None;
+        }
         Self::deserialize(item).ok()
     }
 }
@@ -695,6 +705,14 @@ mod tests {
             super::DetectionCandidate::from_item(&sample_event().into_item().unwrap()),
             None
         );
+
+        let mut disguised = sample_event().into_item().expect("event serializes");
+        disguised["kind"] = json!(super::ITEM_KIND_DETECTION_CANDIDATE);
+        assert!(NormalizedEvent::from_item(&disguised).is_none());
+        disguised["kind"] = json!(42);
+        assert!(NormalizedEvent::from_item(&disguised).is_none());
+        disguised["kind"] = json!(super::ITEM_KIND_NORMALIZED_EVENT);
+        assert!(NormalizedEvent::from_item(&disguised).is_some());
     }
 
     #[test]

@@ -928,6 +928,7 @@ O JSONL é uma fronteira de confiança entre dois processos do mesmo produto.
 
 - requests são validados antes de processar;
 - resultados são validados antes de persistir;
+- um item com `kind` explícito só é evento de timeline quando seu valor é `NORMALIZED_EVENT`; a ausência de `kind` preserva a forma atual do engine, e provider/channel apresentados seguem o mesmo extrator normalizado usado pelo engine;
 - mensagens acima do limite são rejeitadas;
 - linhas malformadas provocam falha controlada do job, não do servidor HTTP;
 - versões de protocolo divergentes geram erro explícito;

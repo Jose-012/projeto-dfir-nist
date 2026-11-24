@@ -26,6 +26,8 @@ pub mod provenance;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod timeline_filter;
+#[cfg(test)]
+mod timeline_properties;
 
 use crate::{
     application::engine::{self, EngineRunnerConfig},
@@ -2340,45 +2342,6 @@ fn timeline_event_from_item(item: &serde_json::Value) -> Option<TimelineEvent> {
     let record_id = normalized.event_record_id.to_string();
     let data = &normalized.data;
 
-    let event_id = normalized
-        .event_id
-        .clone()
-        .or_else(|| dfir_protocol::normalize::event_id(data).map(|value| value.to_string()))
-        .or_else(|| {
-            data.pointer("/Event/System/EventID")
-                .map(value_to_string)
-                .filter(|v| !v.is_empty())
-        });
-    let provider = data
-        .pointer("/Event/System/Provider/Name")
-        .or_else(|| data.pointer("/Event/System/Provider/#attributes/Name"))
-        .map(value_to_string)
-        .filter(|v| !v.is_empty());
-    let channel = data
-        .pointer("/Event/System/Channel")
-        .map(value_to_string)
-        .filter(|v| !v.is_empty());
-    let severity = data
-        .pointer("/Event/System/Level")
-        .map(value_to_string)
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| "INFO".into());
-    let title = match (&event_id, &provider) {
-        (Some(id), Some(provider)) => format!("Event ID {id} · {provider}"),
-        (Some(id), None) => format!("Event ID {id}"),
-        (None, _) => format!("EVTX record {record_id}"),
-    };
-    let computer = data.pointer("/Event/System/Computer").map(value_to_string);
-    let description = build_event_description(
-        data,
-        event_id.as_deref().unwrap_or("unknown"),
-        provider.as_deref(),
-        channel.as_deref(),
-        computer.as_deref(),
-    );
-
-    let id = format!("{}:{}", normalized.evidence_id, normalized.raw_reference);
-
     // Resultados da versão 3 do esquema não trazem os campos estruturais: o
     // app os extrai do próprio registro, com o mesmo extrator do engine.
     let structured = if normalized.source_type.is_some() {
@@ -2399,6 +2362,38 @@ fn timeline_event_from_item(item: &serde_json::Value) -> Option<TimelineEvent> {
     } else {
         dfir_protocol::normalize::event_fields(data)
     };
+
+    let event_id = normalized
+        .event_id
+        .clone()
+        .or_else(|| dfir_protocol::normalize::event_id(data).map(|value| value.to_string()))
+        .or_else(|| {
+            data.pointer("/Event/System/EventID")
+                .map(value_to_string)
+                .filter(|v| !v.is_empty())
+        });
+    let provider = structured.provider.clone();
+    let channel = structured.channel.clone();
+    let severity = data
+        .pointer("/Event/System/Level")
+        .map(value_to_string)
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "INFO".into());
+    let title = match (&event_id, &provider) {
+        (Some(id), Some(provider)) => format!("Event ID {id} · {provider}"),
+        (Some(id), None) => format!("Event ID {id}"),
+        (None, _) => format!("EVTX record {record_id}"),
+    };
+    let computer = data.pointer("/Event/System/Computer").map(value_to_string);
+    let description = build_event_description(
+        data,
+        event_id.as_deref().unwrap_or("unknown"),
+        provider.as_deref(),
+        channel.as_deref(),
+        computer.as_deref(),
+    );
+
+    let id = format!("{}:{}", normalized.evidence_id, normalized.raw_reference);
 
     Some(TimelineEvent {
         id,
@@ -3046,6 +3041,25 @@ mod tests {
         let event = timeline_event_from_item(&item).expect("timeline event");
         assert_eq!(event.event_id.as_deref(), Some("7045"));
         assert_eq!(event.title, "Event ID 7045");
+    }
+
+    #[test]
+    fn timeline_provider_and_channel_follow_normalized_absence() {
+        let item = dfir_protocol::NormalizedEvent::new(
+            1,
+            "2026-01-01T00:00:00Z",
+            serde_json::json!({"Event": {"System": {
+                "EventID": 4624,
+                "Provider": {"Name": "\0"},
+                "Channel": "\0"
+            }}}),
+            "ev_t",
+        )
+        .into_item()
+        .expect("serializable event");
+        let event = timeline_event_from_item(&item).expect("timeline event");
+        assert_eq!(event.provider, None);
+        assert_eq!(event.channel, None);
     }
 
     fn result_jsonl_with_length(length: usize) -> String {
